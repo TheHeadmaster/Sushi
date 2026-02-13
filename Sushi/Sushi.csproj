@@ -10,5 +10,6 @@
         <VersionSuffix>alpha</VersionSuffix>
         <FileVersion>$(Version)</FileVersion>
         <AssemblyVersion>$(Version)</AssemblyVersion>
+        <ApplicationIcon>Sushi.ico</ApplicationIcon>
     </PropertyGroup>
 </Project>
