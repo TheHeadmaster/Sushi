@@ -34,6 +34,17 @@ public static partial class AppMeta
     }
 
     /// <summary>
+    /// Gets the directory of the executing assembly.
+    /// </summary>
+    /// <returns>
+    /// The assembly directory as a string.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// Throws if the executing assembly is null.
+    /// </exception>
+    public static string GetAssemblyDirectory() => Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? throw new InvalidOperationException("Assembly directory is null");
+
+    /// <summary>
     /// Options for how the compiler should behave, translated from the command line arguments.
     /// </summary>
     public static CompilerOptions Options { get; set; } = null!;
