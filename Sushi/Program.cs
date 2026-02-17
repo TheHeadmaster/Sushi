@@ -1,8 +1,17 @@
 ﻿namespace Sushi;
 
-internal class Program
+/// <summary>
+/// Contains application metadata and houses the entry point of the application.
+/// </summary>
+public static class Program
 {
-    static void Main(string[] args)
+    /// <summary>
+    /// The application entry point.
+    /// </summary>
+    /// <param name="args">
+    /// The command line arguments.
+    /// </param>
+    private static void Main(string[] args)
     {
         Console.WriteLine("Hello, World!");
     }
