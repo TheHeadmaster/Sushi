@@ -34,6 +34,21 @@ public static partial class AppMeta
     }
 
     /// <summary>
+    /// Options for how the compiler should behave, translated from the command line arguments.
+    /// </summary>
+    public static CompilerOptions Options { get; set; } = null!;
+
+    /// <summary>
+    /// Whether the program is running in debug mode or not.
+    /// </summary>
+    public static bool IsDebug =>
+#if DEBUG
+        true;
+#else
+        return false;
+#endif
+
+    /// <summary>
     /// Matches a semantic version with or without a suffix.
     /// </summary>
     /// <returns></returns>
@@ -43,7 +58,7 @@ public static partial class AppMeta
     /// <summary>
     /// The console theme used for logging to the console and changes the colors associated with various tokens of text.
     /// </summary>
-    private static AnsiConsoleTheme ConsoleTheme { get; } = new(
+    public static AnsiConsoleTheme ConsoleTheme { get; } = new(
     new Dictionary<ConsoleThemeStyle, string>
     {
         [ConsoleThemeStyle.Text] = "\x1b[38;5;0229m",
