@@ -52,7 +52,7 @@ public static class Program
 
         if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Logs")))
         {
-            Directory.CreateDirectory("Files");
+            Directory.CreateDirectory("Logs");
         }
 
         Log.Logger = new LoggerConfiguration()
