@@ -1,6 +1,6 @@
-﻿using Serilog.Sinks.SystemConsole.Themes;
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
+using Serilog.Sinks.SystemConsole.Themes;
 
 namespace Sushi;
 
@@ -56,7 +56,7 @@ public static partial class AppMeta
 #if DEBUG
         true;
 #else
-        return false;
+        false;
 #endif
 
     /// <summary>
