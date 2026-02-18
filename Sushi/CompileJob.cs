@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-using Sushi.Compilation;
+﻿using Sushi.Compilation;
 
 namespace Sushi;
 
@@ -13,10 +10,7 @@ public sealed class CompileJob
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task Initialize()
-    {
-
-    }
+    public async Task Initialize() => await ASMCompiler.Initialize();
 
     /// <summary>
     /// Runs the <see cref="CompileJob"/>.

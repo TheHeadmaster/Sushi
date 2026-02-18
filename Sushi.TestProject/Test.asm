@@ -1,30 +1,18 @@
-includelib ucrt.lib
-includelib legacy_stdio_definitions.lib
-includelib msvcrt.lib
+; ----------------------------------------------------------------------------------------
+; This is a Win64 console program that writes "Hello" on one line and then exits.  It
+; uses puts from the C library.  To assemble and run:
+;
+;     nasm -fwin64 hello.asm && gcc hello.obj && a
+; ----------------------------------------------------------------------------------------
 
-option casemap:none
-
-.data
-; , 10 means line feed character (LF)
-; , 0 means adding an terminating '\0' to the string
-fmtStr byte 'Hello', 10, 0
-
-.code
-externdef printf:proc
-externdef _CRT_INIT:proc
-externdef exit:proc
-
-main proc
-    call _CRT_INIT
-    push rbp
-    mov rbp, rsp
-
-    sub rsp, 32
-    lea rcx, fmtStr  ; lea: load the address of a variable into a register
-    call printf
-
-    xor ecx, ecx ; the first argument for exit() is setting to 0
-    call exit
-main endp
-
-end
+        global  main
+        extern  puts
+        section .text
+main:
+        sub     rsp, 28h                        ; Reserve the shadow space
+        mov     rcx, message                    ; First argument is address of message
+        call    puts                            ; puts(message)
+        add     rsp, 28h                        ; Remove shadow space
+        ret
+message:
+        db      'Hello', 0                      ; C strings need a zero byte at the end
