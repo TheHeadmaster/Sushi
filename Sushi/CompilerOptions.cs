@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace Sushi;
@@ -16,7 +16,7 @@ public sealed class CompilerOptions
     /// <summary>
     /// The path of the project.
     /// </summary>
-    public string? ProjectPath { get; set; }
+    public string ProjectPath { get; set; } = string.Empty;
 
     /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.
