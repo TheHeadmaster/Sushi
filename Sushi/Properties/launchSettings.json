@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Sushi": {
+      "commandName": "Project",
+      "commandLineArgs": "--project \"$(SolutionDir)Sushi.TestProject\""
+    }
+  }
+}
