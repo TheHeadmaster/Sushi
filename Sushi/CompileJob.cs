@@ -1,16 +1,23 @@
-﻿using Sushi.Compilation;
+using Sushi.Compilation;
+using Sushi.Lexing;
 
 namespace Sushi;
 
 public sealed class CompileJob
 {
+    private List<SourceFile> sourceFiles = null!;
+
     /// <summary>
     /// Initializes the <see cref="CompileJob"/>.
     /// </summary>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task Initialize() => await ASMCompiler.Initialize();
+    public async Task Initialize()
+    {
+        this.sourceFiles = [.. await SushiLexer.Initialize()];
+        await ASMCompiler.Initialize();
+    }
 
     /// <summary>
     /// Runs the <see cref="CompileJob"/>.
@@ -18,5 +25,9 @@ public sealed class CompileJob
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task Run() => await ASMCompiler.Compile();
+    public async Task Run()
+    {
+        await SushiLexer.LexFiles(this.sourceFiles);
+        await ASMCompiler.Compile();
+    }
 }
