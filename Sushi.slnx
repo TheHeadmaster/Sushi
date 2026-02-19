@@ -7,5 +7,6 @@
     <File Path="README.md" />
     <File Path="Sushi.png" />
   </Folder>
+  <Project Path="Sushi.Testing/Sushi.Testing.csproj" Id="7997fac2-5699-4d3c-8508-3a0c2b172309" />
   <Project Path="Sushi/Sushi.csproj" />
 </Solution>
