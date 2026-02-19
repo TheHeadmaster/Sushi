@@ -26,6 +26,7 @@ public sealed class CommentTokenGenerator : TokenGenerator
             return Task.FromResult(new TokenGeneratorResult()
             {
                 CanGenerate = true,
+                Affinity = 1000,
                 ConsumedCharacters = comment.Length,
                 Token = new Token()
                 {
@@ -46,6 +47,7 @@ public sealed class CommentTokenGenerator : TokenGenerator
             return Task.FromResult(new TokenGeneratorResult()
             {
                 CanGenerate = true,
+                Affinity = 1000,
                 ConsumedCharacters = comment.Length,
                 Token = new Token()
                 {
