@@ -13,5 +13,5 @@ public sealed class SourceFile
 
     public required string Source { get; set; }
 
-    public List<SushiToken> Tokens { get; set; } = [];
+    public List<Token> Tokens { get; set; } = [];
 }

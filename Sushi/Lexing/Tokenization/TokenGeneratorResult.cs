@@ -13,5 +13,5 @@ public sealed class TokenGeneratorResult
     public int? Affinity { get; set; }
 
     [MemberNotNullWhen(true, nameof(CanGenerate))]
-    public SushiToken? Token { get; set; }
+    public Token? Token { get; set; }
 }
