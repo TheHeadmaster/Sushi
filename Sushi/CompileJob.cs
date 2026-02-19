@@ -1,11 +1,24 @@
-using Sushi.Compilation;
-using Sushi.Lexing;
+using System.Collections.ObjectModel;
+using Sushi.Extensions;
+using Sushi.Lexing.Tokenization;
+using Sushi.Steps;
 
 namespace Sushi;
 
+/// <summary>
+/// The job that runs the compilation in steps.
+/// </summary>
 public sealed class CompileJob
 {
-    private List<SourceFile> sourceFiles = null!;
+    /// <summary>
+    /// The steps.
+    /// </summary>
+    private readonly ReadOnlyCollection<ICompilerStep> steps = [.. ReflectionEx.GetLeafSubclasses<ICompilerStep>().OrderBy(step => step.StepNumber)];
+
+    /// <summary>
+    /// The token files created during the lexing step.
+    /// </summary>
+    public List<TokenFile> SourceFiles { get; set; } = [];
 
     /// <summary>
     /// Initializes the <see cref="CompileJob"/>.
@@ -15,8 +28,10 @@ public sealed class CompileJob
     /// </returns>
     public async Task Initialize()
     {
-        this.sourceFiles = [.. await SushiLexer.Initialize()];
-        await ASMCompiler.Initialize();
+        foreach (ICompilerStep step in this.steps)
+        {
+            await step.Initialize(this);
+        }
     }
 
     /// <summary>
@@ -27,7 +42,9 @@ public sealed class CompileJob
     /// </returns>
     public async Task Run()
     {
-        await SushiLexer.LexFiles(this.sourceFiles);
-        await ASMCompiler.Compile();
+        foreach (ICompilerStep step in this.steps)
+        {
+            await step.Run(this);
+        }
     }
 }

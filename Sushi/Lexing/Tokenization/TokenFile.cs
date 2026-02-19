@@ -93,7 +93,7 @@ public sealed class TokenFile
             return -1;
         }
 
-        int consumedLinesLength = this.RawSourceCode.Split(Environment.NewLine).Take(this.GetLineNumber() - 1).Sum(x => x.Length + 2);
+        int consumedLinesLength = this.RawSourceCode.Split(Environment.NewLine).Take(this.GetLineNumber() - 1).Sum(c => c.Length + 2);
         return this.CurrentPosition - consumedLinesLength;
     }
 }

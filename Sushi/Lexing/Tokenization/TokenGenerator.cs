@@ -9,8 +9,11 @@ public abstract class TokenGenerator
     /// <summary>
     /// Tries to generate a token for the specific <see cref="TokenFile"/>.
     /// </summary>
-    /// <param name="source"></param>
-    /// <param name="index"></param>
-    /// <returns></returns>
-    public abstract Task<TokenGeneratorResult> TryGenerate(string source, long index);
+    /// <param name="file">
+    /// The file to generate the token from.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the <see cref="TokenGeneratorResult"/>.
+    /// </returns>
+    public abstract Task<TokenGeneratorResult> TryGenerate(TokenFile file);
 }

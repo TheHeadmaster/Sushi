@@ -110,9 +110,9 @@ public static class ExeHelper
 
                 try
                 {
-                    string[] existing = Directory.GetFiles(path, $"{file}.*", SearchOption.AllDirectories);
+                    string[] existingFiles = Directory.GetFiles(path, $"{file}.*", SearchOption.AllDirectories);
 
-                    string? bestPath = existing.OrderByDescending(x => x?.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ?? false).FirstOrDefault();
+                    string? bestPath = existingFiles.OrderByDescending(file => file?.EndsWith(".exe", StringComparison.InvariantCultureIgnoreCase) ?? false).FirstOrDefault();
 
                     if (!string.IsNullOrWhiteSpace(bestPath))
                     {
