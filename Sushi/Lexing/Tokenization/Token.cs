@@ -4,7 +4,7 @@ using System.Text;
 
 namespace Sushi.Lexing.Tokenization;
 
-public sealed class SushiToken
+public sealed class Token
 {
     public required TokenType Type { get; set; }
 
