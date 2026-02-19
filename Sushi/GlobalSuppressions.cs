@@ -6,3 +6,4 @@
 using System.Diagnostics.CodeAnalysis;
 
 [assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.Program.Main(System.String[])~System.Threading.Tasks.Task")]
+[assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.ExeHelper.RunExecutableAndOutputToConsole(System.String,System.String)~System.Threading.Tasks.Task")]
