@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
@@ -88,5 +89,6 @@ public static class Program
     /// <param name="exitCode">
     /// The exit code to use.
     /// </param>
+    [DoesNotReturn]
     public static void Exit(ExitCode exitCode) => Environment.Exit((int)exitCode);
 }
