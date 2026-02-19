@@ -13,7 +13,10 @@ exclude_patterns = [
     'Thumbs.db',
     '.DS_Store',
 ]
-extensions = []
+extensions = [
+    'myst_parser',
+    # other extensions...
+]
 language = 'en'
 master_doc = 'index'
 pygments_style = 'sphinx'
