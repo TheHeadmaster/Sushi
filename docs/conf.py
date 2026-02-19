@@ -20,7 +20,7 @@ extensions = [
 language = 'en'
 master_doc = 'index'
 pygments_style = 'sphinx'
-source_suffix = '.rst'
+source_suffix = { '.rst': 'restructuredtext', '.txt': 'markdown', '.md': 'markdown' }
 templates_path = ['_templates']
 
 # -- Options for HTML output ----------------------------------------------
