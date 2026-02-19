@@ -1,5 +1,5 @@
 // Inline Comment
-bool   ;
+bool isRunning; 
 /* 
 Block Comment
 */
