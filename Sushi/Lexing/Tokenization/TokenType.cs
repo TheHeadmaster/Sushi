@@ -10,5 +10,6 @@ public enum TokenType
     LineComment,
     BlockComment,
     Whitespace,
-    Newline
+    Newline,
+    Terminator
 }
