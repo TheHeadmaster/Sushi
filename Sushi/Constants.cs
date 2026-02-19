@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 
 namespace Sushi;
 
@@ -12,6 +12,6 @@ public static class Constants
     /// </summary>
     public static ReadOnlyCollection<string> ReservedKeywords { get; } =
     [
-
+        "bool"
     ];
 }
