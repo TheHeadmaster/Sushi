@@ -6,5 +6,7 @@ namespace Sushi.Lexing.Tokenization;
 public enum TokenType
 {
     Unknown,
-    Identifier
+    Identifier,
+    LineComment,
+    BlockComment
 }

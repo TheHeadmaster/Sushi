@@ -22,7 +22,7 @@ public static class ReflectionEx
         Assembly assembly = typeof(T).Assembly;
         Type baseType = typeof(T);
 
-        List<Type> concreteSubclasses = [.. assembly.GetTypes().Where(type => type.IsSubclassOf(baseType) && !type.IsAbstract && !type.IsInterface)];
+        List<Type> concreteSubclasses = [.. assembly.GetTypes().Where(type => type.IsAssignableTo(baseType) && !type.IsAbstract && !type.IsInterface)];
         List<Type> leafSubclasses = [.. concreteSubclasses.Where(type => !concreteSubclasses.Any(otherType => otherType.IsSubclassOf(type)))];
 
         List<T> instances = [];

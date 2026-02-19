@@ -39,15 +39,6 @@ public sealed class LexingStep : ICompilerStep
         await Task.WhenAll(fileTasks);
 
         this.sourceFiles.AddRange(fileTasks.Select(task => task.Result));
-
-        int errorCount = this.sourceFiles.SelectMany(x => x.Tokens).Count(x => x.Type == TokenType.Unknown);
-
-        Log.Information("{FileCount} files were lexed with {ErrorCount} syntax errors.", this.sourceFiles.Count, errorCount);
-
-        if (errorCount > 0)
-        {
-            Program.Exit(ExitCode.LexingSyntaxError);
-        }
     }
 
     /// <summary>
@@ -81,6 +72,15 @@ public sealed class LexingStep : ICompilerStep
         await Task.WhenAll(fileTasks);
 
         job.SourceFiles = this.sourceFiles;
+
+        int errorCount = this.sourceFiles.SelectMany(x => x.Tokens).Count(x => x.Type == TokenType.Unknown);
+
+        Log.Information("{FileCount} files were lexed with {ErrorCount} syntax errors.", this.sourceFiles.Count, errorCount);
+
+        if (errorCount > 0)
+        {
+            Program.Exit(ExitCode.LexingSyntaxError);
+        }
     }
 
     /// <summary>
