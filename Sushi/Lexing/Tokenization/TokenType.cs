@@ -8,5 +8,7 @@ public enum TokenType
     Unknown,
     Identifier,
     LineComment,
-    BlockComment
+    BlockComment,
+    Whitespace,
+    Newline
 }

@@ -12,7 +12,7 @@ public sealed class CommentTokenGenerator : TokenGenerator
     {
         string? remainingInput = file.GetRemainingInput();
 
-        // Don't even bother parsing if the remaining input is empty.
+        // Don't even bother lexing if the remaining input is empty.
         if (string.IsNullOrWhiteSpace(remainingInput))
         {
             return Task.FromResult(new TokenGeneratorResult() { CanGenerate = false });
