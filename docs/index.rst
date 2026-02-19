@@ -1,4 +1,4 @@
-Welcome to the Sushi language and compiler documentation.
+Sushi
 ===================================
 
 **Sushi** is a strongly-typed programming language that compiles directly into Assembly. It is Ahead-of-Time (AOT) and does not have
