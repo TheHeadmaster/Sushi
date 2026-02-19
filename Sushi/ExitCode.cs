@@ -16,4 +16,6 @@ public enum ExitCode
     InvalidParameterSyntax,
     LexingSyntaxError,
     ParsingSyntaxError,
+    ProcessFailedToStart,
+    ProcessFailedDuringExecution,
 }

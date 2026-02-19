@@ -3,8 +3,23 @@ using Serilog;
 
 namespace Sushi;
 
+/// <summary>
+/// Contains helper methods for running other executables.
+/// </summary>
 public static class ExeHelper
 {
+    /// <summary>
+    /// Runs an executable file and pipes its output and error streams to the console.
+    /// </summary>
+    /// <param name="fileName">
+    /// The name of the file.
+    /// </param>
+    /// <param name="arguments">
+    /// The command line arguments to pass to the executable.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public static async Task RunExecutableAndOutputToConsole(string fileName, string arguments)
     {
         try
@@ -20,7 +35,14 @@ public static class ExeHelper
                 CreateNoWindow = true
             };
 
-            using Process? process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Process \"{fileName}\" failed to start");
+            using Process? process = Process.Start(startInfo);
+
+            if (process is null)
+            {
+                Log.Error("Process \"{FileName}\" failed to start", Path.GetFileName(fileName));
+
+                Program.Exit(ExitCode.ProcessFailedToStart);
+            }
 
             // Read output and error streams asynchronously to prevent deadlocks
             Task standardOutputTask = ReadStreamAsync(process.StandardOutput);
@@ -35,10 +57,21 @@ public static class ExeHelper
         }
         catch (Exception ex)
         {
-            Log.Warning($"An error occurred: {ex.Message}");
+            Log.Error("An error occurred: {Message}", ex.Message);
+
+            Program.Exit(ExitCode.ProcessFailedDuringExecution);
         }
     }
 
+    /// <summary>
+    /// Reads the specified stream asynchronously.
+    /// </summary>
+    /// <param name="reader">
+    /// The stream to read.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     private static async Task ReadStreamAsync(StreamReader reader)
     {
         string? line;
