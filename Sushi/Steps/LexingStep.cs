@@ -25,6 +25,7 @@ public sealed class LexingStep : ICompilerStep
     /// <inheritdoc />
     public async Task Initialize([NotNull] CompileJob job)
     {
+        DateTime startTime = DateTime.Now;
         Log.Information("Initializing lexer...");
 
         Log.Information("Loading source files from disk...");
@@ -39,6 +40,8 @@ public sealed class LexingStep : ICompilerStep
         await Task.WhenAll(fileTasks);
 
         this.sourceFiles.AddRange(fileTasks.Select(task => task.Result));
+
+        Log.Information("Loaded all source files in {Time}.", startTime.TimeSinceAsString());
     }
 
     /// <summary>
@@ -54,7 +57,7 @@ public sealed class LexingStep : ICompilerStep
     {
         string source = await File.ReadAllTextAsync(file);
 
-        Log.Information("Loaded file {File}.", file);
+        Log.Information("Loaded file {File}.", Path.GetRelativePath(AppMeta.Options.ProjectPath, file));
 
         return new() { FileName = Path.GetFileName(file), FilePath = file, RawSourceCode = source };
     }
@@ -62,6 +65,10 @@ public sealed class LexingStep : ICompilerStep
     /// <inheritdoc />
     public async Task Run([NotNull] CompileJob job)
     {
+        DateTime startTime = DateTime.Now;
+
+        Log.Information("Lexing files...");
+
         List<Task> fileTasks = [];
 
         foreach (TokenFile file in this.sourceFiles)
@@ -75,7 +82,7 @@ public sealed class LexingStep : ICompilerStep
 
         int errorCount = this.sourceFiles.SelectMany(x => x.Tokens).Count(x => x.Type == TokenType.Unknown);
 
-        Log.Information("{FileCount} files were lexed with {ErrorCount} syntax errors.", this.sourceFiles.Count, errorCount);
+        Log.Information("{FileCount} files were lexed in {Time} with {ErrorCount} syntax errors.", this.sourceFiles.Count, startTime.TimeSinceAsString(), errorCount);
 
         if (errorCount > 0)
         {
@@ -94,7 +101,9 @@ public sealed class LexingStep : ICompilerStep
     /// </returns>
     private async Task LexFile([NotNull] TokenFile file)
     {
-        while (!file.EndOfFileReached())
+        Log.Information("Lexing file {File}...", Path.GetRelativePath(AppMeta.Options.ProjectPath, file.FilePath));
+
+        while (!file.LastIndexOfFileReached())
         {
             await this.GetTokenWithHighestAffinity(file);
         }
@@ -137,6 +146,7 @@ public sealed class LexingStep : ICompilerStep
                     LineNumber = file.GetLineNumber(),
                     LinePosition = file.GetLinePosition(),
                 });
+                file.CurrentPosition++;
                 return;
             }
 

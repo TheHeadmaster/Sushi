@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
+using Sushi.Extensions;
 
 namespace Sushi;
 
@@ -23,6 +24,7 @@ public static class Program
     {
         try
         {
+            DateTime startTime = DateTime.Now;
             await Initialize(args);
 
             CompileJob job = new();
@@ -30,6 +32,7 @@ public static class Program
             await job.Initialize();
 
             await job.Run();
+            Log.Information("Compilation completed in {Time}.", startTime.TimeSinceAsString());
         }
         catch (Exception exception)
         {
