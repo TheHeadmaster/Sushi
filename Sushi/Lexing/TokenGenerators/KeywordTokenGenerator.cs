@@ -1,6 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Text.RegularExpressions;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Lexing.TokenGenerators;
@@ -8,7 +6,7 @@ namespace Sushi.Lexing.TokenGenerators;
 /// <summary>
 /// Handles the generation of keyword tokens.
 /// </summary>
-public sealed class KeywordTokenGenerator : TokenGenerator
+public sealed partial class KeywordTokenGenerator : TokenGenerator
 {
     /// <inheritdoc />
     public override Task<TokenGeneratorResult> TryGenerate(TokenFile file)
@@ -21,9 +19,16 @@ public sealed class KeywordTokenGenerator : TokenGenerator
             return Task.FromResult(new TokenGeneratorResult() { CanGenerate = false });
         }
 
+        Match match = Keyword().Match(remainingInput);
+
+        if (!match.Success)
+        {
+            return Task.FromResult(new TokenGeneratorResult() { CanGenerate = false });
+        }
+
         foreach (string keyword in Constants.ReservedKeywords)
         {
-            if (remainingInput.StartsWith(keyword, StringComparison.InvariantCulture))
+            if (match.Value.Equals(keyword, StringComparison.Ordinal))
             {
                 return Task.FromResult(new TokenGeneratorResult()
                 {
@@ -43,4 +48,13 @@ public sealed class KeywordTokenGenerator : TokenGenerator
 
         return Task.FromResult(new TokenGeneratorResult() { CanGenerate = false });
     }
+
+    /// <summary>
+    /// Matches valid keyword strings.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Regex"/>.
+    /// </returns>
+    [GeneratedRegex(@"^[a-z][a-z0-9]*")]
+    private static partial Regex Keyword();
 }
