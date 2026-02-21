@@ -2,7 +2,7 @@
   "profiles": {
     "Sushi": {
       "commandName": "Project",
-      "commandLineArgs": "--project \"$(SolutionDir)Sushi.TestProject\""
+      "commandLineArgs": "--project \"$(SolutionDir)Sushi.Testing\\TestProject\""
     }
   }
 }
