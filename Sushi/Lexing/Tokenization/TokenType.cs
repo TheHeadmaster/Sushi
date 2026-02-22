@@ -6,11 +6,13 @@ namespace Sushi.Lexing.Tokenization;
 public enum TokenType
 {
     Unknown,
+    AssignmentOperator,
     Identifier,
     LineComment,
     BlockComment,
     Whitespace,
     Newline,
     Terminator,
-    Keyword
+    Keyword,
+    NumberLiteral,
 }

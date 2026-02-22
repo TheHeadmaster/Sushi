@@ -55,6 +55,17 @@ public sealed class TokenFile
     public char? GetNextChar() => this.LastIndexOfFileReached() ? null : this.RawSourceCode[this.CurrentPosition];
 
     /// <summary>
+    /// Looks ahead by the specified amount of characters. A lookahead of 1 returns the next character plus the character after it.
+    /// </summary>
+    /// <param name="amount">
+    /// The amount of characters to look ahead. If the amount of characters is less than the lookahead, returns as many characters as are left.
+    /// </param>
+    /// <returns>
+    /// The characters in the specified lookahead, or <see langword="null""/> if the last index of the file was already reached.
+    /// </returns>
+    public string? Lookahead(int amount) => this.LastIndexOfFileReached() ? null : new string([.. this.RawSourceCode[this.CurrentPosition..].Take(amount + 1)]);
+
+    /// <summary>
     /// Gets the current line that the lexer is on.
     /// </summary>
     /// <returns>

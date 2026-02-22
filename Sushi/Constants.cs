@@ -12,6 +12,10 @@ public static class Constants
     /// </summary>
     public static ReadOnlyCollection<string> ReservedKeywords { get; } =
     [
-        "bool"
+        "bool",
+        "true",
+        "false",
+        "i32",
+        "f32"
     ];
 }
