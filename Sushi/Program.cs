@@ -29,9 +29,8 @@ public static class Program
 
             CompileJob job = new();
 
-            await job.Initialize();
-
             await job.Run();
+
             Log.Information("Compilation completed in {Time}.", startTime.TimeSinceAsString());
         }
         catch (Exception exception)

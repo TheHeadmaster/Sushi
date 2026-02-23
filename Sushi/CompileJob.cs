@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using Sushi.Extensions;
 using Sushi.Lexing.Tokenization;
+using Sushi.Parsing.Nodes;
 using Sushi.Steps;
 
 namespace Sushi;
@@ -21,18 +22,9 @@ public sealed class CompileJob
     public List<TokenFile> SourceFiles { get; set; } = [];
 
     /// <summary>
-    /// Initializes the <see cref="CompileJob"/>.
+    /// The syntax tree that represents the entirety of the source code.
     /// </summary>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    public async Task Initialize()
-    {
-        foreach (ICompilerStep step in this.steps)
-        {
-            await step.Initialize(this);
-        }
-    }
+    public AbstractSyntaxTree SyntaxTree { get; set; } = new();
 
     /// <summary>
     /// Runs the <see cref="CompileJob"/>.
@@ -44,6 +36,7 @@ public sealed class CompileJob
     {
         foreach (ICompilerStep step in this.steps)
         {
+            await step.Initialize(this);
             await step.Run(this);
         }
     }
