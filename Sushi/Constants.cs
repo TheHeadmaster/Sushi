@@ -15,7 +15,13 @@ public static class Constants
         "bool",
         "true",
         "false",
-        "i32",
-        "f32"
+        "int32",
+        "float32"
     ];
+
+    public static ReadOnlyDictionary<string, string> PrimitiveTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
+        { "bool", "Boolean" },
+        { "int32", "Int32" },
+        { "float32", "Float32" },
+    });
 }
