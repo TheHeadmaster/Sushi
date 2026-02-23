@@ -24,4 +24,9 @@ public sealed class Token
     /// The position of the <see cref="Token"/> in the line it appears in.
     /// </summary>
     public required long LinePosition { get; set; }
+
+    /// <summary>
+    /// The line that this <see cref="Token"/> appears on as a string.
+    /// </summary>
+    public string CurrentLine { get; set; } = string.Empty;
 }

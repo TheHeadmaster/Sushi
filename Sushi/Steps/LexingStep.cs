@@ -16,7 +16,9 @@ public sealed class LexingStep : ICompilerStep
     /// </summary>
     private readonly List<TokenFile> sourceFiles = [];
 
+    /// <summary>
     /// The list of token generators used to create tokens during the lexing process.
+    /// </summary>
     private readonly ReadOnlyCollection<TokenGenerator> generators = [.. ReflectionEx.GetLeafSubclasses<TokenGenerator>()];
 
     /// <inheritdoc />
@@ -161,6 +163,7 @@ public sealed class LexingStep : ICompilerStep
             Program.Exit(ExitCode.LexingSyntaxError);
         }
 
+        nominatedToken.Token.CurrentLine = file.GetCurrentLine() ?? string.Empty;
         file.Tokens.Add(nominatedToken.Token);
         file.CurrentPosition += nominatedToken.ConsumedCharacters ?? 0;
     }
