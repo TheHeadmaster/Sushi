@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using Serilog;
 using Sushi.Extensions;
@@ -80,7 +80,8 @@ public sealed class LexingStep : ICompilerStep
 
         await Task.WhenAll(fileTasks);
 
-        job.SourceFiles = this.sourceFiles;
+        // Any source file with no tokens is junk and we should throw it away
+        job.SourceFiles = [..this.sourceFiles.Where(file => file.Tokens.Count > 0)];
 
         int errorCount = this.sourceFiles.SelectMany(x => x.Tokens).Count(x => x.Type == TokenType.Unknown);
 
