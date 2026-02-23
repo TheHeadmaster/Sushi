@@ -416,3 +416,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+Sushi.Testing/TestProject/bin
+Sushi.Testing/TestProject/obj
+Sushi.Testing/TestProject/intermediate
