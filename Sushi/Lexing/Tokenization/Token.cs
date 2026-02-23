@@ -18,12 +18,12 @@ public sealed class Token
     /// <summary>
     /// The line the <see cref="Token"/> appears in.
     /// </summary>
-    public required long LineNumber { get; set; }
+    public required int LineNumber { get; set; }
 
     /// <summary>
     /// The position of the <see cref="Token"/> in the line it appears in.
     /// </summary>
-    public required long LinePosition { get; set; }
+    public required int LinePosition { get; set; }
 
     /// <summary>
     /// The line that this <see cref="Token"/> appears on as a string.
