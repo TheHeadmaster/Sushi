@@ -1,0 +1,56 @@
+name: Sushi
+scopeName: source.sus
+fileTypes:
+  - sus
+patterns:
+  - include: "#comment"
+  - include: "#declarations"
+repository:
+  declarations:
+    patterns:
+      - include: "#type-declarations"
+  type-declarations:
+    patterns:
+      - include: "#comment"
+      - include: "#class-declaration"
+  class-declaration: 
+    begin: (?=\bclass\b)
+    end: (?<=\})|(?=;)
+    patterns:
+      - begin: |-
+          (?x)
+          \b(class)\b\s+
+          (@?[_[:alpha:]][_[:alnum:]]*)\s*
+        beginCaptures:
+          "1":
+            name: storage.type.class.sus
+          "2":
+            name: entity.name.type.class.sus
+        end: (?=\{)|(?=;)
+        patterns:
+          - include: "#comment"
+      - begin: \{
+        beginCaptures:
+          "0":
+            name: punctuation.curlybrace.open.sus
+        end: \}
+        endCaptures:
+          "0":
+            name: punctuation.curlybrace.close.sus
+      - include: "#comment"
+  comment:
+    patterns:
+      - name: comment.line.double-slash.sus
+        begin: (^\s+)?(//).*$
+        while: ^(\s*)(//).*$
+        captures:
+          "1":
+            name: punctuation.whitespace.comment.leading.sus
+          "2":
+            name: punctuation.definition.comment.sus
+      - name: comment.block.sus
+        begin: /\*
+        end: \*/
+        captures:
+          "0":
+            name: punctuation.definition.comment.sus

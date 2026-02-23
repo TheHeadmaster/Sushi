@@ -1,0 +1,41 @@
+{
+  "name": "sushi",
+  "displayName": "Sushi",
+  "description": "Sushi",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.107.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "sushi",
+        "aliases": [
+          "Sushi",
+          "sushi"
+        ],
+        "extensions": [
+          ".sus"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/Sushi.png",
+          "dark": "./icons/Sushi.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sushi",
+        "scopeName": "source.sus",
+        "path": "./syntaxes/sushi.tmLanguage.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.1"
+  }
+}
