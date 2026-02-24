@@ -1,16 +1,18 @@
-namespace Sushi.Compilation;
+﻿using System.Diagnostics.CodeAnalysis;
 
-public static class ASMCompiler
+namespace Sushi.Steps;
+
+public class ExecutableCompilingStep : ICompilerStep
 {
     private static string gccPath;
-    private static string nasmPath;
 
     private static DirectoryInfo binFolder = null!;
     private static DirectoryInfo objFolder = null!;
 
-    public static async Task Initialize()
+    public int StepNumber => 4;
+
+    public Task Initialize([NotNull] CompileJob job)
     {
-        nasmPath = ExeHelper.GetFilePathFromEnvPath("nasm");
         gccPath = ExeHelper.GetFilePathFromEnvPath("gcc");
 
         ArgumentException.ThrowIfNullOrWhiteSpace(AppMeta.Options.ProjectPath);
@@ -30,11 +32,8 @@ public static class ASMCompiler
 
         Directory.CreateDirectory(binFolder.FullName);
         Directory.CreateDirectory(objFolder.FullName);
-    }
 
-    public static async Task Compile()
-    {
-        await ExeHelper.RunExecutableAndOutputToConsole(nasmPath, "-fwin64 Test.asm -o obj/Test.obj");
-        await ExeHelper.RunExecutableAndOutputToConsole(gccPath, "-g obj/*.obj -o bin/Test.exe");
+        return Task.CompletedTask;
     }
+    public async Task Run([NotNull] CompileJob job) => await ExeHelper.RunExecutableAndOutputToConsole(gccPath, "-g intermediate/*.c -o bin/Test.exe");
 }

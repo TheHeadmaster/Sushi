@@ -24,4 +24,10 @@ public static class Constants
         { "int32", "Int32" },
         { "float32", "Float32" },
     });
+
+    public static ReadOnlyDictionary<string, string> SushiToCTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
+        { "Boolean", "bool" },
+        { "Int32", "int32_t" },
+        { "Float32", "float" },
+    });
 }

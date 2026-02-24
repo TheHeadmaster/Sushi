@@ -1,17 +1,12 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Serilog;
 using Sushi.Compilation;
 using Sushi.Extensions;
-using Sushi.Parsing;
-using Sushi.Parsing.Nodes;
 
 namespace Sushi.Steps;
 
 /// <summary>
-/// Handles the compilation of a syntax tree into assembly source files.
+/// Handles the compilation of a syntax tree into C source files.
 /// </summary>
 public sealed class SushiCompilingStep : ICompilerStep
 {
