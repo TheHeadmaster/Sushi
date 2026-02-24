@@ -3,6 +3,10 @@
     "Sushi": {
       "commandName": "Project",
       "commandLineArgs": "--project \"$(SolutionDir)Sushi.Testing\\TestProject\""
+    },
+    "Sushi Intermediate Only": {
+      "commandName": "Project",
+      "commandLineArgs":  "--project \"$(SolutionDIr)Sushi.Testing\\TestProject\" -intermediate"
     }
   }
 }

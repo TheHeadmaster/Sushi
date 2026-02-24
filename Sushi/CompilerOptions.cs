@@ -19,6 +19,11 @@ public sealed class CompilerOptions
     public string ProjectPath { get; set; } = string.Empty;
 
     /// <summary>
+    /// Instructs the compiler to only compile into the intermediate language and not into an executable.
+    /// </summary>
+    public bool IntermediateOnly { get; set; }
+
+    /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.
     /// </summary>
     /// <param name="args">The command line arguments.</param>
@@ -62,6 +67,11 @@ public sealed class CompilerOptions
         if (arguments.TryGetValue("project", out string? path))
         {
             options.ProjectPath = path;
+        }
+
+        if (flags.Contains("intermediate"))
+        {
+            options.IntermediateOnly = true;
         }
 
         await options.Validate();

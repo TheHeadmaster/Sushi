@@ -34,7 +34,14 @@ public sealed class CompileJob
     /// </returns>
     public async Task Run()
     {
-        foreach (ICompilerStep step in this.steps)
+        ReadOnlyCollection<ICompilerStep> filteredSteps = this.steps;
+
+        if (AppMeta.Options.IntermediateOnly)
+        {
+            filteredSteps = [.. filteredSteps.Where(step => step.GetType() != typeof(ExecutableCompilingStep))];
+        }
+
+        foreach (ICompilerStep step in filteredSteps)
         {
             await step.Initialize(this);
             await step.Run(this);
