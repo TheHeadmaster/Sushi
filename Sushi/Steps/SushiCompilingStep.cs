@@ -18,7 +18,7 @@ public sealed class SushiCompilingStep : ICompilerStep
     {
         DateTime startTime = DateTime.Now;
 
-        Log.Information("Initializing Sushi Compiler...");
+        Log.Information("Initializing Sushi intermediate compiler...");
 
         DirectoryInfo intermediateFolder = new(Path.Combine(AppMeta.Options.ProjectPath, "intermediate"));
 
@@ -29,7 +29,7 @@ public sealed class SushiCompilingStep : ICompilerStep
 
         Directory.CreateDirectory(intermediateFolder.FullName);
 
-        Log.Information("Initialized Sushi Compiler in {Time}.", startTime.TimeSinceAsString());
+        Log.Information("Initialized Sushi intermediate compiler in {Time}.", startTime.TimeSinceAsString());
     }
 
     /// <inheritdoc />
@@ -37,12 +37,12 @@ public sealed class SushiCompilingStep : ICompilerStep
     {
         DateTime startTime = DateTime.Now;
 
-        Log.Information("Compiling...");
+        Log.Information("Compiling intermediate...");
 
         SushiVisitor visitor = new();
 
         await visitor.Visit(job.SyntaxTree);
 
-        Log.Information("Compilation completed in {Time}.", startTime.TimeSinceAsString());
+        Log.Information("Intermediate compilation completed in {Time}.", startTime.TimeSinceAsString());
     }
 }
