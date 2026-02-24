@@ -56,18 +56,50 @@ public sealed class FileNode() : SyntaxNode(null)
 
         if (Constants.PrimitiveTypes.ContainsKey(token.Value))
         {
-            VariableDeclarationNode varDeclarationNode = new(token);
-            this.Children.Add(varDeclarationNode);
+            // Look ahead to see if this is the start of a variable or function declaration
 
-            await varDeclarationNode.Visit(context);
 
-            return true;
+            if (this.IsVariableDeclaration(context))
+            {
+                VariableDeclarationNode varDeclarationNode = new(token);
+                this.Children.Add(varDeclarationNode);
+
+                return await varDeclarationNode.Visit(context);
+            }
+
+            FunctionDeclarationNode funcDeclarationNode = new(token);
+            this.Children.Add(funcDeclarationNode);
+
+            return await funcDeclarationNode.Visit(context);
         }
 
         context.Errors.Add(new CompilerError(token)
         {
             ErrorReason = $"Unexpected keyword in top-level statement ({token.Value})."
         });
+
+        return false;
+    }
+
+    private bool IsVariableDeclaration([NotNull] ParsingContext context)
+    {
+        Token? name = context.Peek(2);
+        Token? assignment = context.Peek(3);
+
+        if (assignment?.Type is TokenType.Whitespace)
+        {
+            assignment = context.Peek(4);
+        }
+        
+        if (name?.Type is TokenType.Identifier && assignment?.Type is TokenType.AssignmentOperator)
+        {
+            return true;
+        }
+
+        if (name?.Type is TokenType.Identifier && assignment?.Type is TokenType.Terminator)
+        {
+            return true;
+        }
 
         return false;
     }

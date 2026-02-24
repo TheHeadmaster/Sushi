@@ -7,6 +7,10 @@ public enum TokenType
 {
     Unknown,
     AssignmentOperator,
+    OpeningParenthesis,
+    ClosingParenthesis,
+    OpeningSquiggly,
+    ClosingSquiggly,
     Identifier,
     LineComment,
     BlockComment,

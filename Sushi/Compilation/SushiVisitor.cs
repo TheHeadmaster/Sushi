@@ -48,6 +48,10 @@ public sealed class SushiVisitor
         {
             await this.VisitNumberLiteral((NumberLiteralNode)node);
         }
+        else if (node.GetType() == typeof(FunctionDeclarationNode))
+        {
+            await this.VisitFunctionDeclaration((FunctionDeclarationNode)node);
+        }
     }
 
     private Task<string> Compile() => Task.FromResult(this.sb.ToString().Trim());
@@ -67,13 +71,6 @@ public sealed class SushiVisitor
         this.sb.AppendLine("#include <stdio.h>");
         this.sb.AppendLine("#include <stdint.h>");
         this.sb.AppendLine();
-
-        if (node.FileName == "Program.sus")
-        {
-            this.sb.AppendLine("int main() {");
-        }
-
-        this.indentLevel++;
 
         string intermediateFolder = Path.Combine(AppMeta.Options.ProjectPath, "intermediate");
 
@@ -101,12 +98,6 @@ public sealed class SushiVisitor
             await this.Visit(child);
         }
 
-        this.AppendLineFormatted("printf(\"Hello World!\");");
-        this.AppendLineFormatted("return 0;");
-        this.sb.AppendLine("}");
-
-        this.indentLevel--;
-
         await File.WriteAllTextAsync(Path.ChangeExtension(Path.Combine(intermediateFolder, relativeFilePath), ".c"), await this.Compile(), Encoding.UTF8);
     }
 
@@ -130,5 +121,43 @@ public sealed class SushiVisitor
         this.sb.Append(node.Value);
 
         return Task.CompletedTask;
+    }
+
+    private async Task VisitFunctionDeclaration(FunctionDeclarationNode node)
+    {
+        string type = Constants.SushiToCTypes[node.ReturnType];
+        string name = node.Name;
+
+        if (name == "Main")
+        {
+            name = "main";
+            
+            if (type == "int32_t")
+            {
+                type = "int";
+            }
+        }
+
+        this.AppendFormatted($"{type} {name}() {{");
+
+        if (!node.Body.Any())
+        {
+            this.AppendFormatted(" }");
+        }
+        else
+        {
+            this.sb.AppendLine();
+
+            this.indentLevel++;
+
+            foreach (SyntaxNode statement in node.Body)
+            {
+                await this.Visit(statement);
+            }
+        
+            this.indentLevel--;
+        
+            this.AppendLineFormatted("}");
+        }
     }
 }

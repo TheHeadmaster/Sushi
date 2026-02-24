@@ -1,4 +1,4 @@
-﻿using Sushi.Lexing.Tokenization;
+using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Lexing.TokenGenerators;
 
@@ -44,6 +44,10 @@ public sealed partial class SymbolTokenGenerator : TokenGenerator
 
         type = symbol switch
         {
+            '(' => TokenType.OpeningParenthesis,
+            ')' => TokenType.ClosingParenthesis,
+            '{' => TokenType.OpeningSquiggly,
+            '}' => TokenType.ClosingSquiggly,
             '=' => TokenType.AssignmentOperator,
             _ => null
         };

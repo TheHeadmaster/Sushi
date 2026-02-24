@@ -50,9 +50,57 @@ public abstract class SyntaxNode(Token? token)
             TokenType.Terminator => await this.VisitTerminator(context),
             TokenType.AssignmentOperator => await this.VisitAssignment(context),
             TokenType.NumberLiteral => await this.VisitNumberLiteral(context),
+            TokenType.OpeningParenthesis => await this.VisitOpeningParenthesis(context),
+            TokenType.ClosingParenthesis => await this.VisitClosingParenthesis(context),
+            TokenType.OpeningSquiggly => await this.VisitOpeningSquiggly(context),
+            TokenType.ClosingSquiggly => await this.VisitClosingSquiggly(context),
             _ => false
         };
     }
+
+    /// <summary>
+    /// Visits an opening squiggly <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitOpeningSquiggly([NotNull] ParsingContext context) => Task.FromResult(false);
+
+    /// <summary>
+    /// Visits a closing squiggly <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitClosingSquiggly([NotNull] ParsingContext context) => Task.FromResult(false);
+
+    /// <summary>
+    /// Visits an opening parenthesis <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitOpeningParenthesis([NotNull] ParsingContext context) => Task.FromResult(false);
+
+    /// <summary>
+    /// Visits a closing parenthesis <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitClosingParenthesis([NotNull] ParsingContext context) => Task.FromResult(false);
 
     /// <summary>
     /// Visits a terminator <see cref="Token"/>.
