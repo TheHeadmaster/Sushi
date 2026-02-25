@@ -29,7 +29,7 @@ extensions = [
 ]
 language = 'en'
 master_doc = 'index'
-pygments_style = 'style.SushiLexerStyle'
+pygments_style = 'sushiStyle.SushiLexerStyle'
 source_suffix = { '.rst': 'restructuredtext', '.txt': 'markdown', '.md': 'markdown' }
 templates_path = ['_templates']
 
