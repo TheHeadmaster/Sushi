@@ -15,68 +15,34 @@ namespace Sushi.Parsing.Nodes;
 /// </param>
 public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(startToken)
 {
-    public string ReturnType { get; set; } = null!;
+    /// <summary>
+    /// The return type of the function.
+    /// </summary>
+    public TypeNode? ReturnType { get; set; }
 
     /// <summary>
     /// The name of the function.
     /// </summary>
-    public string Name { get; set; } = null!;
+    public IdentifierNode? Name { get; set; }
 
     /// <summary>
     /// The statements inside of the body of the function.
     /// </summary>
-    public List<SyntaxNode> Body { get; set; } = [];
+    public FunctionBodyNode? Body { get; set; }
 
-    public bool ParametersOpened { get; set; }
-
-    public bool ParametersClosed { get; set; }
-
-    public bool BodyOpened { get; set; }
+    /// <summary>
+    /// The parameters of the function.
+    /// </summary>
+    public ParameterListNode? Parameters { get; set; }
 
     /// <inheritdoc />
-    public override async Task<bool> VisitKeyword([NotNull] ParsingContext context)
+    public override async Task<bool> Visit([NotNull] ParsingContext context)
     {
         Token token = context.Peek()!;
 
-        if (this.ReturnType is not null)
+        if (token is null)
         {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected keyword token in function declaration, as return type is already defined."
-            });
-
-            return false;
-        }
-
-        this.ReturnType = Constants.PrimitiveTypes[token.Value];
-
-        context.Pop();
-
-        return await this.Visit(context);
-    }
-
-    /// <inheritdoc />
-    public override async Task<bool> VisitIdentifier([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
-
-        if (this.Name is not null)
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected identifier token in function declaration, as name is already defined."
-            });
-
-            return false;
-        }
-
-        this.Name = token.Value;
-
-        context.Pop();
-
-        if (context.IsAtEnd())
-        {
-            context.Errors.Add(new CompilerError(token)
+            context.Errors.Add(new CompilerError(context.Previous())
             {
                 ErrorReason = "Unexpected end of file."
             });
@@ -84,138 +50,59 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
             return false;
         }
 
-        return await this.Visit(context);
-    }
-
-    /// <inheritdoc />
-    public override async Task<bool> VisitOpeningParenthesis([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
-
-        if (this.ParametersOpened)
+        if (this.ReturnType is null)
         {
-            context.Errors.Add(new CompilerError(token)
+            TypeNode type = new(token);
+            if (!await type.Visit(context))
             {
-                ErrorReason = "Unexpected opening parenthesis token in function declaration."
-            });
-
-            return false;
-        }
-
-        this.ParametersOpened = true;
-
-        context.Pop();
-
-        if (context.IsAtEnd())
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected end of file."
-            });
-
-            return false;
-        }
-
-        return await this.Visit(context);
-    }
-
-    /// <inheritdoc />
-    public override async Task<bool> VisitClosingParenthesis([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
-
-        if (this.ParametersClosed)
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected closing parenthesis token in function declaration."
-            });
-            return false;
-        }
-
-        this.ParametersOpened = true;
-
-        context.Pop();
-
-        if (context.IsAtEnd())
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected end of file."
-            });
-
-            return false;
-        }
-
-        return await this.Visit(context);
-    }
-
-    /// <inheritdoc />
-    public override async Task<bool> VisitOpeningSquiggly([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
-
-        if (this.BodyOpened)
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected opening squiggly token in function declaration."
-            });
-            return false;
-        }
-
-        this.BodyOpened = true;
-
-        context.Pop();
-        while (true)
-        {
-            if (context.IsAtEnd())
-            {
-                context.Errors.Add(new CompilerError(token)
-                {
-                    ErrorReason = "Unexpected end of file."
-                });
-
                 return false;
             }
 
+            this.ReturnType = type;
 
-            Token currentToken = context.Peek()!;
-
-            if (currentToken.Type is TokenType.Whitespace or TokenType.Newline)
-            {
-                context.Pop();
-                continue;
-            }
-
-            if (currentToken.Type is not TokenType.ClosingSquiggly)
-            {
-                VariableDeclarationNode varDeclarationNode = new(currentToken);
-                this.Body.Add(varDeclarationNode);
-
-                bool result = await varDeclarationNode.Visit(context);
-
-                if (!result)
-                {
-                    return false;
-                }
-
-                continue;
-            }
-
-            break;
+            return await this.Visit(context);
         }
 
+        if (this.Name is null)
+        {
+            IdentifierNode name = new(token);
+            if (!await name.Visit(context))
+            {
+                return false;
+            }
 
-        return await this.Visit(context);
-    }
+            this.Name = name;
 
-    /// <inheritdoc />
-    public override async Task<bool> VisitClosingSquiggly([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
+            return await this.Visit(context);
+        }
 
-        context.Pop();
+        if (this.Parameters is null)
+        {
+            ParameterListNode parameters = new(token);
+
+            if (!await parameters.Visit(context))
+            {
+                return false;
+            }
+
+            this.Parameters = parameters;
+
+            return await this.Visit(context);
+        }
+
+        if (this.Body is null)
+        {
+            FunctionBodyNode body = new(token);
+
+            if (!await body.Visit(context))
+            {
+                return false;
+            }
+
+            this.Body = body;
+
+            return await this.Visit(context);
+        }
 
         return true;
     }

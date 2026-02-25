@@ -26,6 +26,8 @@ public static class Constants
     });
 
     public static ReadOnlyDictionary<string, string> SushiToCTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
+
+        { "__MAIN_SHADOWED_INT_SPECIAL", "int" },
         { "Boolean", "bool" },
         { "Int32", "int32_t" },
         { "Float32", "float" },

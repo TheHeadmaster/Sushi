@@ -12,7 +12,13 @@ public sealed class SushiVisitor
 {
     private StringBuilder sb = null!;
 
-    int indentLevel = 0;
+    int indentLevel;
+
+    private static readonly List<string> implicitHeaders =
+    [
+        "stdio",
+        "stdint"
+    ];
 
     private string Pad()
     {
@@ -44,18 +50,79 @@ public sealed class SushiVisitor
         {
             await this.VisitFile((FileNode)node);
         }
-        else if (node.GetType() == typeof(NumberLiteralNode))
+        else if (node.GetType() == typeof(ConstantNode))
         {
-            await this.VisitNumberLiteral((NumberLiteralNode)node);
-        }
-        else if (node.GetType() == typeof(BooleanLiteralNode))
-        {
-            await this.VisitBooleanLiteral((BooleanLiteralNode)node);
+            await this.VisitConstant((ConstantNode)node);
         }
         else if (node.GetType() == typeof(FunctionDeclarationNode))
         {
             await this.VisitFunctionDeclaration((FunctionDeclarationNode)node);
         }
+        else if (node.GetType() == typeof(IdentifierNode))
+        {
+            await this.VisitIdentifier((IdentifierNode)node);
+        }
+        else if (node.GetType() == typeof(TypeNode))
+        {
+            await this.VisitType((TypeNode)node);
+        }
+        else if (node.GetType() == typeof(ExpressionNode))
+        {
+            await this.VisitExpression((ExpressionNode)node);
+        }
+        else if (node.GetType() == typeof(FunctionBodyNode))
+        {
+            await this.VisitFunctionBody((FunctionBodyNode)node);
+        }
+        else if (node.GetType() == typeof(ParameterListNode))
+        {
+            await this.VisitParameterList((ParameterListNode)node);
+        }
+    }
+
+    private async Task VisitParameterList(ParameterListNode node)
+    {
+        this.sb.Append('(');
+        this.sb.Append(')');
+    }
+
+    private async Task VisitFunctionBody(FunctionBodyNode node)
+    {
+        if (!node.Statements.Any())
+        {
+            this.sb.Append(" { }");
+            return;
+        }
+
+        this.sb.AppendLine();
+        this.AppendLineFormatted("{");
+
+        this.indentLevel++;
+
+        foreach (SyntaxNode statement in node.Statements)
+        {
+            await this.Visit(statement);
+        }
+
+        this.indentLevel--;
+
+        this.AppendLineFormatted("}");
+    }
+
+    private async Task VisitExpression(ExpressionNode node) => await this.Visit(node.Body!);
+
+    private Task VisitType(TypeNode node)
+    {
+        this.sb.Append(Constants.SushiToCTypes[node.Name!]);
+
+        return Task.CompletedTask;
+    }
+
+    private Task VisitIdentifier(IdentifierNode node)
+    {
+        this.sb.Append(node.Name);
+
+        return Task.CompletedTask;
     }
 
     private Task<string> Compile() => Task.FromResult(this.sb.ToString().Trim());
@@ -72,8 +139,11 @@ public sealed class SushiVisitor
     {
         this.sb = new StringBuilder();
 
-        this.sb.AppendLine("#include <stdio.h>");
-        this.sb.AppendLine("#include <stdint.h>");
+        foreach (string header in implicitHeaders)
+        {
+            this.sb.AppendLine($"#include <{header}.h>");
+        }
+
         this.sb.AppendLine();
 
         string intermediateFolder = Path.Combine(AppMeta.Options.ProjectPath, "intermediate");
@@ -107,7 +177,13 @@ public sealed class SushiVisitor
 
     private async Task VisitVariableDeclaration(VariableDeclarationNode node)
     {
-        this.AppendFormatted($"{Constants.SushiToCTypes[node.Type]} {node.Name}");
+        this.AppendFormatted("");
+
+        await this.Visit(node.Type!);
+
+        this.sb.Append(' ');
+
+        await this.Visit(node.Name!);
 
         if (node.Assignment is not null)
         {
@@ -120,14 +196,7 @@ public sealed class SushiVisitor
         this.sb.AppendLine();
     }
 
-    private Task VisitNumberLiteral(NumberLiteralNode node)
-    {
-        this.sb.Append(node.Value);
-
-        return Task.CompletedTask;
-    }
-
-    private Task VisitBooleanLiteral(BooleanLiteralNode node)
+    private Task VisitConstant(ConstantNode node)
     {
         this.sb.Append(node.Value);
 
@@ -136,39 +205,29 @@ public sealed class SushiVisitor
 
     private async Task VisitFunctionDeclaration(FunctionDeclarationNode node)
     {
-        string type = Constants.SushiToCTypes[node.ReturnType];
-        string name = node.Name;
+        this.AppendFormatted("");
 
-        if (name == "Main")
+        TypeNode type = node.ReturnType!;
+        IdentifierNode name = node.Name!;
+
+        if (name.Name == "Main")
         {
-            name = "main";
+            name.Name = "main";
 
-            if (type == "int32_t")
+            if (type.Name == "Int32")
             {
-                type = "int";
+                type.Name = "__MAIN_SHADOWED_INT_SPECIAL";
             }
         }
 
-        this.AppendFormatted($"{type} {name}() {{");
+        await this.Visit(node.ReturnType!);
 
-        if (!node.Body.Any())
-        {
-            this.AppendFormatted(" }");
-        }
-        else
-        {
-            this.sb.AppendLine();
+        this.sb.Append(' ');
 
-            this.indentLevel++;
+        await this.Visit(node.Name!);
+        await this.Visit(node.Parameters!);
+        await this.Visit(node.Body!);
 
-            foreach (SyntaxNode statement in node.Body)
-            {
-                await this.Visit(statement);
-            }
-
-            this.indentLevel--;
-
-            this.AppendLineFormatted("}");
-        }
+        this.sb.AppendLine();
     }
 }
