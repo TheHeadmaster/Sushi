@@ -1,7 +1,7 @@
 import sys
 import os
 
-sys.path.append(os.path.asbpath('ext'))
+sys.path.append(os.path.abspath('ext'))
 
 from sushi import SushiLexer
 
