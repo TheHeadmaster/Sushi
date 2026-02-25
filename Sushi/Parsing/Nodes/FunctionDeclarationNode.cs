@@ -42,7 +42,7 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (token is null)
         {
-            context.Errors.Add(new CompilerError(context.Previous())
+            context.Errors.Add(new CompilerError(context.EndOfFileToken())
             {
                 ErrorReason = "Unexpected end of file."
             });

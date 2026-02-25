@@ -19,4 +19,5 @@ public enum TokenType
     Terminator,
     Keyword,
     NumberLiteral,
+    Comma,
 }

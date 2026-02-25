@@ -35,10 +35,65 @@ public sealed class ParameterListNode(Token startToken) : SyntaxNode(startToken)
 
         context.Pop();
 
+        while (true)
+        {
+            if (context.IsAtEnd())
+            {
+                context.Errors.Add(new CompilerError(context.EndOfFileToken())
+                {
+                    ErrorReason = "Unexpected end of file."
+                });
+
+                return false;
+            }
+
+            Token currentToken = context.Peek()!;
+
+            if (currentToken.Type is TokenType.Whitespace or TokenType.Newline)
+            {
+                context.Pop();
+                continue;
+            }
+
+            if (currentToken.Type is not TokenType.ClosingParenthesis)
+            {
+                ParameterNode parameterNode = new(currentToken);
+                this.Parameters.Add(parameterNode);
+
+                bool result = await parameterNode.Visit(context);
+
+                currentToken = context.Peek()!;
+
+                if (!result)
+                {
+                    return false;
+                }
+
+                if (currentToken.Type is TokenType.Comma)
+                {
+                    await this.Visit(context);
+                    continue;
+                }
+
+                break;
+            }
+
+            break;
+        }
+
         return await this.Visit(context);
     }
 
+    /// <inheritdoc />
     public override Task<bool> VisitClosingParenthesis([NotNull] ParsingContext context)
+    {
+        context.Pop();
+
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
+    public override Task<bool> VisitComma([NotNull] ParsingContext context)
     {
         context.Pop();
 

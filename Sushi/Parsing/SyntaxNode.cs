@@ -34,7 +34,7 @@ public abstract class SyntaxNode(Token? startToken)
     {
         if (context.IsAtEnd())
         {
-            context.Errors.Add(new CompilerError(context.Previous())
+            context.Errors.Add(new CompilerError(context.EndOfFileToken())
             {
                 ErrorReason = "Unexpected end of file."
             });
@@ -59,9 +59,21 @@ public abstract class SyntaxNode(Token? startToken)
             TokenType.ClosingParenthesis => await this.VisitClosingParenthesis(context),
             TokenType.OpeningSquiggly => await this.VisitOpeningSquiggly(context),
             TokenType.ClosingSquiggly => await this.VisitClosingSquiggly(context),
+            TokenType.Comma => await this.VisitComma(context),
             _ => false
         };
     }
+
+    /// <summary>
+    /// Visits a comma <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitComma([NotNull] ParsingContext context) => Task.FromResult(false);
 
     /// <summary>
     /// Visits an opening squiggly <see cref="Token"/>.

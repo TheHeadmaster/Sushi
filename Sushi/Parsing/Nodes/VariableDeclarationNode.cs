@@ -31,7 +31,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (token is null)
         {
-            context.Errors.Add(new CompilerError(context.Previous())
+            context.Errors.Add(new CompilerError(context.EndOfFileToken())
             {
                 ErrorReason = "Unexpected end of file."
             });
@@ -71,7 +71,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
 
             if (context.IsAtEnd())
             {
-                context.Errors.Add(new CompilerError(token)
+                context.Errors.Add(new CompilerError(context.EndOfFileToken())
                 {
                     ErrorReason = "Unexpected end of file."
                 });

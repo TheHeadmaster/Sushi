@@ -47,6 +47,19 @@ public sealed class ParsingContext
         return false;
     }
 
+    public Token EndOfFileToken()
+    {
+        Token previousToken = this.Previous();
+        return new()
+        {
+            LineNumber = previousToken.LineNumber,
+            LinePosition = previousToken.LinePosition + previousToken.Value.Length,
+            CurrentLine = previousToken.CurrentLine,
+            Type = TokenType.Unknown,
+            Value = "",
+        };
+    }
+
     public Token Previous() => this.Peek(-1)!;
 
     public List<CompilerError> Errors { get; } = [];

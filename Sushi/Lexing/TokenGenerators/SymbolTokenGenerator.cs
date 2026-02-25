@@ -48,6 +48,7 @@ public sealed partial class SymbolTokenGenerator : TokenGenerator
             ')' => TokenType.ClosingParenthesis,
             '{' => TokenType.OpeningSquiggly,
             '}' => TokenType.ClosingSquiggly,
+            ',' => TokenType.Comma,
             '=' => TokenType.AssignmentOperator,
             _ => null
         };

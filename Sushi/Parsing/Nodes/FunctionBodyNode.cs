@@ -36,13 +36,11 @@ public sealed class FunctionBodyNode(Token startToken) : SyntaxNode(startToken)
 
         context.Pop();
 
-        Token token = context.Peek()!;
-
         while (true)
         {
             if (context.IsAtEnd())
             {
-                context.Errors.Add(new CompilerError(token)
+                context.Errors.Add(new CompilerError(context.EndOfFileToken())
                 {
                     ErrorReason = "Unexpected end of file."
                 });
