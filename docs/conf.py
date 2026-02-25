@@ -1,3 +1,14 @@
+import sys
+import os
+
+sys.path.append(os.path.asbpath('ext'))
+
+from sushi import SushiLexer
+
+def setup(app):
+    from sphinx.highlighting import lexers
+    lexers['sushi'] = SushiLexer(startinline=True)
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
