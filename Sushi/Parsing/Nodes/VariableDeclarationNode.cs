@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Linq.Expressions;
 using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
@@ -13,42 +12,105 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
     /// <summary>
     /// The type of the variable.
     /// </summary>
-    public string Type { get; set; } = null!;
+    public TypeNode? Type { get; set; }
 
     /// <summary>
     /// The name of the variable.
     /// </summary>
-    public string Name { get; set; } = null!;
+    public IdentifierNode? Name { get; set; }
 
     /// <summary>
     /// The right hand side of the variable declaration, if there is one.
     /// </summary>
-    public SyntaxNode? Assignment { get; set; }
-
-    /// <summary>
-    /// True if the variable declaration has an assignment, false otherwise.
-    /// </summary>
-    private bool IsAssigned { get; set; }
+    public ExpressionNode? Assignment { get; set; }
 
     /// <inheritdoc />
-    public override async Task<bool> VisitKeyword([NotNull] ParsingContext context)
+    public override async Task<bool> Visit([NotNull] ParsingContext context)
     {
-        Token token = context.Peek()!;
-        if (this.Type is not null)
+        Token? token = context.Peek();
+
+        if (token is null)
         {
-            context.Errors.Add(new CompilerError(token)
+            context.Errors.Add(new CompilerError(context.Previous())
             {
-                ErrorReason = "Unexpected keyword token in variable declaration, as type is already defined."
+                ErrorReason = "Unexpected token in variable declaration."
             });
 
             return false;
         }
 
-        this.Type = Constants.PrimitiveTypes[token.Value];
+        if (this.Type is null)
+        {
+            TypeNode type = new(token);
+            if (!await type.Visit(context))
+            {
+                return false;
+            }
+            return await this.Visit(context);
+        }
+
+        if (this.Name is null)
+        {
+            IdentifierNode name = new(token);
+            if (!await name.Visit(context))
+            {
+                return false;
+            }
+            return await this.Visit(context);
+        }
+
+        if (this.Assignment is null)
+        {
+            ExpressionNode expression = new(token);
+            if (!await expression.Visit(context))
+            {
+                return false;
+            }
+
+            return await this.Visit(context);
+        }
+
+        if (!await base.Visit(context))
+        {
+            context.Errors.Add(new CompilerError(token)
+            {
+                ErrorReason = "Unexpected token in variable declaration."
+            });
+
+            return false;
+        }
 
         context.Pop();
 
-        return await this.Visit(context);
+        return true;
+    }
+
+    /// <inheritdoc />
+    public override async Task<bool> VisitKeyword([NotNull] ParsingContext context)
+    {
+        if (Constants.BooleanLiterals.Contains(token.Value))
+        {
+            if (this.Type is null)
+            {
+                context.Errors.Add(new CompilerError(token)
+                {
+                    ErrorReason = "Unexpected boolean literal in variable declaration."
+                });
+                return false;
+            }
+
+            if (this.IsAssigned && this.Assignment is not null)
+            {
+                ErrorReason
+            }
+        }
+
+        context.Errors.Add(new CompilerError(token)
+        {
+            ErrorReason = "Unexpected keyword in variable declaration."
+        });
+
+        return false;
     }
 
     /// <inheritdoc />
@@ -171,6 +233,48 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
         }
 
         this.Assignment = new NumberLiteralNode(token);
+
+        context.Pop();
+
+        if (context.IsAtEnd())
+        {
+            context.Errors.Add(new CompilerError(token)
+            {
+                ErrorReason = "Unexpected end of file."
+            });
+
+            return false;
+        }
+
+        return await this.Visit(context);
+    }
+
+    /// <inheritdoc />
+    public override async Task<bool> VisitBooleanLiteral([NotNull] ParsingContext context)
+    {
+        Token token = context.Peek()!;
+
+        if (!this.IsAssigned)
+        {
+            context.Errors.Add(new CompilerError(token)
+            {
+                ErrorReason = "Unexpected boolean literal in variable declaration."
+            });
+
+            return false;
+        }
+
+        if (this.IsAssigned && this.Assignment is not null)
+        {
+            context.Errors.Add(new CompilerError(token)
+            {
+                ErrorReason = "Unexpected boolean literal in variable assignment."
+            });
+
+            return false;
+        }
+
+        this.Assignment = new BooleanLiteralNode(token);
 
         context.Pop();
 

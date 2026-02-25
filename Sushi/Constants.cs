@@ -30,4 +30,10 @@ public static class Constants
         { "Int32", "int32_t" },
         { "Float32", "float" },
     });
+
+    public static ReadOnlyCollection<string> BooleanLiterals { get; } =
+    [
+        "true",
+        "false"
+    ];
 }

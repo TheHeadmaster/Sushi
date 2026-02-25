@@ -1,9 +1,8 @@
 // Inline Comment
-// bool isRunning = true;
-
 int32 Main() {
     int32 count = 5;
     float32 xPosition = 10.5;
+    bool isRunning = true;
 }
 /* 
 Block Comment

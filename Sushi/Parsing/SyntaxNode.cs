@@ -125,6 +125,17 @@ public abstract class SyntaxNode(Token? token)
     public virtual Task<bool> VisitNumberLiteral([NotNull] ParsingContext context) => Task.FromResult(false);
 
     /// <summary>
+    /// Visits a boolean literal <see cref="Token"/>.
+    /// </summary>
+    /// <param name="context">
+    /// The context that describes and mutates the current state of the parser.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the <see cref="Token"/> was consumed.
+    /// </returns>
+    public virtual Task<bool> VisitBooleanLiteral([NotNull] ParsingContext context) => Task.FromResult(false);
+
+    /// <summary>
     /// Visits an identifier <see cref="Token"/>.
     /// </summary>
     /// <param name="context">

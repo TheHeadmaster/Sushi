@@ -48,6 +48,10 @@ public sealed class SushiVisitor
         {
             await this.VisitNumberLiteral((NumberLiteralNode)node);
         }
+        else if (node.GetType() == typeof(BooleanLiteralNode))
+        {
+            await this.VisitBooleanLiteral((BooleanLiteralNode)node);
+        }
         else if (node.GetType() == typeof(FunctionDeclarationNode))
         {
             await this.VisitFunctionDeclaration((FunctionDeclarationNode)node);
@@ -123,6 +127,13 @@ public sealed class SushiVisitor
         return Task.CompletedTask;
     }
 
+    private Task VisitBooleanLiteral(BooleanLiteralNode node)
+    {
+        this.sb.Append(node.Value);
+
+        return Task.CompletedTask;
+    }
+
     private async Task VisitFunctionDeclaration(FunctionDeclarationNode node)
     {
         string type = Constants.SushiToCTypes[node.ReturnType];
@@ -131,7 +142,7 @@ public sealed class SushiVisitor
         if (name == "Main")
         {
             name = "main";
-            
+
             if (type == "int32_t")
             {
                 type = "int";
@@ -154,9 +165,9 @@ public sealed class SushiVisitor
             {
                 await this.Visit(statement);
             }
-        
+
             this.indentLevel--;
-        
+
             this.AppendLineFormatted("}");
         }
     }
