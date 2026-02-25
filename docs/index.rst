@@ -61,3 +61,4 @@ Contents
 .. toctree::
 
    Home <self>
+   Design <design>
