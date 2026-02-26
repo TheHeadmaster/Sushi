@@ -1,5 +1,7 @@
-html.dark .highlight .c,
-html.light .highlight .c {
+html.dark .highlight .c1,
+html.dark .highlight .cm,
+html.light .highlight .c1,
+html.light .highlight .cm {
     color: #56A64A;
 }
 
