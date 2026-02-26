@@ -26,6 +26,8 @@ public sealed class CorrectnessVisitor : AbstractTreeVisitor
         }
     }
 
+    public override async Task VisitVariableDeclaration([NotNull] VariableDeclarationNode node) => await new AssignmentTypeChecker().Visit(node);
+
     public override async Task VisitFunctionDeclaration([NotNull] FunctionDeclarationNode node) => await new NameCollisionChecker().Visit(node);
 
     public static Task<List<CompilerError>> CollectErrors() => Task.FromResult(Errors);
