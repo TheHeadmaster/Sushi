@@ -8,9 +8,9 @@ class SushiLexerStyle(Style):
         Token: '',
         Comment: '',
         Keyword: '#aa0000',
-        Name: '#ffffb6',
+        Name: '#aa00aa',
         Name.Class: '',
         Name.Function: '',
-        Operator: '#aa00aa',
+        Operator: '#ffffb6',
         String: ''
     }
