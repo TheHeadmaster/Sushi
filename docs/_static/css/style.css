@@ -1,11 +1,14 @@
-.k {
+html.dark .highlight .k,
+html.light .highlight .k {
     color: #aa00aa;
 }
 
-.n {
+html.dark .highlight .n,
+html.light .highlight .n {
     color: #ffffb6;
 }
 
-.o {
+html.dark .highlight .o,
+html.light .highlight .o {
     color: #aa0000;
 }
