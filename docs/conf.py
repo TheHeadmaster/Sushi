@@ -8,6 +8,7 @@ from sushi import SushiLexer
 def setup(app):
     from sphinx.highlighting import lexers
     lexers['sushi'] = SushiLexer(startinline=True)
+    app.add_css_file('css/style.css')
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -29,7 +30,6 @@ extensions = [
 ]
 language = 'en'
 master_doc = 'index'
-pygments_style = 'sushiStyle.SushiLexerStyle'
 source_suffix = { '.rst': 'restructuredtext', '.txt': 'markdown', '.md': 'markdown' }
 templates_path = ['_templates']
 
