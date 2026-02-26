@@ -1,6 +1,8 @@
 from pygments.style import Style
 from pygments.token import *
-Token.Sushi
+
+Sushi.Keyword
+
 class SushiLexerStyle(Style):
 
     styles = {
