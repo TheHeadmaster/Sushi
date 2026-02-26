@@ -7,7 +7,7 @@ class SushiLexer(RegexLexer):
     aliases = ['sushi']
     tokens = {
         'root': [
-            (r'MyKeyword', Token.Keyword),
+            (r'My', Token.Keyword),
             (r'[a-zA-Z_]\w*', Token.Name),
             (r'\s', Token.Text),
             (r'.', Token.Operator),
