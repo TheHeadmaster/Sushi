@@ -1,14 +1,20 @@
 from pygments.style import Style
 from pygments.token import *
 
-Sushi.Keyword
+
 
 class SushiLexerStyle(Style):
 
     styles = {
         Token: '',
         Comment: '',
-        Sushi.Keyword: '#aa0000',
+        Keyword: '#aa0000',
+        Keyword.Constant: '#aa0000',
+        Keyword.Declaration: '#aa0000',
+        Keyword.Namespace: '#aa0000',
+        Keyword.Pseudo: '#aa0000',
+        Keyword.Reserved: '#aa0000',
+        Keyword.Type : '#aa0000',
         Name: '#aa00aa',
         Name.Class: '',
         Name.Function: '',
