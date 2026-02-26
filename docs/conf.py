@@ -37,5 +37,13 @@ templates_path = ['_templates']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'shibuya'
+html_theme_options = {
+    "accent_color": "pink",
+}
+html_context = {
+    "source_type": "github",
+    "source_user": "theheadmaster",
+    "source_repo": "sushi",
+}
 html_static_path = ['_static']
-html_logo = "_static/sushi.png"
+html_logo = "_static/Sushi.png"
