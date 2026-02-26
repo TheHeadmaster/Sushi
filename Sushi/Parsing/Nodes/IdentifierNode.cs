@@ -23,6 +23,11 @@ public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
 
         this.Name = token.Value;
 
+        this.LineNumber = token.LineNumber;
+        this.LinePosition = token.LinePosition;
+        this.CurrentLine = token.CurrentLine;
+        this.Length = token.Value.Length;
+
         context.Pop();
 
         return Task.FromResult(true);

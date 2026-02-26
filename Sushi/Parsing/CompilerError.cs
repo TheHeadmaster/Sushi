@@ -23,6 +23,11 @@ public sealed class CompilerError(Token token)
     public string CurrentLine { get; set; } = token.CurrentLine;
 
     /// <summary>
+    /// The span of the error. This is used to draw squigglies underneath a line.
+    /// </summary>
+    public int Span { get; set; } = token.Value.Length;
+
+    /// <summary>
     /// The specific reason that the error was thrown.
     /// </summary>
     public required string ErrorReason { get; set; }

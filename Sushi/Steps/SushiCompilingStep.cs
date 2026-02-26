@@ -11,7 +11,7 @@ namespace Sushi.Steps;
 public sealed class SushiCompilingStep : ICompilerStep
 {
     /// <inheritdoc />
-    public int StepNumber => 3;
+    public int StepNumber => 4;
 
     /// <inheritdoc />
     public async Task Initialize([NotNull] CompileJob job)

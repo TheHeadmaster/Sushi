@@ -22,6 +22,16 @@ public abstract class SyntaxNode(Token? startToken)
     public int LinePosition { get; set; } = startToken?.LinePosition ?? 0;
 
     /// <summary>
+    /// The line as a string that the start of the syntax node appears on.
+    /// </summary>
+    public string CurrentLine { get; set; } = startToken?.CurrentLine ?? string.Empty;
+
+    /// <summary>
+    /// The character length of the syntax node.
+    /// </summary>
+    public int Length { get; set; } = startToken?.Value.Length ?? 0;
+
+    /// <summary>
     /// Visits a node.
     /// </summary>
     /// <param name="context">

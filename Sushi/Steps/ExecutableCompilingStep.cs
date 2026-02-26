@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Sushi.Steps;
 
@@ -9,7 +9,7 @@ public class ExecutableCompilingStep : ICompilerStep
     private static DirectoryInfo binFolder = null!;
     private static DirectoryInfo objFolder = null!;
 
-    public int StepNumber => 4;
+    public int StepNumber => 5;
 
     public Task Initialize([NotNull] CompileJob job)
     {

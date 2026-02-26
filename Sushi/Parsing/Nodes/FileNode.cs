@@ -58,7 +58,6 @@ public sealed class FileNode() : SyntaxNode(null)
         {
             // Look ahead to see if this is the start of a variable or function declaration
 
-
             if (this.IsVariableDeclaration(context))
             {
                 VariableDeclarationNode varDeclarationNode = new(token);

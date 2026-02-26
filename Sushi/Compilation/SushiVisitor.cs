@@ -8,7 +8,7 @@ namespace Sushi.Compilation;
 /// <summary>
 /// Visits each node in a syntax tree and builds a C file from it.
 /// </summary>
-public sealed class SushiVisitor
+public sealed class SushiVisitor : AbstractTreeVisitor
 {
     private StringBuilder sb = null!;
 
@@ -36,57 +36,13 @@ public sealed class SushiVisitor
 
     private void AppendLineFormatted(string s) => this.sb.AppendLine($"{this.Pad()}{s}");
 
-    public async Task Visit([NotNull] SyntaxNode node)
-    {
-        if (node.GetType() == typeof(AbstractSyntaxTree))
-        {
-            await this.VisitRoot((AbstractSyntaxTree)node);
-        }
-        else if (node.GetType() == typeof(VariableDeclarationNode))
-        {
-            await this.VisitVariableDeclaration((VariableDeclarationNode)node);
-        }
-        else if (node.GetType() == typeof(FileNode))
-        {
-            await this.VisitFile((FileNode)node);
-        }
-        else if (node.GetType() == typeof(ConstantNode))
-        {
-            await this.VisitConstant((ConstantNode)node);
-        }
-        else if (node.GetType() == typeof(FunctionDeclarationNode))
-        {
-            await this.VisitFunctionDeclaration((FunctionDeclarationNode)node);
-        }
-        else if (node.GetType() == typeof(IdentifierNode))
-        {
-            await this.VisitIdentifier((IdentifierNode)node);
-        }
-        else if (node.GetType() == typeof(TypeNode))
-        {
-            await this.VisitType((TypeNode)node);
-        }
-        else if (node.GetType() == typeof(ExpressionNode))
-        {
-            await this.VisitExpression((ExpressionNode)node);
-        }
-        else if (node.GetType() == typeof(FunctionBodyNode))
-        {
-            await this.VisitFunctionBody((FunctionBodyNode)node);
-        }
-        else if (node.GetType() == typeof(ParameterListNode))
-        {
-            await this.VisitParameterList((ParameterListNode)node);
-        }
-    }
-
-    private async Task VisitParameterList(ParameterListNode node)
+    public override async Task VisitParameterList([NotNull] ParameterListNode node)
     {
         this.sb.Append('(');
         this.sb.Append(')');
     }
 
-    private async Task VisitFunctionBody(FunctionBodyNode node)
+    public override async Task VisitFunctionBody([NotNull] FunctionBodyNode node)
     {
         if (!node.Statements.Any())
         {
@@ -109,16 +65,16 @@ public sealed class SushiVisitor
         this.AppendLineFormatted("}");
     }
 
-    private async Task VisitExpression(ExpressionNode node) => await this.Visit(node.Body!);
+    public override async Task VisitExpression([NotNull] ExpressionNode node) => await this.Visit(node.Body!);
 
-    private Task VisitType(TypeNode node)
+    public override Task VisitType([NotNull] TypeNode node)
     {
         this.sb.Append(Constants.SushiToCTypes[node.Name!]);
 
         return Task.CompletedTask;
     }
 
-    private Task VisitIdentifier(IdentifierNode node)
+    public override Task VisitIdentifier([NotNull] IdentifierNode node)
     {
         this.sb.Append(node.Name);
 
@@ -127,7 +83,7 @@ public sealed class SushiVisitor
 
     private Task<string> Compile() => Task.FromResult(this.sb.ToString().Trim());
 
-    private async Task VisitRoot(AbstractSyntaxTree node)
+    public override async Task VisitRoot([NotNull] AbstractSyntaxTree node)
     {
         foreach (SyntaxNode child in node.Children)
         {
@@ -135,7 +91,7 @@ public sealed class SushiVisitor
         }
     }
 
-    private async Task VisitFile(FileNode node)
+    public override async Task VisitFile([NotNull] FileNode node)
     {
         this.sb = new StringBuilder();
 
@@ -175,7 +131,7 @@ public sealed class SushiVisitor
         await File.WriteAllTextAsync(Path.ChangeExtension(Path.Combine(intermediateFolder, relativeFilePath), ".c"), await this.Compile(), Encoding.UTF8);
     }
 
-    private async Task VisitVariableDeclaration(VariableDeclarationNode node)
+    public override async Task VisitVariableDeclaration([NotNull] VariableDeclarationNode node)
     {
         this.AppendFormatted("");
 
@@ -196,14 +152,14 @@ public sealed class SushiVisitor
         this.sb.AppendLine();
     }
 
-    private Task VisitConstant(ConstantNode node)
+    public override Task VisitConstant([NotNull] ConstantNode node)
     {
         this.sb.Append(node.Value);
 
         return Task.CompletedTask;
     }
 
-    private async Task VisitFunctionDeclaration(FunctionDeclarationNode node)
+    public override async Task VisitFunctionDeclaration([NotNull] FunctionDeclarationNode node)
     {
         this.AppendFormatted("");
 
