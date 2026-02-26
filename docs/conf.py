@@ -38,3 +38,4 @@ templates_path = ['_templates']
 
 html_theme = 'shibuya'
 html_static_path = ['_static']
+html_logo = "_static/sushi.png"
