@@ -1,0 +1,23 @@
+name: Sushi
+scopeName: source.sus
+fileTypes:
+  - sus
+patterns:
+  - include: "#comment"
+repository:
+  comment:
+    patterns:
+      - name: comment.line.double-slash.sus
+        begin: (^\s+)?(//).*$
+        while: ^(\s*)(//).*$
+        captures:
+          "1":
+            name: punctuation.whitespace.comment.leading.sus
+          "2":
+            name: punctuation.definition.comment.sus
+      - name: comment.block.sus
+        begin: /\*
+        end: \*/
+        captures:
+          "0":
+            name: punctuation.definition.comment.sus
