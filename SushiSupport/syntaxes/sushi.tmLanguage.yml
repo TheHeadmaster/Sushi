@@ -4,6 +4,7 @@ fileTypes:
   - sus
 patterns:
   - include: "#comment"
+  - include: "#function-declaration"
 repository:
   comment:
     patterns:
@@ -21,3 +22,55 @@ repository:
         captures:
           "0":
             name: punctuation.definition.comment.sus
+  function-declaration:
+    begin: ([a-zA-Z][a-zA-Z0-9]*)\s+([A-Z][a-zA-Z0-9]*)(?=\()
+    beginCaptures:
+      "1":
+        patterns:
+          - include: "#type"
+      "2":
+        name: entity.name.function.sus
+    end: (?<=\})
+    patterns:
+      - include: "#comment"
+      - include: "#parenthesized-parameter-list"
+      - include: "#block"
+  parameter:
+    match: ([a-zA-Z][a-zA-Z0-9]*)\s+([a-z][a-zA-Z0-9]*)
+    captures:
+      "1":
+        patterns:
+          - include: "#type"
+      "2":
+        - name: entity.name.variable.parameter.sus
+
+  parenthesized-parameter-list:
+    begin: (\()
+    beginCaptures:
+      "0":
+        name: punctuation.parenthesis.open.sus
+    end: (\))
+    endCaptures:
+      "0":
+        name: punctuation.parenthesis.close.sus
+    patterns:
+      - include: "#comment"
+      - include: "#parameter"
+      - include: "#punctuation-comma"
+  punctuation-comma:
+    name: punctuation.separator.comma.sus
+    match: ","
+
+  type:
+    patterns:
+      - include: "#comment"
+      - include: "#type-builtin"
+      - include: "#type-name"
+  type-builtin:
+    name: keyword.type.builtin.sus
+    match: \b(bool|int32|float32)\b
+  type-name:
+    patterns:
+      - match: ([A-Z][a-zA-Z0-9]*)
+        name: entity.name.type.sus
+
