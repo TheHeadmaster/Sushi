@@ -6,6 +6,17 @@ patterns:
   - include: "#comment"
   - include: "#function-declaration"
 repository:
+  block:
+    begin: \{
+    beginCaptures:
+      "0":
+        name: punctuation.curlybrace.open.sus
+    end: \}
+    endCaptures:
+      "0":
+        name: punctuation.curlybrace.close.sus
+    patterns:
+      - include: "#statement"
   comment:
     patterns:
       - name: comment.line.double-slash.sus
@@ -22,6 +33,10 @@ repository:
         captures:
           "0":
             name: punctuation.definition.comment.sus
+  expression:
+    patterns:
+      - include: "#comment"
+      - include: "#literal"
   function-declaration:
     begin: ([a-zA-Z][a-zA-Z0-9]*)\s+([A-Z][a-zA-Z0-9]*)(?=\()
     beginCaptures:
@@ -35,6 +50,35 @@ repository:
       - include: "#comment"
       - include: "#parenthesized-parameter-list"
       - include: "#block"
+  literal:
+    patterns:
+      - include: "#literal-boolean"
+      - include: "#literal-numeric"
+  literal-boolean:
+    patterns:
+      - name: constant.language.boolean.true.sus
+        match: (?<!\.)\btrue\b
+      - name: constant.language.boolean.false.sus
+        match: (?<!\.)\bfalse\b
+  literal-numeric:
+    patterns:
+      - name: constant.numeric.sus
+        match: ([0-9]+)(\.[0-9]+)*
+  local-declaration:
+    patterns:
+      - include: "#local-variable-declaration"
+  local-variable-declaration:
+    begin: ([a-z][a-zA-Z0-9]*)
+    beginCaptures:
+      "1":
+        patterns:
+          - include: "#type"
+    end: (?=[;)}])
+    patterns:
+      - name: entity.name.variable.local.sus
+        match: ([a-z][a-zA-Z0-9]*)
+      - include: "#comment"
+      - include: "#variable-initializer"
   parameter:
     match: ([a-zA-Z][a-zA-Z0-9]*)\s+([a-z][a-zA-Z0-9]*)
     captures:
@@ -42,7 +86,7 @@ repository:
         patterns:
           - include: "#type"
       "2":
-        - name: entity.name.variable.parameter.sus
+        name: entity.name.variable.parameter.sus
 
   parenthesized-parameter-list:
     begin: (\()
@@ -60,7 +104,14 @@ repository:
   punctuation-comma:
     name: punctuation.separator.comma.sus
     match: ","
-
+  punctuation-semicolon:
+    name: punctuation.terminator.statement.sus
+    match: ";"
+  statement:
+    patterns:
+      - include: "#comment"
+      - include: "#local-declaration"
+      - include: "#punctuation-semicolon"
   type:
     patterns:
       - include: "#comment"
@@ -73,4 +124,11 @@ repository:
     patterns:
       - match: ([A-Z][a-zA-Z0-9]*)
         name: entity.name.type.sus
-
+  variable-initializer:
+    begin: (?<!=|!)(=)(?!=|>)
+    beginCaptures:
+      "1":
+        name: keyword.operator.assignment.sus
+    end: (?=[,\)\];}])
+    patterns:
+      - include: "#expression"
