@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Compilation;
+using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
 
 namespace Sushi.Correctness;
@@ -11,11 +9,26 @@ public sealed class AssignmentTypeChecker : AbstractTreeVisitor
 {
     public override Task VisitVariableDeclaration([NotNull] VariableDeclarationNode node)
     {
-        TypeNode type = node.Assignment!.EvaluateType();
+        SushiType? assignmentType = node.Assignment!.EvaluateType();
+        SushiType? declarationType = node.Type!.EvaluateType();
 
-        if (node.Type!.Name != type.Name)
+        if (assignmentType is null)
         {
-            GenerateError(type, "Type mismatch.");
+            GenerateError(node.Assignment, "Could not resolve type in assignment declaration.");
+
+            return Task.CompletedTask;
+        }
+
+        if (declarationType is null)
+        {
+            GenerateError(node.Type, "Could not resolve type in assignment declaration.");
+
+            return Task.CompletedTask;
+        }
+
+        if (!declarationType.IsValidAssignment(assignmentType))
+        {
+            GenerateError(node.Assignment, "Type mismatch.");
         }
 
         return Task.CompletedTask;

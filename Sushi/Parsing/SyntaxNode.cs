@@ -9,8 +9,17 @@ namespace Sushi.Parsing;
 /// <param name="startToken">
 /// The token used to mark the start of the node.
 /// </param>
-public abstract class SyntaxNode(Token? startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public abstract class SyntaxNode(Token? startToken, ReferenceScope scope)
 {
+    /// <summary>
+    /// The scope that the node exists in. Used for reference lookups and checking for name collision.
+    /// If the scope does not have a parent, then it is the global scope.
+    /// </summary>
+    public ReferenceScope Scope { get; set; } = scope;
+
     /// <summary>
     /// The line the <see cref="SyntaxNode" /> starts at.
     /// </summary>

@@ -7,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents an expression, which can have one or more sub expressions in a tree hierarchy.
 /// </summary>
 /// <param name="startToken">
-/// The token used to mark the start of the node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class ExpressionNode(Token startToken) : ExpressionableNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class ExpressionNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
     /// The body of the expression. This can be a terminal, such as a constant,
@@ -22,10 +25,11 @@ public sealed class ExpressionNode(Token startToken) : ExpressionableNode(startT
     {
         Token token = context.Peek()!;
 
-        this.Body = new ConstantNode(token);
+        this.Body = new ConstantNode(token, this.Scope);
 
         return await this.Body.Visit(context);
     }
 
-    public override TypeNode EvaluateType() => this.Body!.EvaluateType();
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Body!.EvaluateType();
 }

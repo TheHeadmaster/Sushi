@@ -7,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents an identifier that is defined somewhere else in the code.
 /// </summary>
 /// <param name="startToken">
-/// The token used to mark the start of the node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class IdentifierNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
     /// The name of the identifier.
@@ -28,8 +31,19 @@ public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
         this.CurrentLine = token.CurrentLine;
         this.Length = token.Value.Length;
 
+        if (!this.Scope.TryAddIdentifier(this.Name))
+        {
+            context.Errors.Add(new CompilerError(token)
+            {
+                ErrorReason = "Name collision."
+            });
+        }
+
         context.Pop();
 
         return Task.FromResult(true);
     }
+
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Scope.ResolveType(this.Name!);
 }

@@ -1,6 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Numerics;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -8,7 +6,13 @@ namespace Sushi.Parsing.Nodes;
 /// <summary>
 /// Represents a constant literal value, such as <see cref="true"/> or <c>1.05f</c>.
 /// </summary>
-public sealed class ConstantNode(Token startToken) : ExpressionableNode(startToken)
+/// <param name="startToken">
+/// The <see cref="Token"/> used to mark the start of the node.
+/// </param>
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class ConstantNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
     /// The type of the constant.
@@ -20,18 +24,46 @@ public sealed class ConstantNode(Token startToken) : ExpressionableNode(startTok
     /// </summary>
     public string? Value { get; set; }
 
-    public override TypeNode EvaluateType() => this.Type!;
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Scope.ResolveType(this.Type!.Name!);
 
     /// <inheritdoc />
     public override Task<bool> VisitConstant([NotNull] ParsingContext context)
     {
         Token token = context.Peek()!;
 
-        if (int.TryParse(this.Value, out _))
+        if (Constants.BooleanLiterals.Contains(token.Value))
         {
-            this.Type = new TypeNode(token)
+            this.Type = new TypeNode(token, this.Scope)
+            {
+                Name = "Boolean"
+            };
+
+            this.Value = token.Value;
+
+            context.Pop();
+
+            return Task.FromResult(true);
+        }
+
+        if (int.TryParse(token.Value, out _))
+        {
+            this.Type = new TypeNode(token, this.Scope)
             {
                 Name = "Int32"
+            };
+
+            this.Value = token.Value;
+
+            context.Pop();
+
+            return Task.FromResult(true);
+        }
+        else if (float.TryParse(token.Value, out _))
+        {
+            this.Type = new TypeNode(token, this.Scope)
+            {
+                Name = "Float32"
             };
 
             this.Value = token.Value;
@@ -47,27 +79,5 @@ public sealed class ConstantNode(Token startToken) : ExpressionableNode(startTok
         });
 
         return Task.FromResult(false);
-    }
-
-    /// <inheritdoc />
-    public override async Task<bool> VisitKeyword([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
-
-        if (Constants.BooleanLiterals.Contains(token.Value))
-        {
-            this.Type = new TypeNode(token)
-            {
-                Name = "Boolean"
-            };
-            this.Value = token.Value;
-        }
-
-        context.Errors.Add(new CompilerError(token)
-        {
-            ErrorReason = "Unexpected keyword in variable assignment."
-        });
-
-        return false;
     }
 }

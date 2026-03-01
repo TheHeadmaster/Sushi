@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -7,7 +6,13 @@ namespace Sushi.Parsing.Nodes;
 /// <summary>
 /// Represents a variable declaration.
 /// </summary>
-public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="startToken">
+/// The <see cref="Token"/> used to mark the start of the node.
+/// </param>
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class VariableDeclarationNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
 {
     /// <summary>
     /// The type of the variable.
@@ -41,7 +46,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.Type is null)
         {
-            TypeNode type = new(token);
+            TypeNode type = new(token, this.Scope);
             if (!await type.Visit(context))
             {
                 return false;
@@ -54,7 +59,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.Name is null)
         {
-            IdentifierNode name = new(token);
+            IdentifierNode name = new(token, this.Scope);
             if (!await name.Visit(context))
             {
                 return false;
@@ -79,7 +84,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
                 return false;
             }
 
-            ExpressionNode expression = new(token);
+            ExpressionNode expression = new(token, this.Scope);
             if (!await expression.Visit(context))
             {
                 return false;
@@ -89,7 +94,7 @@ public sealed class VariableDeclarationNode(Token startToken) : SyntaxNode(start
 
             return await this.Visit(context);
         }
-        
+
         if (token.Type is TokenType.Terminator)
         {
             context.Pop();

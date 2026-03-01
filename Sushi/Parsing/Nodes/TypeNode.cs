@@ -7,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents a type that is defined somewhere else in the code.
 /// </summary>
 /// <param name="startToken">
-/// The token used to mark the start of the node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class TypeNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class TypeNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
     /// The name of the type.
@@ -31,4 +34,7 @@ public sealed class TypeNode(Token startToken) : SyntaxNode(startToken)
 
         return Task.FromResult(false);
     }
+
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Scope.ResolveType(this.Name!);
 }

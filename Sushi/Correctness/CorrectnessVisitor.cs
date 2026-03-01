@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Compilation;
 using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
@@ -28,7 +25,11 @@ public sealed class CorrectnessVisitor : AbstractTreeVisitor
 
     public override async Task VisitVariableDeclaration([NotNull] VariableDeclarationNode node) => await new AssignmentTypeChecker().Visit(node);
 
-    public override async Task VisitFunctionDeclaration([NotNull] FunctionDeclarationNode node) => await new NameCollisionChecker().Visit(node);
+    public override async Task VisitFunctionDeclaration([NotNull] FunctionDeclarationNode node)
+    {
+        await this.Visit(node.Parameters!);
+        await this.Visit(node.Body!);
+    }
 
     public static Task<List<CompilerError>> CollectErrors() => Task.FromResult(Errors);
 }
