@@ -3,6 +3,10 @@
   "displayName": "Sushi",
   "description": "Sushi",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/theheadmaster/sushi"
+  },
   "engines": {
     "vscode": "^1.109.0"
   },
