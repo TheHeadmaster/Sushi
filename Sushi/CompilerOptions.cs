@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Options;
 using Serilog;
 
 namespace Sushi;
@@ -16,7 +16,12 @@ public sealed class CompilerOptions
     /// <summary>
     /// The path of the project.
     /// </summary>
-    public string? ProjectPath { get; set; }
+    public string ProjectPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Instructs the compiler to only compile into the intermediate language and not into an executable.
+    /// </summary>
+    public bool IntermediateOnly { get; set; }
 
     /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.
@@ -62,6 +67,11 @@ public sealed class CompilerOptions
         if (arguments.TryGetValue("project", out string? path))
         {
             options.ProjectPath = path;
+        }
+
+        if (flags.Contains("intermediate"))
+        {
+            options.IntermediateOnly = true;
         }
 
         await options.Validate();

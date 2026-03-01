@@ -1,0 +1,21 @@
+html.dark .highlight .c1,
+html.dark .highlight .cm,
+html.light .highlight .c1,
+html.light .highlight .cm {
+    color: #56A64A;
+}
+
+html.dark .highlight .k,
+html.light .highlight .k {
+    color: #AA0000;
+}
+
+html.dark .highlight .n,
+html.light .highlight .n {
+    color: #ffffb6;
+}
+
+html.dark .highlight .o,
+html.light .highlight .o {
+    color: #aa0000;
+}

@@ -1,0 +1,22 @@
+Extremely Technical Stuff For Those That Care
+=============================================
+
+.. code:: sushi
+    
+   // Inline Comment
+
+   int32 Main()
+   {
+      int32 count = 5;
+      float32 xPosition = 10.5;
+      bool isRunning = true;
+   }
+   
+   bool IsDevelopment(bool isDebug, bool isForceReleaseMode)
+   {
+      int32 something;
+   }
+
+   /* 
+   Block Comment
+   */

@@ -61,3 +61,4 @@ Contents
 .. toctree::
 
    Home <self>
+   Extremely Technical Stuff For Those That Care <technical>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -16,4 +16,6 @@ public enum ExitCode
     InvalidParameterSyntax,
     LexingSyntaxError,
     ParsingSyntaxError,
+    ProcessFailedToStart,
+    ProcessFailedDuringExecution,
 }

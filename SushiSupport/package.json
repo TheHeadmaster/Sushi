@@ -1,0 +1,45 @@
+{
+  "name": "sushi",
+  "displayName": "Sushi",
+  "description": "Sushi",
+  "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/theheadmaster/sushi"
+  },
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "sushi",
+        "aliases": [
+          "Sushi",
+          "sushi"
+        ],
+        "extensions": [
+          ".sus"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/Sushi.png",
+          "dark": "./icons/Sushi.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sushi",
+        "scopeName": "source.sus",
+        "path": "./syntaxes/sushi.tmLanguage.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.1"
+  }
+}

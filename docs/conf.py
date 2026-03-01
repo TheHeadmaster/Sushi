@@ -1,3 +1,14 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath('./ext'))
+
+from sushi import SushiLexer
+
+def setup(app):
+    from sphinx.highlighting import lexers
+    lexers['sushi'] = SushiLexer(startinline=True)
+    app.add_css_file('css/style.css')
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
@@ -19,12 +30,20 @@ extensions = [
 ]
 language = 'en'
 master_doc = 'index'
-pygments_style = 'sphinx'
 source_suffix = { '.rst': 'restructuredtext', '.txt': 'markdown', '.md': 'markdown' }
 templates_path = ['_templates']
 
 # -- Options for HTML output ----------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'groundwork'
+html_theme = 'shibuya'
+html_theme_options = {
+    "accent_color": "pink",
+}
+html_context = {
+    "source_type": "github",
+    "source_user": "theheadmaster",
+    "source_repo": "sushi",
+}
 html_static_path = ['_static']
+html_logo = "_static/Sushi.png"

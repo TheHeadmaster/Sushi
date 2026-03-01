@@ -1,6 +1,8 @@
-﻿using System.Text;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
+using Sushi.Extensions;
 
 namespace Sushi;
 
@@ -22,13 +24,14 @@ public static class Program
     {
         try
         {
+            DateTime startTime = DateTime.Now;
             await Initialize(args);
 
             CompileJob job = new();
 
-            await job.Initialize();
-
             await job.Run();
+
+            Log.Information("Compilation completed in {Time}.", startTime.TimeSinceAsString());
         }
         catch (Exception exception)
         {
@@ -81,4 +84,13 @@ public static class Program
     /// The event arguments.
     /// </param>
     private static void OnExit(object? sender, EventArgs args) => Log.CloseAndFlush();
+
+    /// <summary>
+    /// Exits the program gracefully.
+    /// </summary>
+    /// <param name="exitCode">
+    /// The exit code to use.
+    /// </param>
+    [DoesNotReturn]
+    public static void Exit(ExitCode exitCode) => Environment.Exit((int)exitCode);
 }
