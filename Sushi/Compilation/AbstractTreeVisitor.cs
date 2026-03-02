@@ -74,7 +74,22 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitAssignment((AssignmentNode)node);
         }
+        else if (node.GetType() == typeof(MethodCallNode))
+        {
+            await this.VisitMethodCall((MethodCallNode)node);
+        }
+        else if (node.GetType() == typeof(ArgumentListNode))
+        {
+            await this.VisitArgumentList((ArgumentListNode)node);
+        }
+        else if (node.GetType() == typeof(ArgumentNode))
+        {
+            await this.VisitArgument((ArgumentNode)node);
+        }
     }
+    public virtual Task VisitArgument(ArgumentNode node) => Task.CompletedTask;
+    public virtual Task VisitArgumentList(ArgumentListNode node) => Task.CompletedTask;
+    public virtual Task VisitMethodCall(MethodCallNode node) => Task.CompletedTask;
     public virtual Task VisitAssignment(AssignmentNode node) => Task.CompletedTask;
     public virtual Task VisitParameter([NotNull] ParameterNode node) => Task.CompletedTask;
     public virtual Task VisitParameterList([NotNull] ParameterListNode node) => Task.CompletedTask;

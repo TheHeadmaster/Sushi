@@ -66,9 +66,14 @@ public sealed class FunctionDeclarationNode(Token startToken, ReferenceScope sco
 
         if (this.Name is null)
         {
-            IdentifierNode name = new(token, this.Scope);
+            IdentifierNode name = new(token, this.Scope, true);
 
             if (!await name.Visit(context))
+            {
+                return false;
+            }
+
+            if (!name.AssignType(context, this.ReturnType))
             {
                 return false;
             }

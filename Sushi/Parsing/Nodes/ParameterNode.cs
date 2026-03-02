@@ -54,7 +54,7 @@ public sealed class ParameterNode(Token startToken, ReferenceScope scope) : Synt
 
         if (this.Name is null)
         {
-            IdentifierNode name = new(token, this.Scope);
+            IdentifierNode name = new(token, this.Scope, false);
 
             if (!await name.Visit(context))
             {

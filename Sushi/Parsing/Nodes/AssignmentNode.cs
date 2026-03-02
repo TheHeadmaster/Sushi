@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -44,7 +44,7 @@ public sealed class AssignmentNode(Token startToken, ReferenceScope scope) : Exp
 
         if (this.Identifier is null)
         {
-            IdentifierNode identifier = new(token, this.Scope);
+            IdentifierNode identifier = new(token, this.Scope, false);
             if (!await identifier.Visit(context))
             {
                 return false;

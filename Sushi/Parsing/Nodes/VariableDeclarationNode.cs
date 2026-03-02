@@ -59,7 +59,7 @@ public sealed class VariableDeclarationNode(Token startToken, ReferenceScope sco
 
         if (this.Name is null)
         {
-            IdentifierNode name = new(token, this.Scope);
+            IdentifierNode name = new(token, this.Scope, false);
 
             if (!await name.Visit(context))
             {

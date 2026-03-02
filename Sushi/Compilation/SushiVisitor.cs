@@ -39,7 +39,29 @@ public sealed class SushiVisitor : AbstractTreeVisitor
     public override async Task VisitParameterList([NotNull] ParameterListNode node)
     {
         this.sb.Append('(');
+
+        bool isFirst = true;
+
+        foreach (ParameterNode parameter in node.Parameters)
+        {
+            if (!isFirst)
+            {
+                this.sb.Append(", ");
+            }
+
+            isFirst = false;
+
+            await this.Visit(parameter);
+        }
+
         this.sb.Append(')');
+    }
+
+    public override async Task VisitParameter([NotNull] ParameterNode node)
+    {
+        await this.Visit(node.Type);
+        this.sb.Append(' ');
+        await this.Visit(node.Name);
     }
 
     public override async Task VisitFunctionBody([NotNull] FunctionBodyNode node)
@@ -208,5 +230,37 @@ public sealed class SushiVisitor : AbstractTreeVisitor
         this.sb.Append(';');
 
         this.AppendLineFormatted("");
+    }
+
+    public override async Task VisitMethodCall(MethodCallNode node)
+    {
+        await this.Visit(node.Identifier);
+        await this.Visit(node.Arguments);
+    }
+
+    public override async Task VisitArgumentList(ArgumentListNode node)
+    {
+        this.sb.Append('(');
+
+        bool isFirst = true;
+
+        foreach (ArgumentNode argument in node.Arguments)
+        {
+            if (!isFirst)
+            {
+                this.sb.Append(", ");
+            }
+
+            isFirst = false;
+
+            await this.Visit(argument);
+        }
+
+        this.sb.Append(')');
+    }
+
+    public override async Task VisitArgument(ArgumentNode node)
+    {
+        await this.Visit(node.Argument);
     }
 }

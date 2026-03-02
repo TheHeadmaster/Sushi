@@ -1,4 +1,4 @@
-﻿namespace Sushi.Parsing;
+namespace Sushi.Parsing;
 
 /// <summary>
 /// Represents an identifier, such as a variable or parameter name.
@@ -14,4 +14,5 @@ public sealed class SushiIdentifier
     /// The identifier type.
     /// </summary>
     public required string Type { get; set; }
+    public required bool IsFunction { get; set; }
 }

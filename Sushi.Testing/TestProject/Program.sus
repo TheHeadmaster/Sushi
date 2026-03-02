@@ -6,12 +6,13 @@ int32 Main()
     float32 xPosition = 10.5;
     bool isRunning = true;
     bool isNotRunning = false;
-    isNotRunning = isRunning;
+    isNotRunning = IsDevelopment(isRunning, isRunning);
 }
 
 bool IsDevelopment(bool isDebug, bool isForceReleaseMode)
 {
     int32 something;
+
 }
 
 /* 

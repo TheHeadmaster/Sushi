@@ -1,4 +1,4 @@
-﻿namespace Sushi.Parsing;
+namespace Sushi.Parsing;
 
 /// <summary>
 /// Represents a scope in which identifiers and type names live. Two identifiers with the same name
@@ -57,13 +57,13 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <returns>
     /// The <see cref="SushiIdentifier"/> or null if it was not found.
     /// </returns>
-    public SushiIdentifier? ResolveIdentifier(string name)
+    public SushiIdentifier? ResolveIdentifier(string name, bool isFunction)
     {
-        SushiIdentifier? existing = this.identifiers.FirstOrDefault(x => x.Name == name);
+        SushiIdentifier? existing = this.identifiers.FirstOrDefault(x => x.Name == name && x.IsFunction == isFunction);
 
         if (existing is null)
         {
-            return this.ParentScope?.ResolveIdentifier(name) ?? null;
+            return this.ParentScope?.ResolveIdentifier(name, isFunction) ?? null;
         }
 
         return existing;
@@ -104,16 +104,16 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <returns>
     /// True for success, false for name collision error.
     /// </returns>
-    public bool TryAddIdentifier(string name, string type)
+    public bool TryAddIdentifier(string name, string type, bool isFunction)
     {
-        SushiIdentifier? resolvedIdentifier = this.ResolveIdentifier(name);
+        SushiIdentifier? resolvedIdentifier = this.ResolveIdentifier(name, isFunction);
 
         if (resolvedIdentifier is not null)
         {
             return false;
         }
 
-        this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type });
+        this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type, IsFunction = isFunction });
 
         return true;
     }
