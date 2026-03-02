@@ -64,7 +64,7 @@ public sealed class SushiVisitor : AbstractTreeVisitor
         await this.Visit(node.Name);
     }
 
-    public override async Task VisitFunctionBody([NotNull] FunctionBodyNode node)
+    public override async Task VisitBlock([NotNull] BlockNode node)
     {
         if (!node.Statements.Any())
         {
@@ -262,5 +262,18 @@ public sealed class SushiVisitor : AbstractTreeVisitor
     public override async Task VisitArgument(ArgumentNode node)
     {
         await this.Visit(node.Argument);
+    }
+
+    public override async Task VisitIf(IfNode node)
+    {
+        this.AppendFormatted("if (");
+
+        await this.Visit(node.Expression);
+
+        this.sb.Append(')');
+
+        await this.Visit(node.Body!);
+
+        this.sb.AppendLine();
     }
 }

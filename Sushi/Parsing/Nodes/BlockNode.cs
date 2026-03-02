@@ -4,7 +4,7 @@ using Sushi.Lexing.Tokenization;
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
-/// Represents a function body.
+/// Represents a block body, such as a function block or an if block.
 /// </summary>
 /// <param name="startToken">
 /// The <see cref="Token"/> used to mark the start of the node.
@@ -12,7 +12,7 @@ namespace Sushi.Parsing.Nodes;
 /// <param name="scope">
 /// The scope that the node exists in.
 /// </param>
-public sealed class FunctionBodyNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
+public sealed class BlockNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
 {
     public List<SyntaxNode> Statements { get; set; } = [];
 
@@ -25,7 +25,7 @@ public sealed class FunctionBodyNode(Token startToken, ReferenceScope scope) : S
         {
             context.Errors.Add(new CompilerError(context.Peek()!)
             {
-                ErrorReason = "Unexpected '{' token in function body."
+                ErrorReason = "Unexpected '{' token in block body."
             });
 
             return false;
@@ -55,25 +55,27 @@ public sealed class FunctionBodyNode(Token startToken, ReferenceScope scope) : S
                 continue;
             }
 
-            if (currentToken.Type is not TokenType.ClosingSquiggly)
+            if (currentToken.Type is TokenType.ClosingSquiggly)
             {
-                SyntaxNode statement = currentToken.Type is not TokenType.Identifier
+                break;
+            }
+
+            SyntaxNode statement = currentToken.Type is TokenType.Keyword && currentToken.Value == "if"
+                ? new IfNode(currentToken, this.Scope)
+                : currentToken.Type is not TokenType.Identifier
                     ? new VariableDeclarationNode(currentToken, this.Scope)
                     : new AssignmentNode(currentToken, this.Scope);
 
-                this.Statements.Add(statement);
+            this.Statements.Add(statement);
 
-                bool result = await statement.Visit(context);
+            bool result = await statement.Visit(context);
 
-                if (!result)
-                {
-                    return false;
-                }
-
-                continue;
+            if (!result)
+            {
+                return false;
             }
 
-            break;
+            continue;
         }
 
         return await this.Visit(context);

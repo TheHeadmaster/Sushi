@@ -33,15 +33,7 @@ public sealed class ExpressionNode(Token startToken, ReferenceScope scope) : Exp
     public override async Task<bool> VisitIdentifier([NotNull] ParsingContext context)
     {
         Token token = context.Peek()!;
-        Token? nextToken = null;
-        int lookahead = 1;
-
-        while (context.Peek(lookahead)?.Type is TokenType.Whitespace or TokenType.Newline)
-        {
-            lookahead++;
-        }
-
-        nextToken = context.Peek(lookahead);
+        Token? nextToken = context.PeekNextNonWhiteSpaceNonReturnToken(1);
 
         if (nextToken?.Type is TokenType.OpeningParenthesis)
         {

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Serilog.Parsing;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing;
@@ -23,7 +24,28 @@ public sealed class ParsingContext
         return this.Tokens[this.currentIndex + lookahead];
     }
 
+    public Token? PeekNextNonWhiteSpaceNonReturnToken(int startIndex)
+    {
+        int lookahead = startIndex;
+
+        while (this.Peek(lookahead)?.Type is TokenType.Whitespace or TokenType.Newline)
+        {
+            lookahead++;
+        }
+
+        return this.Peek(lookahead);
+    }
+
     public void Pop() => this.currentIndex++;
+
+    public void PopUntilNonWhiteSpaceNonReturnTokenOrEndOfFile()
+    {
+        while (this.Peek()?.Type is TokenType.Whitespace or TokenType.Newline)
+        {
+            this.Pop();
+        }
+    }
+
 
     public bool IsAnyOf(params TokenType[] types)
     {

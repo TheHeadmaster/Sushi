@@ -27,7 +27,7 @@ public sealed class FunctionDeclarationNode(Token startToken, ReferenceScope sco
     /// <summary>
     /// The statements inside of the body of the function.
     /// </summary>
-    public FunctionBodyNode? Body { get; set; }
+    public BlockNode? Body { get; set; }
 
     /// <summary>
     /// The parameters of the function.
@@ -99,7 +99,7 @@ public sealed class FunctionDeclarationNode(Token startToken, ReferenceScope sco
 
         if (this.Body is null)
         {
-            FunctionBodyNode body = new(token, this.functionScope);
+            BlockNode body = new(token, this.functionScope);
 
             if (!await body.Visit(context))
             {

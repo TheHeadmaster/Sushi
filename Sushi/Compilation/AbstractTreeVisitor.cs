@@ -58,9 +58,9 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitExpression((ExpressionNode)node);
         }
-        else if (node.GetType() == typeof(FunctionBodyNode))
+        else if (node.GetType() == typeof(BlockNode))
         {
-            await this.VisitFunctionBody((FunctionBodyNode)node);
+            await this.VisitBlock((BlockNode)node);
         }
         else if (node.GetType() == typeof(ParameterListNode))
         {
@@ -86,7 +86,13 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitArgument((ArgumentNode)node);
         }
+        else if (node.GetType() == typeof(IfNode))
+        {
+            await this.VisitIf((IfNode)node);
+        }
     }
+
+    public virtual Task VisitIf(IfNode node) => Task.CompletedTask;
     public virtual Task VisitArgument(ArgumentNode node) => Task.CompletedTask;
     public virtual Task VisitArgumentList(ArgumentListNode node) => Task.CompletedTask;
     public virtual Task VisitMethodCall(MethodCallNode node) => Task.CompletedTask;
@@ -94,7 +100,7 @@ public abstract class AbstractTreeVisitor
     public virtual Task VisitParameter([NotNull] ParameterNode node) => Task.CompletedTask;
     public virtual Task VisitParameterList([NotNull] ParameterListNode node) => Task.CompletedTask;
 
-    public virtual Task VisitFunctionBody([NotNull] FunctionBodyNode node) => Task.CompletedTask;
+    public virtual Task VisitBlock([NotNull] BlockNode node) => Task.CompletedTask;
 
     public virtual Task VisitExpression([NotNull] ExpressionNode node) => Task.CompletedTask;
 

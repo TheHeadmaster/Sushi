@@ -15,6 +15,8 @@ public static class Constants
         "bool",
         "true",
         "false",
+        "if",
+        "then",
         "int32",
         "float32"
     ];
