@@ -98,10 +98,13 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <param name="name">
     /// The name of the new identifier.
     /// </param>
+    /// <param name="type">
+    /// The name of the type declared when the identifier was declared.
+    /// </param>
     /// <returns>
     /// True for success, false for name collision error.
     /// </returns>
-    public bool TryAddIdentifier(string name)
+    public bool TryAddIdentifier(string name, string type)
     {
         SushiIdentifier? resolvedIdentifier = this.ResolveIdentifier(name);
 
@@ -110,7 +113,7 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
             return false;
         }
 
-        this.identifiers.Add(new SushiIdentifier() { Name = name });
+        this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type });
 
         return true;
     }

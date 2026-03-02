@@ -5,6 +5,8 @@ int32 Main()
     int32 count = 5;
     float32 xPosition = 10.5;
     bool isRunning = true;
+    bool isNotRunning = false;
+    isNotRunning = isRunning;
 }
 
 bool IsDevelopment(bool isDebug, bool isForceReleaseMode)

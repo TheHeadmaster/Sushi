@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
@@ -73,8 +70,12 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitParameter((ParameterNode)node);
         }
+        else if (node.GetType() == typeof(AssignmentNode))
+        {
+            await this.VisitAssignment((AssignmentNode)node);
+        }
     }
-
+    public virtual Task VisitAssignment(AssignmentNode node) => Task.CompletedTask;
     public virtual Task VisitParameter([NotNull] ParameterNode node) => Task.CompletedTask;
     public virtual Task VisitParameterList([NotNull] ParameterListNode node) => Task.CompletedTask;
 

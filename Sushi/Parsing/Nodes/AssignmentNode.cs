@@ -1,10 +1,10 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
-/// Represents a variable declaration.
+/// Represents a variable or member assignment.
 /// </summary>
 /// <param name="startToken">
 /// The <see cref="Token"/> used to mark the start of the node.
@@ -12,22 +12,20 @@ namespace Sushi.Parsing.Nodes;
 /// <param name="scope">
 /// The scope that the node exists in.
 /// </param>
-public sealed class VariableDeclarationNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
+public sealed class AssignmentNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
-    /// The type of the variable.
+    /// The left hand side of the assignment.
     /// </summary>
-    public TypeNode? Type { get; set; }
+    public IdentifierNode? Identifier { get; set; }
 
     /// <summary>
-    /// The name of the variable.
+    /// The right hand side of the assignment.
     /// </summary>
-    public IdentifierNode? Name { get; set; }
+    public ExpressionNode? RightHandSide { get; set; }
 
-    /// <summary>
-    /// The right hand side of the variable declaration, if there is one.
-    /// </summary>
-    public ExpressionNode? Assignment { get; set; }
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Identifier?.EvaluateType();
 
     /// <inheritdoc />
     public override async Task<bool> Visit([NotNull] ParsingContext context)
@@ -44,39 +42,20 @@ public sealed class VariableDeclarationNode(Token startToken, ReferenceScope sco
             return false;
         }
 
-        if (this.Type is null)
+        if (this.Identifier is null)
         {
-            TypeNode type = new(token, this.Scope);
-            if (!await type.Visit(context))
+            IdentifierNode identifier = new(token, this.Scope);
+            if (!await identifier.Visit(context))
             {
                 return false;
             }
 
-            this.Type = type;
+            this.Identifier = identifier;
 
             return await this.Visit(context);
         }
 
-        if (this.Name is null)
-        {
-            IdentifierNode name = new(token, this.Scope);
-
-            if (!await name.Visit(context))
-            {
-                return false;
-            }
-
-            if (!name.AssignType(context, this.Type))
-            {
-                return false;
-            }
-
-            this.Name = name;
-
-            return await this.Visit(context);
-        }
-
-        if (this.Assignment is null && token.Type is TokenType.AssignmentOperator)
+        if (this.RightHandSide is null && token.Type is TokenType.AssignmentOperator)
         {
             context.Pop();
 
@@ -96,7 +75,7 @@ public sealed class VariableDeclarationNode(Token startToken, ReferenceScope sco
                 return false;
             }
 
-            this.Assignment = expression;
+            this.RightHandSide = expression;
 
             return await this.Visit(context);
         }

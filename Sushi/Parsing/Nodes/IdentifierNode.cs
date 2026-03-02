@@ -14,6 +14,8 @@ namespace Sushi.Parsing.Nodes;
 /// </param>
 public sealed class IdentifierNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
+    public TypeNode? Type { get; private set; }
+
     /// <summary>
     /// The name of the identifier.
     /// </summary>
@@ -31,19 +33,38 @@ public sealed class IdentifierNode(Token startToken, ReferenceScope scope) : Exp
         this.CurrentLine = token.CurrentLine;
         this.Length = token.Value.Length;
 
-        if (!this.Scope.TryAddIdentifier(this.Name))
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Name collision."
-            });
-        }
-
         context.Pop();
 
         return Task.FromResult(true);
     }
 
+    public bool AssignType([NotNull] ParsingContext context, TypeNode type)
+    {
+        this.Type = type;
+
+        if (!this.Scope.TryAddIdentifier(this.Name!, this.Type!.Name!))
+        {
+            context.Errors.Add(new CompilerError(startToken)
+            {
+                ErrorReason = "Name collision."
+            });
+
+            return false;
+        }
+
+        return true;
+    }
+
     /// <inheritdoc />
-    public override SushiType? EvaluateType() => this.Scope.ResolveType(this.Name!);
+    public override SushiType? EvaluateType()
+    {
+        if (this.Type is not null)
+        {
+            return this.Type.EvaluateType();
+        }
+
+        SushiIdentifier? identifier = this.Scope.ResolveIdentifier(this.Name!);
+
+        return this.Scope.ResolveType(identifier!.Type);
+    }
 }

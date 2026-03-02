@@ -31,5 +31,15 @@ public sealed class CorrectnessVisitor : AbstractTreeVisitor
         await this.Visit(node.Body!);
     }
 
+    public override async Task VisitFunctionBody([NotNull] FunctionBodyNode node)
+    {
+        foreach (SyntaxNode statement in node.Statements)
+        {
+            await this.Visit(statement);
+        }
+    }
+
+    public override async Task VisitAssignment(AssignmentNode node) => await new AssignmentTypeChecker().Visit(node);
+
     public static Task<List<CompilerError>> CollectErrors() => Task.FromResult(Errors);
 }

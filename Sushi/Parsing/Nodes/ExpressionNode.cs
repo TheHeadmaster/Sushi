@@ -30,6 +30,15 @@ public sealed class ExpressionNode(Token startToken, ReferenceScope scope) : Exp
         return await this.Body.Visit(context);
     }
 
+    public override async Task<bool> VisitIdentifier([NotNull] ParsingContext context)
+    {
+        Token token = context.Peek()!;
+
+        this.Body = new IdentifierNode(token, this.Scope);
+
+        return await this.Body.Visit(context);
+    }
+
     /// <inheritdoc />
     public override SushiType? EvaluateType() => this.Body!.EvaluateType();
 }

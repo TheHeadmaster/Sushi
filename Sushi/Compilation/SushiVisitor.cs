@@ -95,6 +95,12 @@ public sealed class SushiVisitor : AbstractTreeVisitor
     {
         this.sb = new StringBuilder();
 
+        this.sb.AppendLine("#ifndef bool");
+        this.sb.AppendLine("#define bool int");
+        this.sb.AppendLine("#define true 1");
+        this.sb.AppendLine("#define false 0");
+        this.sb.AppendLine("#endif");
+
         foreach (string header in implicitHeaders)
         {
             this.sb.AppendLine($"#include <{header}.h>");
@@ -185,5 +191,22 @@ public sealed class SushiVisitor : AbstractTreeVisitor
         await this.Visit(node.Body!);
 
         this.sb.AppendLine();
+    }
+
+    public override async Task VisitAssignment(AssignmentNode node)
+    {
+        this.AppendFormatted("");
+
+        IdentifierNode name = node.Identifier!;
+
+        await this.Visit(node.Identifier!);
+
+        this.sb.Append(" = ");
+
+        await this.Visit(node.RightHandSide!);
+
+        this.sb.Append(';');
+
+        this.AppendLineFormatted("");
     }
 }

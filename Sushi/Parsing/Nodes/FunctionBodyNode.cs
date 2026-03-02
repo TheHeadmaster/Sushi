@@ -57,10 +57,13 @@ public sealed class FunctionBodyNode(Token startToken, ReferenceScope scope) : S
 
             if (currentToken.Type is not TokenType.ClosingSquiggly)
             {
-                VariableDeclarationNode varDeclarationNode = new(currentToken, this.Scope);
-                this.Statements.Add(varDeclarationNode);
+                SyntaxNode statement = currentToken.Type is not TokenType.Identifier
+                    ? new VariableDeclarationNode(currentToken, this.Scope)
+                    : new AssignmentNode(currentToken, this.Scope);
 
-                bool result = await varDeclarationNode.Visit(context);
+                this.Statements.Add(statement);
+
+                bool result = await statement.Visit(context);
 
                 if (!result)
                 {

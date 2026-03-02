@@ -9,4 +9,9 @@ public sealed class SushiIdentifier
     /// The identifier name.
     /// </summary>
     public required string Name { get; set; }
+
+    /// <summary>
+    /// The identifier type.
+    /// </summary>
+    public required string Type { get; set; }
 }
