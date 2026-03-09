@@ -1,9 +1,9 @@
-﻿namespace Sushi.Extensions;
+namespace System;
 
 /// <summary>
 /// Contains extension methods for <see cref="DateTime"/> objects.
 /// </summary>
-public static class DateTimeEx
+public static class DateTimeExtensions
 {
     /// <summary>
     /// Returns the time since this <see cref="DateTime"/> as a <see cref="TimeSpan"/>.
