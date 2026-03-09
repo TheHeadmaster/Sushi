@@ -2,25 +2,8 @@ using System.Collections.ObjectModel;
 
 namespace Sushi;
 
-/// <summary>
-/// Holds constants used accross the entire application.
-/// </summary>
 public static class Constants
 {
-    /// <summary>
-    /// Contains keywords reserved by the language, and therefore cannot be used as identifiers.
-    /// </summary>
-    public static ReadOnlyCollection<string> ReservedKeywords { get; } =
-    [
-        "bool",
-        "true",
-        "false",
-        "if",
-        "then",
-        "int32",
-        "float32"
-    ];
-
     public static ReadOnlyDictionary<string, string> PrimitiveTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
         { "bool", "Boolean" },
         { "int32", "Int32" },

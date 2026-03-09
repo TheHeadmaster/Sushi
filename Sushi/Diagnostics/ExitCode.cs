@@ -9,5 +9,6 @@ public enum ExitCode
     UnhandledException,
     ProjectPathNotSpecified,
     ProjectPathNotFound,
-    InvalidParameterSyntax
+    InvalidParameterSyntax,
+    LexingSyntaxError
 }

@@ -15,28 +15,11 @@
 	<ItemGroup>
 	  <Compile Remove="OLD\Compilation\AbstractTreeVisitor.cs" />
 	  <Compile Remove="OLD\Compilation\SushiVisitor.cs" />
-	  <Compile Remove="OLD\CompileJob.cs" />
 	  <Compile Remove="OLD\Constants.cs" />
 	  <Compile Remove="OLD\Correctness\AssignmentTypeChecker.cs" />
 	  <Compile Remove="OLD\Correctness\CorrectnessVisitor.cs" />
-	  <Compile Remove="OLD\Diagnostics\CompilerError.cs" />
-	  <Compile Remove="OLD\Diagnostics\ErrorPosition.cs" />
-	  <Compile Remove="OLD\Diagnostics\ErrorSeverity.cs" />
 	  <Compile Remove="OLD\ExeHelper.cs" />
 	  <Compile Remove="OLD\Extensions\ReflectionEx.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\CommentTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\IdentifierTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\KeywordTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\NewlineTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\NumberTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\SymbolTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\TerminatorTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\TokenGenerators\WhitespaceTokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\Tokenization\Token.cs" />
-	  <Compile Remove="OLD\Lexing\Tokenization\TokenFile.cs" />
-	  <Compile Remove="OLD\Lexing\Tokenization\TokenGenerator.cs" />
-	  <Compile Remove="OLD\Lexing\Tokenization\TokenGeneratorResult.cs" />
-	  <Compile Remove="OLD\Lexing\Tokenization\TokenType.cs" />
 	  <Compile Remove="OLD\Parsing\CompilerError.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ArgumentListNode.cs" />
@@ -63,35 +46,17 @@
 	  <Compile Remove="OLD\Steps\CorrectnessStep.cs" />
 	  <Compile Remove="OLD\Steps\ExecutableCompilingStep.cs" />
 	  <Compile Remove="OLD\Steps\ICompilerStep.cs" />
-	  <Compile Remove="OLD\Steps\LexingStep.cs" />
 	  <Compile Remove="OLD\Steps\ParsingStep.cs" />
 	  <Compile Remove="OLD\Steps\SushiCompilingStep.cs" />
 	</ItemGroup>
 	<ItemGroup>
 	  <None Include="OLD\Compilation\AbstractTreeVisitor.cs" />
 	  <None Include="OLD\Compilation\SushiVisitor.cs" />
-	  <None Include="OLD\CompileJob.cs" />
 	  <None Include="OLD\Constants.cs" />
 	  <None Include="OLD\Correctness\AssignmentTypeChecker.cs" />
 	  <None Include="OLD\Correctness\CorrectnessVisitor.cs" />
-	  <None Include="OLD\Diagnostics\CompilerError.cs" />
-	  <None Include="OLD\Diagnostics\ErrorPosition.cs" />
-	  <None Include="OLD\Diagnostics\ErrorSeverity.cs" />
 	  <None Include="OLD\ExeHelper.cs" />
 	  <None Include="OLD\Extensions\ReflectionEx.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\CommentTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\IdentifierTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\KeywordTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\NewlineTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\NumberTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\SymbolTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\TerminatorTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\TokenGenerators\WhitespaceTokenGenerator.cs" />
-	  <None Include="OLD\Lexing\Tokenization\Token.cs" />
-	  <None Include="OLD\Lexing\Tokenization\TokenFile.cs" />
-	  <None Include="OLD\Lexing\Tokenization\TokenGenerator.cs" />
-	  <None Include="OLD\Lexing\Tokenization\TokenGeneratorResult.cs" />
-	  <None Include="OLD\Lexing\Tokenization\TokenType.cs" />
 	  <None Include="OLD\Parsing\CompilerError.cs" />
 	  <None Include="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <None Include="OLD\Parsing\Nodes\ArgumentListNode.cs" />
@@ -118,7 +83,6 @@
 	  <None Include="OLD\Steps\CorrectnessStep.cs" />
 	  <None Include="OLD\Steps\ExecutableCompilingStep.cs" />
 	  <None Include="OLD\Steps\ICompilerStep.cs" />
-	  <None Include="OLD\Steps\LexingStep.cs" />
 	  <None Include="OLD\Steps\ParsingStep.cs" />
 	  <None Include="OLD\Steps\SushiCompilingStep.cs" />
 	</ItemGroup>
@@ -130,5 +94,8 @@
 		<PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
 		<PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Diagnostics\Warnings\" />
 	</ItemGroup>
 </Project>

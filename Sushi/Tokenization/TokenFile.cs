@@ -1,4 +1,7 @@
-﻿namespace Sushi.Lexing.Tokenization;
+using Newtonsoft.Json.Linq;
+using Sushi.Diagnostics;
+
+namespace Sushi.Tokenization;
 
 /// <summary>
 /// Represents a source file during the lexing step.
@@ -29,6 +32,11 @@ public sealed class TokenFile
     /// The current position of the lexer.
     /// </summary>
     public int CurrentPosition { get; set; }
+
+    /// <summary>
+    /// Contains the messages emitted by the lexer, such as errors and warnings.
+    /// </summary>
+    public List<CompilerMessage> Messages { get; } = [];
 
     /// <summary>
     /// Whether the end of file has been reached.

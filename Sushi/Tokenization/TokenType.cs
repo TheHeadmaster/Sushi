@@ -1,4 +1,4 @@
-namespace Sushi.Lexing.Tokenization;
+namespace Sushi.Tokenization;
 
 /// <summary>
 /// Represents a token type, such as an identifier, type, string, or unknown.
@@ -12,12 +12,15 @@ public enum TokenType
     OpeningSquiggly,
     ClosingSquiggly,
     Identifier,
-    LineComment,
-    BlockComment,
-    Whitespace,
-    Newline,
     Terminator,
-    Keyword,
     NumberLiteral,
     Comma,
+    BoolPrimitive,
+    TrueLiteral,
+    FalseLiteral,
+    If,
+    Then,
+    Int32Primitive,
+    Float32Primitive,
 }
+

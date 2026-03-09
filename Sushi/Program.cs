@@ -3,6 +3,7 @@ using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Diagnostics;
+using Sushi.Tokenization;
 
 namespace Sushi;
 
@@ -77,7 +78,12 @@ public static class Program
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public static Task Run() => Task.CompletedTask;
+    public static async Task Run()
+    {
+        Lexer lexer = new();
+
+        List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
+    }
 
     /// <summary>
     /// Event that fires when the application is exiting.

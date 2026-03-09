@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Serilog;
+using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics;
 
