@@ -22,5 +22,9 @@ public enum TokenType
     Then,
     Int32Primitive,
     Float32Primitive,
+    Plus,
+    Minus,
+    Asterisk,
+    Slash,
 }
 

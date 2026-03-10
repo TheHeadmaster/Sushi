@@ -72,23 +72,23 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
         {
             Log.Warning("SUSWARN{ID}: {Description}\nat Line {LineNumber} Position {LinePosition}\n{Line}\n{Padding}{Indicator}",
                 this.MessageNumber,
-                this.GetDescription(),
+                await this.GetDescription(),
                 this.LineNumber,
                 this.LinePosition,
                 this.CurrentLine,
                 new string(' ', this.LinePosition),
-                span > 1 ? new string('~', span) : '^');
+                span > 1 ? new string('~', span) : "^");
         }
         else
         {
             Log.Error("SUSE{ID}: {Description}\nat Line {LineNumber} Position {LinePosition}\n{Line}\n{Padding}{Indicator}",
                 this.MessageNumber.ToString("0000"),
-                this.GetDescription(),
+                await this.GetDescription(),
                 this.LineNumber,
                 this.LinePosition,
                 this.CurrentLine,
                 new string(' ', this.LinePosition),
-                span > 1 ? new string('~', span) : '^');
+                span > 1 ? new string('~', span) : "^");
         }
     }
 }

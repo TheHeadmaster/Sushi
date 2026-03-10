@@ -34,6 +34,11 @@ public sealed partial class Lexer
         int errorCount = sourceFiles.SelectMany(file => file.Messages).Count(message => message.Type is CompilerMessageType.Error);
         int warningCount = sourceFiles.SelectMany(file => file.Messages).Count(message => message.Type is CompilerMessageType.Warning);
 
+        foreach (CompilerMessage? message in sourceFiles.SelectMany(file => file.Messages).OrderBy(x => x.Type))
+        {
+            await message.LogMessage();
+        }
+
         Log.Information("{FileCount} files were lexed with {ErrorCount} syntax errors and {WarningCount} warnings.", sourceFiles.Count, errorCount, warningCount);
 
         if (errorCount > 0)

@@ -8,45 +8,6 @@ namespace Sushi.Parsing;
 
 public sealed class ParsingContext
 {
-    public required List<Token> Tokens { get; set; }
-
-    private int currentIndex;
-
-    public bool IsAtEnd(int lookahead = 0) => this.Tokens.Count <= this.currentIndex + lookahead;
-
-    public Token? Peek(int lookahead = 0)
-    {
-        if (this.IsAtEnd(lookahead))
-        {
-            return null;
-        }
-
-        return this.Tokens[this.currentIndex + lookahead];
-    }
-
-    public Token? PeekNextNonWhiteSpaceNonReturnToken(int startIndex)
-    {
-        int lookahead = startIndex;
-
-        while (this.Peek(lookahead)?.Type is TokenType.Whitespace or TokenType.Newline)
-        {
-            lookahead++;
-        }
-
-        return this.Peek(lookahead);
-    }
-
-    public void Pop() => this.currentIndex++;
-
-    public void PopUntilNonWhiteSpaceNonReturnTokenOrEndOfFile()
-    {
-        while (this.Peek()?.Type is TokenType.Whitespace or TokenType.Newline)
-        {
-            this.Pop();
-        }
-    }
-
-
     public bool IsAnyOf(params TokenType[] types)
     {
         ArgumentNullException.ThrowIfNull(types);
@@ -81,8 +42,6 @@ public sealed class ParsingContext
             Value = "",
         };
     }
-
-    public Token Previous() => this.Peek(-1)!;
 
     public List<CompilerError> Errors { get; } = [];
 }
