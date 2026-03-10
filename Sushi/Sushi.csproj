@@ -45,7 +45,6 @@
 	  <Compile Remove="OLD\Parsing\SyntaxNode.cs" />
 	  <Compile Remove="OLD\Steps\CorrectnessStep.cs" />
 	  <Compile Remove="OLD\Steps\ExecutableCompilingStep.cs" />
-	  <Compile Remove="OLD\Steps\ICompilerStep.cs" />
 	  <Compile Remove="OLD\Steps\ParsingStep.cs" />
 	  <Compile Remove="OLD\Steps\SushiCompilingStep.cs" />
 	</ItemGroup>
@@ -82,7 +81,6 @@
 	  <None Include="OLD\Parsing\SyntaxNode.cs" />
 	  <None Include="OLD\Steps\CorrectnessStep.cs" />
 	  <None Include="OLD\Steps\ExecutableCompilingStep.cs" />
-	  <None Include="OLD\Steps\ICompilerStep.cs" />
 	  <None Include="OLD\Steps\ParsingStep.cs" />
 	  <None Include="OLD\Steps\SushiCompilingStep.cs" />
 	</ItemGroup>

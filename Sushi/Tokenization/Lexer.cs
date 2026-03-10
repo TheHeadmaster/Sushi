@@ -155,7 +155,15 @@ public sealed partial class Lexer
         file.CurrentPosition += tokenValue.Length;
     }
 
-    private static bool IsIdentifier(string remainingInput, [NotNullWhen(true)]  out string? identifier)
+    /// <summary>
+    /// Returns whether the specified input can be consumed as an identifier.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="identifier">The identifier that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
+    private static bool IsIdentifier(string remainingInput, [NotNullWhen(true)] out string? identifier)
     {
         identifier = null;
 
@@ -175,6 +183,14 @@ public sealed partial class Lexer
         return true;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a number.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="number">The number that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsNumber(string remainingInput, [NotNullWhen(true)] out string? number)
     {
         number = null;
@@ -190,6 +206,15 @@ public sealed partial class Lexer
         return true;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a symbol.
+    /// </summary>
+    /// <param name="sample">The first few characters of the remaining input as a sample.</param>
+    /// <param name="symbol">The symbol that gets generated, if any.</param>
+    /// <param name="symbolType">The type of the symbol, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsSymbol(string sample, [NotNullWhen(true)] out string? symbol, [NotNullWhen(true)] out TokenType? symbolType)
     {
         symbol = null;
@@ -208,6 +233,15 @@ public sealed partial class Lexer
         return false;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a keyword.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="keyword">The keyword that gets generated, if any.</param>
+    /// <param name="keywordType">The type of the keyword, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsKeyword(string remainingInput, [NotNullWhen(true)] out string? keyword, [NotNullWhen(true)] out TokenType? keywordType)
     {
         keyword = null;
@@ -233,6 +267,14 @@ public sealed partial class Lexer
         return false;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a comment.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="comment">The comment that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsComment(string remainingInput, [NotNullWhen(true)] out string? comment)
     {
         // Lexes line comments (i.e. // This is a comment).
@@ -256,10 +298,19 @@ public sealed partial class Lexer
         return false;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a newline.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="newline">The newline that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsNewline(string remainingInput, [NotNullWhen(true)] out string? newline)
     {
-        // These statements are done this way because we don't know which operating system the file was written on, which may be different from the one our compiler is running on.
-        // So let's catch the longest newline first and then fall through the single char newlines.
+        // These statements are done this way because we don't know which operating system the file was written on,
+        // which may be different from the one our compiler is running on. So let's catch the longest newline first
+        // and then fall through the single char newlines.
         if (remainingInput.StartsWith("\r\n", StringComparison.InvariantCultureIgnoreCase))
         {
             newline = "\r\n";
@@ -280,6 +331,14 @@ public sealed partial class Lexer
         return false;
     }
 
+    /// <summary>
+    /// Returns whether the specified input can be consumed as whitespace.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="value">The whitespace that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
     private static bool IsWhitespace(string remainingInput, [NotNullWhen(true)] out string? value)
     {
         value = null;
@@ -294,6 +353,15 @@ public sealed partial class Lexer
         return false;
     }
 
+    /// <summary>
+    /// Appends an unknown token to the token list, or appends a character to an existing unknown token.
+    /// </summary>
+    /// <param name="file">
+    /// The <see cref="TokenFile"/> being processed.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     private static Task AppendUnknownToken([NotNull] TokenFile file)
     {
         Token? lastToken = file.Tokens.LastOrDefault();

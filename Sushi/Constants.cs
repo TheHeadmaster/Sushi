@@ -22,6 +22,9 @@ public static class Constants
         { "float32", TokenType.Float32Primitive }
     });
 
+    /// <summary>
+    /// A symbol table for converting symbols to their respective token types.
+    /// </summary>
     public static ReadOnlyDictionary<string, TokenType> Symbols { get; } = new ReadOnlyDictionary<string, TokenType>(new Dictionary<string, TokenType>()
     {
         { ";", TokenType.Terminator },
