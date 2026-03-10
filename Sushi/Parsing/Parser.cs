@@ -34,6 +34,10 @@ public sealed class Parser
         { TokenType.OpeningParenthesis, new MethodCallParser() }
     };
 
+    private static readonly Dictionary<TokenType, IStatementParser> statements = new()
+    {
+    };
+
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
 
     public Token? Peek(int lookahead = 0)
@@ -77,7 +81,7 @@ public sealed class Parser
         {
             this.tokens = file.Tokens;
             this.currentIndex = 0;
-            tree.Children.Add(await this.ParseExpression(BindingPower.Primary));
+            tree.Children.AddRange(await this.ParseStatements());
         }
 
         return tree;
@@ -109,6 +113,25 @@ public sealed class Parser
         }
 
         return left;
+    }
+
+    public async Task<List<StatementNode>> ParseStatements()
+    {
+        Token? token;
+
+        List<StatementNode> returnStatements = [];
+
+        while ((token = this.Peek()) is not null)
+        {
+            if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
+            {
+                throw new NotImplementedException();
+            }
+
+            returnStatements.Add(await statement.Parse(this, token));
+        }
+
+        return returnStatements;
     }
 
     private async Task<BindingPower> GetPrecedence()

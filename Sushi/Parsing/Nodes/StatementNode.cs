@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace Sushi.Parsing.Nodes;
 
-internal class StatementNode
+public class StatementNode : SyntaxNode
 {
 }

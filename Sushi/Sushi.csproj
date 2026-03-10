@@ -20,7 +20,6 @@
 	  <Compile Remove="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <Compile Remove="OLD\ExeHelper.cs" />
 	  <Compile Remove="OLD\Extensions\ReflectionEx.cs" />
-	  <Compile Remove="OLD\Parsing\CompilerError.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ArgumentListNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ArgumentNode.cs" />
@@ -56,7 +55,6 @@
 	  <None Include="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <None Include="OLD\ExeHelper.cs" />
 	  <None Include="OLD\Extensions\ReflectionEx.cs" />
-	  <None Include="OLD\Parsing\CompilerError.cs" />
 	  <None Include="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <None Include="OLD\Parsing\Nodes\ArgumentListNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\ArgumentNode.cs" />
