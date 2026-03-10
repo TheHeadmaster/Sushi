@@ -29,7 +29,9 @@ public sealed class Parser
         { TokenType.Plus, new InfixOperatorParser(BindingPower.SumDifference) },
         { TokenType.Minus, new InfixOperatorParser(BindingPower.SumDifference) },
         { TokenType.Asterisk, new InfixOperatorParser(BindingPower.ProductQuotient) },
-        { TokenType.Slash, new InfixOperatorParser(BindingPower.ProductQuotient) }
+        { TokenType.Slash, new InfixOperatorParser(BindingPower.ProductQuotient) },
+        { TokenType.Assignment, new AssignmentParser()  },
+        { TokenType.OpeningParenthesis, new MethodCallParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
@@ -92,14 +94,14 @@ public sealed class Parser
 
         ExpressionNode left = await prefix.Parse(this, token);
 
-        while ((int)power < (int)await GetPrecedence(token = this.Peek()))
+        while ((int)power < (int)await this.GetPrecedence())
         {
-            if (token is null)
+            if (this.Peek() is null)
             {
                 break;
             }
 
-            this.Pop();
+            token = this.Pop()!;
 
             IInfixParser infix = infixes[token.Type];
 
@@ -109,8 +111,9 @@ public sealed class Parser
         return left;
     }
 
-    private static async Task<BindingPower> GetPrecedence(Token? token)
+    private async Task<BindingPower> GetPrecedence()
     {
+        Token? token = this.Peek();
         if (token is null || !infixes.TryGetValue(token.Type, out IInfixParser? infix))
         {
             return 0;

@@ -33,7 +33,7 @@ public static class Constants
         { "{", TokenType.OpeningSquiggly },
         { "}", TokenType.ClosingSquiggly },
         { ",", TokenType.Comma },
-        { "=", TokenType.AssignmentOperator },
+        { "=", TokenType.Assignment },
         { "+", TokenType.Plus },
         { "-", TokenType.Minus },
         { "*", TokenType.Asterisk },
