@@ -2,31 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
-/// <summary>
-/// Represents a function body.
-/// </summary>
-/// <param name="startToken">
-/// The <see cref="Token"/> that acts as the head of the syntax node.
-/// </param>
-public sealed class FunctionBodyNode(Token startToken) : SyntaxNode(startToken)
+public sealed class ArgumentListNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
 {
-    public List<SyntaxNode> Statements { get; set; } = [];
+    public List<ArgumentNode> Arguments { get; set; } = [];
 
     private bool IsOpened { get; set; }
 
-    /// <inheritdoc />
-    public override async Task<bool> VisitOpeningSquiggly([NotNull] ParsingContext context)
+    public override async Task<bool> VisitOpeningParenthesis([NotNull] ParsingContext context)
     {
         if (this.IsOpened)
         {
             context.Errors.Add(new CompilerError(context.Peek()!)
             {
-                ErrorReason = "Unexpected '{' token in function body."
+                ErrorReason = "Unexpected '(' token in function declaration."
             });
 
             return false;
@@ -56,19 +48,27 @@ public sealed class FunctionBodyNode(Token startToken) : SyntaxNode(startToken)
                 continue;
             }
 
-            if (currentToken.Type is not TokenType.ClosingSquiggly)
+            if (currentToken.Type is not TokenType.ClosingParenthesis)
             {
-                VariableDeclarationNode varDeclarationNode = new(currentToken);
-                this.Statements.Add(varDeclarationNode);
+                ArgumentNode argumentNode = new(currentToken, this.Scope);
+                this.Arguments.Add(argumentNode);
 
-                bool result = await varDeclarationNode.Visit(context);
+                bool result = await argumentNode.Visit(context);
+
+                currentToken = context.Peek()!;
 
                 if (!result)
                 {
                     return false;
                 }
 
-                continue;
+                if (currentToken.Type is TokenType.Comma)
+                {
+                    await this.Visit(context);
+                    continue;
+                }
+
+                break;
             }
 
             break;
@@ -78,10 +78,18 @@ public sealed class FunctionBodyNode(Token startToken) : SyntaxNode(startToken)
     }
 
     /// <inheritdoc />
-    public override async Task<bool> VisitClosingSquiggly([NotNull] ParsingContext context)
+    public override Task<bool> VisitClosingParenthesis([NotNull] ParsingContext context)
     {
         context.Pop();
 
-        return true;
+        return Task.FromResult(true);
+    }
+
+    /// <inheritdoc />
+    public override Task<bool> VisitComma([NotNull] ParsingContext context)
+    {
+        context.Pop();
+
+        return Task.FromResult(true);
     }
 }

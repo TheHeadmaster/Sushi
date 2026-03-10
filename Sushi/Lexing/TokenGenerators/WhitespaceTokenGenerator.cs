@@ -14,14 +14,8 @@ public sealed partial class WhitespaceTokenGenerator : TokenGenerator
 
         string? remainingInput = file.GetRemainingInput();
 
-        // Don't even bother lexing if the remaining input is empty.
-        if (string.IsNullOrWhiteSpace(remainingInput))
-        {
-            return Task.FromResult(new TokenGeneratorResult() { CanGenerate = false });
-        }
-
         // Match leading whitespace pattern
-        Match match = LeadingWhitespace().Match(remainingInput);
+        Match match = LeadingWhitespace().Match(remainingInput ?? "");
 
         if (match.Success)
         {

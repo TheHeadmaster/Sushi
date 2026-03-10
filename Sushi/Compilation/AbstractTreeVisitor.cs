@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
@@ -61,9 +58,9 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitExpression((ExpressionNode)node);
         }
-        else if (node.GetType() == typeof(FunctionBodyNode))
+        else if (node.GetType() == typeof(BlockNode))
         {
-            await this.VisitFunctionBody((FunctionBodyNode)node);
+            await this.VisitBlock((BlockNode)node);
         }
         else if (node.GetType() == typeof(ParameterListNode))
         {
@@ -73,12 +70,37 @@ public abstract class AbstractTreeVisitor
         {
             await this.VisitParameter((ParameterNode)node);
         }
+        else if (node.GetType() == typeof(AssignmentNode))
+        {
+            await this.VisitAssignment((AssignmentNode)node);
+        }
+        else if (node.GetType() == typeof(MethodCallNode))
+        {
+            await this.VisitMethodCall((MethodCallNode)node);
+        }
+        else if (node.GetType() == typeof(ArgumentListNode))
+        {
+            await this.VisitArgumentList((ArgumentListNode)node);
+        }
+        else if (node.GetType() == typeof(ArgumentNode))
+        {
+            await this.VisitArgument((ArgumentNode)node);
+        }
+        else if (node.GetType() == typeof(IfNode))
+        {
+            await this.VisitIf((IfNode)node);
+        }
     }
 
+    public virtual Task VisitIf(IfNode node) => Task.CompletedTask;
+    public virtual Task VisitArgument(ArgumentNode node) => Task.CompletedTask;
+    public virtual Task VisitArgumentList(ArgumentListNode node) => Task.CompletedTask;
+    public virtual Task VisitMethodCall(MethodCallNode node) => Task.CompletedTask;
+    public virtual Task VisitAssignment(AssignmentNode node) => Task.CompletedTask;
     public virtual Task VisitParameter([NotNull] ParameterNode node) => Task.CompletedTask;
     public virtual Task VisitParameterList([NotNull] ParameterListNode node) => Task.CompletedTask;
 
-    public virtual Task VisitFunctionBody([NotNull] FunctionBodyNode node) => Task.CompletedTask;
+    public virtual Task VisitBlock([NotNull] BlockNode node) => Task.CompletedTask;
 
     public virtual Task VisitExpression([NotNull] ExpressionNode node) => Task.CompletedTask;
 

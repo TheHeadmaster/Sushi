@@ -1,8 +1,6 @@
-using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using Serilog;
 using Sushi.Extensions;
-using Sushi.Lexing.Tokenization;
 using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
 
@@ -28,7 +26,7 @@ public sealed class ParsingStep : ICompilerStep
 
         Log.Information("Initializing parser...");
 
-        this.syntaxTree.Children.AddRange(job.SourceFiles.Select(file => new FileNode()
+        this.syntaxTree.Children.AddRange(job.SourceFiles.Select(file => new FileNode(this.syntaxTree)
         {
             RawSourceCode = file.RawSourceCode,
             FileName = file.FileName,
@@ -59,7 +57,7 @@ public sealed class ParsingStep : ICompilerStep
 
         job.SyntaxTree = this.syntaxTree;
 
-        List<CompilerError> errors = [..fileTasks.SelectMany(context => context.Result.Errors)];
+        List<CompilerError> errors = [.. fileTasks.SelectMany(context => context.Result.Errors)];
 
         foreach (CompilerError error in errors)
         {

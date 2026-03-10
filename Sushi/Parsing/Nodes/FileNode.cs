@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -7,7 +6,10 @@ namespace Sushi.Parsing.Nodes;
 /// <summary>
 /// Represents a source file that contains <see cref="SyntaxNode"/> objects.
 /// </summary>
-public sealed class FileNode() : SyntaxNode(null)
+/// <param name="tree">
+/// The syntax tree that this node exists under.
+/// </param>
+public sealed class FileNode(AbstractSyntaxTree tree) : SyntaxNode(null, tree.Scope)
 {
     /// <summary>
     /// The child nodes in the file.
@@ -58,15 +60,15 @@ public sealed class FileNode() : SyntaxNode(null)
         {
             // Look ahead to see if this is the start of a variable or function declaration
 
-            if (this.IsVariableDeclaration(context))
+            if (IsVariableDeclaration(context))
             {
-                VariableDeclarationNode varDeclarationNode = new(token);
+                VariableDeclarationNode varDeclarationNode = new(token, this.Scope);
                 this.Children.Add(varDeclarationNode);
 
                 return await varDeclarationNode.Visit(context);
             }
 
-            FunctionDeclarationNode funcDeclarationNode = new(token);
+            FunctionDeclarationNode funcDeclarationNode = new(token, this.Scope);
             this.Children.Add(funcDeclarationNode);
 
             return await funcDeclarationNode.Visit(context);
@@ -80,7 +82,7 @@ public sealed class FileNode() : SyntaxNode(null)
         return false;
     }
 
-    private bool IsVariableDeclaration([NotNull] ParsingContext context)
+    private static bool IsVariableDeclaration([NotNull] ParsingContext context)
     {
         Token? name = context.Peek(2);
         Token? assignment = context.Peek(3);
@@ -89,7 +91,7 @@ public sealed class FileNode() : SyntaxNode(null)
         {
             assignment = context.Peek(4);
         }
-        
+
         if (name?.Type is TokenType.Identifier && assignment?.Type is TokenType.AssignmentOperator)
         {
             return true;

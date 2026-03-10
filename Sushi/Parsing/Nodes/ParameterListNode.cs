@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -11,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents a parameter list inside of a function declaration.
 /// </summary>
 /// <param name="startToken">
-/// The <see cref="Token"/> that acts as the head of the syntax node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class ParameterListNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class ParameterListNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
 {
     public List<ParameterNode> Parameters { get; set; } = [];
 
@@ -57,7 +56,7 @@ public sealed class ParameterListNode(Token startToken) : SyntaxNode(startToken)
 
             if (currentToken.Type is not TokenType.ClosingParenthesis)
             {
-                ParameterNode parameterNode = new(currentToken);
+                ParameterNode parameterNode = new(currentToken, this.Scope);
                 this.Parameters.Add(parameterNode);
 
                 bool result = await parameterNode.Visit(context);

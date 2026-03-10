@@ -7,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents an expression, which can have one or more sub expressions in a tree hierarchy.
 /// </summary>
 /// <param name="startToken">
-/// The token used to mark the start of the node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class ExpressionNode(Token startToken) : ExpressionableNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class ExpressionNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
 {
     /// <summary>
     /// The body of the expression. This can be a terminal, such as a constant,
@@ -22,10 +25,28 @@ public sealed class ExpressionNode(Token startToken) : ExpressionableNode(startT
     {
         Token token = context.Peek()!;
 
-        this.Body = new ConstantNode(token);
+        this.Body = new ConstantNode(token, this.Scope);
 
         return await this.Body.Visit(context);
     }
 
-    public override TypeNode EvaluateType() => this.Body!.EvaluateType();
+    public override async Task<bool> VisitIdentifier([NotNull] ParsingContext context)
+    {
+        Token token = context.Peek()!;
+        Token? nextToken = context.PeekNextNonWhiteSpaceNonReturnToken(1);
+
+        if (nextToken?.Type is TokenType.OpeningParenthesis)
+        {
+            this.Body = new MethodCallNode(token, this.Scope);
+
+            return await this.Body.Visit(context);
+        }
+
+        this.Body = new IdentifierNode(token, this.Scope, false);
+
+        return await this.Body.Visit(context);
+    }
+
+    /// <inheritdoc />
+    public override SushiType? EvaluateType() => this.Body!.EvaluateType();
 }

@@ -39,10 +39,32 @@ public sealed class SushiVisitor : AbstractTreeVisitor
     public override async Task VisitParameterList([NotNull] ParameterListNode node)
     {
         this.sb.Append('(');
+
+        bool isFirst = true;
+
+        foreach (ParameterNode parameter in node.Parameters)
+        {
+            if (!isFirst)
+            {
+                this.sb.Append(", ");
+            }
+
+            isFirst = false;
+
+            await this.Visit(parameter);
+        }
+
         this.sb.Append(')');
     }
 
-    public override async Task VisitFunctionBody([NotNull] FunctionBodyNode node)
+    public override async Task VisitParameter([NotNull] ParameterNode node)
+    {
+        await this.Visit(node.Type);
+        this.sb.Append(' ');
+        await this.Visit(node.Name);
+    }
+
+    public override async Task VisitBlock([NotNull] BlockNode node)
     {
         if (!node.Statements.Any())
         {
@@ -94,6 +116,12 @@ public sealed class SushiVisitor : AbstractTreeVisitor
     public override async Task VisitFile([NotNull] FileNode node)
     {
         this.sb = new StringBuilder();
+
+        this.sb.AppendLine("#ifndef bool");
+        this.sb.AppendLine("#define bool int");
+        this.sb.AppendLine("#define true 1");
+        this.sb.AppendLine("#define false 0");
+        this.sb.AppendLine("#endif");
 
         foreach (string header in implicitHeaders)
         {
@@ -182,6 +210,68 @@ public sealed class SushiVisitor : AbstractTreeVisitor
 
         await this.Visit(node.Name!);
         await this.Visit(node.Parameters!);
+        await this.Visit(node.Body!);
+
+        this.sb.AppendLine();
+    }
+
+    public override async Task VisitAssignment(AssignmentNode node)
+    {
+        this.AppendFormatted("");
+
+        IdentifierNode name = node.Identifier!;
+
+        await this.Visit(node.Identifier!);
+
+        this.sb.Append(" = ");
+
+        await this.Visit(node.RightHandSide!);
+
+        this.sb.Append(';');
+
+        this.AppendLineFormatted("");
+    }
+
+    public override async Task VisitMethodCall(MethodCallNode node)
+    {
+        await this.Visit(node.Identifier);
+        await this.Visit(node.Arguments);
+    }
+
+    public override async Task VisitArgumentList(ArgumentListNode node)
+    {
+        this.sb.Append('(');
+
+        bool isFirst = true;
+
+        foreach (ArgumentNode argument in node.Arguments)
+        {
+            if (!isFirst)
+            {
+                this.sb.Append(", ");
+            }
+
+            isFirst = false;
+
+            await this.Visit(argument);
+        }
+
+        this.sb.Append(')');
+    }
+
+    public override async Task VisitArgument(ArgumentNode node)
+    {
+        await this.Visit(node.Argument);
+    }
+
+    public override async Task VisitIf(IfNode node)
+    {
+        this.AppendFormatted("if (");
+
+        await this.Visit(node.Expression);
+
+        this.sb.Append(')');
+
         await this.Visit(node.Body!);
 
         this.sb.AppendLine();

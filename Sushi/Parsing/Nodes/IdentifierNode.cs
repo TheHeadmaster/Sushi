@@ -7,14 +7,21 @@ namespace Sushi.Parsing.Nodes;
 /// Represents an identifier that is defined somewhere else in the code.
 /// </summary>
 /// <param name="startToken">
-/// The token used to mark the start of the node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class IdentifierNode(Token startToken, ReferenceScope scope, bool isFunction) : ExpressionableNode(startToken, scope)
 {
+    public TypeNode? Type { get; private set; }
+
     /// <summary>
     /// The name of the identifier.
     /// </summary>
     public string? Name { get; set; }
+
+    public bool IsFunction { get; set; } = isFunction;
 
     /// <inheritdoc />
     public override Task<bool> VisitIdentifier([NotNull] ParsingContext context)
@@ -31,5 +38,35 @@ public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
         context.Pop();
 
         return Task.FromResult(true);
+    }
+
+    public bool AssignType([NotNull] ParsingContext context, TypeNode type)
+    {
+        this.Type = type;
+
+        if (!this.Scope.TryAddIdentifier(this.Name!, this.Type!.Name!, this.IsFunction))
+        {
+            context.Errors.Add(new CompilerError(startToken)
+            {
+                ErrorReason = "Name collision."
+            });
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <inheritdoc />
+    public override SushiType? EvaluateType()
+    {
+        if (this.Type is not null)
+        {
+            return this.Type.EvaluateType();
+        }
+
+        SushiIdentifier? identifier = this.Scope.ResolveIdentifier(this.Name!, this.IsFunction);
+
+        return identifier is null ? null : this.Scope.ResolveType(identifier!.Type);
     }
 }

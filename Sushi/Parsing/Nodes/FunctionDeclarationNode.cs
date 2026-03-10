@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using Newtonsoft.Json.Linq;
 using Sushi.Lexing.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -11,9 +7,12 @@ namespace Sushi.Parsing.Nodes;
 /// Represents a function declaration.
 /// </summary>
 /// <param name="startToken">
-/// The <see cref="Token"/> that acts as the head of the syntax node.
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(startToken)
+/// <param name="scope">
+/// The scope that the node exists in.
+/// </param>
+public sealed class FunctionDeclarationNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
 {
     /// <summary>
     /// The return type of the function.
@@ -28,12 +27,14 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
     /// <summary>
     /// The statements inside of the body of the function.
     /// </summary>
-    public FunctionBodyNode? Body { get; set; }
+    public BlockNode? Body { get; set; }
 
     /// <summary>
     /// The parameters of the function.
     /// </summary>
     public ParameterListNode? Parameters { get; set; }
+
+    private readonly ReferenceScope functionScope = new(scope);
 
     /// <inheritdoc />
     public override async Task<bool> Visit([NotNull] ParsingContext context)
@@ -52,7 +53,7 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.ReturnType is null)
         {
-            TypeNode type = new(token);
+            TypeNode type = new(token, this.Scope);
             if (!await type.Visit(context))
             {
                 return false;
@@ -65,8 +66,14 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.Name is null)
         {
-            IdentifierNode name = new(token);
+            IdentifierNode name = new(token, this.Scope, true);
+
             if (!await name.Visit(context))
+            {
+                return false;
+            }
+
+            if (!name.AssignType(context, this.ReturnType))
             {
                 return false;
             }
@@ -78,7 +85,7 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.Parameters is null)
         {
-            ParameterListNode parameters = new(token);
+            ParameterListNode parameters = new(token, this.functionScope);
 
             if (!await parameters.Visit(context))
             {
@@ -92,7 +99,7 @@ public sealed class FunctionDeclarationNode(Token startToken) : SyntaxNode(start
 
         if (this.Body is null)
         {
-            FunctionBodyNode body = new(token);
+            BlockNode body = new(token, this.functionScope);
 
             if (!await body.Visit(context))
             {
