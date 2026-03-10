@@ -3,6 +3,7 @@ using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Diagnostics;
+using Sushi.Parsing;
 using Sushi.Tokenization;
 
 namespace Sushi;
@@ -37,7 +38,7 @@ public static class Program
         }
 #pragma warning restore CA1031 // Do not catch general exception types
     }
-    
+
     /// <summary>
     /// Initializes the compiler.
     /// </summary>
@@ -81,8 +82,10 @@ public static class Program
     public static async Task Run()
     {
         Lexer lexer = new();
-
+        Parser parser = new();
         List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
+
+        AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
     }
 
     /// <summary>
