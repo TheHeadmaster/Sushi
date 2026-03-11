@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers;
 using Sushi.Tokenization;
@@ -14,6 +15,8 @@ public sealed class Parser
 
     private List<Token> tokens = null!;
 
+    public List<CompilerMessage> Messages { get; set; } = [];
+
     private static readonly Dictionary<TokenType, IPrefixParser> prefixes = new()
     {
         { TokenType.Minus, new PrefixOperatorParser() },
@@ -21,7 +24,7 @@ public sealed class Parser
         { TokenType.TrueLiteral, new ConstantParser() },
         { TokenType.FalseLiteral, new ConstantParser() },
         { TokenType.Identifier, new IdentifierParser() },
-        { TokenType.OpeningParenthesis, new GroupParser() }
+        { TokenType.OpeningParenthesis, new GroupParser() },
     };
 
     private static readonly Dictionary<TokenType, IInfixParser> infixes = new()
@@ -31,11 +34,13 @@ public sealed class Parser
         { TokenType.Asterisk, new InfixOperatorParser(BindingPower.ProductQuotient) },
         { TokenType.Slash, new InfixOperatorParser(BindingPower.ProductQuotient) },
         { TokenType.Assignment, new AssignmentParser()  },
-        { TokenType.OpeningParenthesis, new MethodCallParser() }
+        { TokenType.OpeningParenthesis, new MethodCallParser() },
+        { TokenType.Dot, new NamespaceParser() }
     };
 
     private static readonly Dictionary<TokenType, IStatementParser> statements = new()
     {
+        { TokenType.Using, new UsingParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
@@ -76,6 +81,7 @@ public sealed class Parser
     public async Task<AbstractSyntaxTree> ParseSource([NotNull] List<TokenFile> tokenFiles)
     {
         AbstractSyntaxTree tree = new();
+        this.Messages = [];
 
         foreach (TokenFile file in tokenFiles)
         {
@@ -83,6 +89,8 @@ public sealed class Parser
             this.currentIndex = 0;
             tree.Children.AddRange(await this.ParseStatements());
         }
+
+        tree.Messages = this.Messages;
 
         return tree;
     }
@@ -125,7 +133,9 @@ public sealed class Parser
         {
             if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
             {
-                throw new NotImplementedException();
+                returnStatements.Add(new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary)));
+                await this.ExpectAndPop(TokenType.Terminator);
+                continue;
             }
 
             returnStatements.Add(await statement.Parse(this, token));
@@ -143,5 +153,17 @@ public sealed class Parser
         }
 
         return infix.Power();
+    }
+
+    public Task ExpectAndPop(TokenType type)
+    {
+        if (this.Peek()?.Type != type)
+        {
+            throw new NotImplementedException();
+        }
+
+        this.Pop();
+
+        return Task.CompletedTask;
     }
 }

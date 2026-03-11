@@ -4,6 +4,6 @@ using System.Text;
 
 namespace Sushi.Parsing.Nodes;
 
-public class StatementNode : SyntaxNode
+public abstract class StatementNode : SyntaxNode
 {
 }

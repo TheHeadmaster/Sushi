@@ -6,4 +6,6 @@ namespace Sushi.Parsing.Nodes;
 public class ConstantNode([NotNull] Token token) : ExpressionNode
 {
     public string Value { get; set; } = token.Value;
+
+    public override Token GetStartToken() => token;
 }

@@ -18,6 +18,7 @@ public static class Constants
         { "false", TokenType.FalseLiteral },
         { "if", TokenType.If },
         { "then", TokenType.Then },
+        { "using", TokenType.Using },
         { "int32", TokenType.Int32Primitive },
         { "float32", TokenType.Float32Primitive }
     });
@@ -38,5 +39,6 @@ public static class Constants
         { "-", TokenType.Minus },
         { "*", TokenType.Asterisk },
         { "/", TokenType.Slash },
+        { ".", TokenType.Dot }
     });
 }

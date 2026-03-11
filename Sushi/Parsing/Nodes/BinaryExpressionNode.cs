@@ -20,4 +20,6 @@ public class BinaryExpressionNode([NotNull] Token token, [NotNull] ExpressionNod
     public ExpressionNode Left { get; set; } = left;
 
     public ExpressionNode Right { get; set; } = right;
+
+    public override Token GetStartToken() => this.Left.GetStartToken();
 }

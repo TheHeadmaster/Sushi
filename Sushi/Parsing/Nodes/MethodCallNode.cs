@@ -11,4 +11,6 @@ public class MethodCallNode([NotNull] ExpressionNode method, [NotNull] List<Expr
     public ExpressionNode Method { get; set; } = method;
 
     public List<ExpressionNode> Arguments { get; set; } = arguments;
+
+    public override Token GetStartToken() => this.Method.GetStartToken();
 }

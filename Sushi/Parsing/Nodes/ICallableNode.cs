@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
-public abstract class SyntaxNode
+public interface ICallableNode
 {
-    public abstract Token GetStartToken();
+    public bool ResolvesToIdentifier();
 }

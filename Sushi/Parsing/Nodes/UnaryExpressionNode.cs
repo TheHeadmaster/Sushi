@@ -20,4 +20,6 @@ public class UnaryExpressionNode([NotNull] Token token, bool isPrefix, [NotNull]
             };
 
     public ExpressionNode Operand { get; set; } = operand;
+
+    public override Token GetStartToken() => isPrefix ? token : this.Operand.GetStartToken();
 }

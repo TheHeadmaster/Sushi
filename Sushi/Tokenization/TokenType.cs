@@ -26,5 +26,7 @@ public enum TokenType
     Minus,
     Asterisk,
     Slash,
+    Using,
+    Dot,
 }
 

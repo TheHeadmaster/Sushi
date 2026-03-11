@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
@@ -30,6 +31,11 @@ public class MethodCallParser : IInfixParser
         }
         else
         {
+            if (left is not ICallableNode callable || !callable.ResolvesToIdentifier())
+            {
+                parser.Messages.Add(new NonInvocableError(left.GetStartToken(), token));
+            }
+
             parser.Pop();
         }
 

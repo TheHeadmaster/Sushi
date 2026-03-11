@@ -12,13 +12,8 @@ public class GroupParser : IPrefixParser
     public async Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] Token token)
     {
         ExpressionNode expression = await parser.ParseExpression(BindingPower.Primary);
-        
-        if (parser.Peek()?.Type is not TokenType.ClosingParenthesis)
-        {
-            throw new NotImplementedException();
-        }
 
-        parser.Pop();
+        await parser.ExpectAndPop(TokenType.ClosingParenthesis);
 
         return expression;
     }

@@ -6,11 +6,11 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
-public class AssignmentNode([NotNull] IdentifierNode identifier, [NotNull] ExpressionNode right) : ExpressionNode
+public class NamespaceNode([NotNull] IdentifierNode identifier, [NotNull] ExpressionNode right) : ExpressionNode
 {
-    public IdentifierNode Identifier { get; set; } = identifier;
-
     public ExpressionNode Right { get; set; } = right;
+
+    public IdentifierNode Identifier { get; set; } = identifier;
 
     public override Token GetStartToken() => this.Identifier.GetStartToken();
 }
