@@ -1,1 +1,1 @@
-using Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes;

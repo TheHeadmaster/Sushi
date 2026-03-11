@@ -19,6 +19,7 @@ public static class Constants
         { "if", TokenType.If },
         { "then", TokenType.Then },
         { "using", TokenType.Using },
+        { "namespace", TokenType.Namespace },
         { "int32", TokenType.Int32Primitive },
         { "float32", TokenType.Float32Primitive }
     });

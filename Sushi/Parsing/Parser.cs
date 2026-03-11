@@ -40,7 +40,8 @@ public sealed class Parser
 
     private static readonly Dictionary<TokenType, IStatementParser> statements = new()
     {
-        { TokenType.Using, new UsingParser() }
+        { TokenType.Using, new UsingParser() },
+        { TokenType.Namespace, new NamespaceDeclarationParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;

@@ -28,5 +28,6 @@ public enum TokenType
     Slash,
     Using,
     Dot,
+    Namespace,
 }
 
