@@ -21,7 +21,6 @@
 	  <Compile Remove="OLD\ExeHelper.cs" />
 	  <Compile Remove="OLD\Extensions\ReflectionEx.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ArgumentListNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ArgumentNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AssignmentNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\BlockNode.cs" />
@@ -37,7 +36,6 @@
 	  <Compile Remove="OLD\Parsing\Nodes\ParameterNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\TypeNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <Compile Remove="OLD\Parsing\ParsingContext.cs" />
 	  <Compile Remove="OLD\Parsing\ReferenceScope.cs" />
 	  <Compile Remove="OLD\Parsing\SushiIdentifier.cs" />
 	  <Compile Remove="OLD\Parsing\SushiType.cs" />
@@ -56,7 +54,6 @@
 	  <None Include="OLD\ExeHelper.cs" />
 	  <None Include="OLD\Extensions\ReflectionEx.cs" />
 	  <None Include="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
-	  <None Include="OLD\Parsing\Nodes\ArgumentListNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\ArgumentNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\AssignmentNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\BlockNode.cs" />
@@ -72,7 +69,6 @@
 	  <None Include="OLD\Parsing\Nodes\ParameterNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\TypeNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <None Include="OLD\Parsing\ParsingContext.cs" />
 	  <None Include="OLD\Parsing\ReferenceScope.cs" />
 	  <None Include="OLD\Parsing\SushiIdentifier.cs" />
 	  <None Include="OLD\Parsing\SushiType.cs" />

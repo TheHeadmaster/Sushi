@@ -143,6 +143,13 @@ public sealed class Parser
     {
         if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
         {
+            if (token.Type is TokenType.Class or TokenType.Static)
+            {
+                ClassNode returnClass = await ClassParser.Parse(this, token);
+
+                return returnClass;
+            }
+
             StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));
             await this.ExpectAndPop(TokenType.Terminator);
             return returnStatement;
@@ -172,5 +179,12 @@ public sealed class Parser
         this.Pop();
 
         return Task.CompletedTask;
+    }
+
+    public Task<Token> PeekAndExpectNotEOF()
+    {
+        Token token = this.Peek() ?? throw new NotImplementedException();
+
+        return Task.FromResult(token);
     }
 }

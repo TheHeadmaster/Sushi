@@ -1,12 +1,5 @@
-if 3 + 5 then
+class Program
 {
-   someValue = 3;
 }
-else if 3 + 2 then
-{
-    someOtherValue = 2 + 5;
-}
-else
-{
-    // Do Nothing
-}
+
+static class Derp { }

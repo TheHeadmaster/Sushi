@@ -21,6 +21,8 @@ public static class Constants
         { "else", TokenType.Else },
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },
+        { "class", TokenType.Class },
+        { "static", TokenType.Static },
         { "int32", TokenType.Int32Primitive },
         { "float32", TokenType.Float32Primitive }
     });

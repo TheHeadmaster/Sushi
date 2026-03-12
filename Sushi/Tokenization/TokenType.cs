@@ -30,5 +30,7 @@ public enum TokenType
     Using,
     Dot,
     Namespace,
+    Class,
+    Static,
 }
 
