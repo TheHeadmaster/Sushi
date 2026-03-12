@@ -41,7 +41,8 @@ public sealed class Parser
     private static readonly Dictionary<TokenType, IStatementParser> statements = new()
     {
         { TokenType.Using, new UsingParser() },
-        { TokenType.Namespace, new NamespaceDeclarationParser() }
+        { TokenType.Namespace, new NamespaceDeclarationParser() },
+        { TokenType.If, new IfParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
@@ -59,7 +60,7 @@ public sealed class Parser
     public Token? Pop()
     {
         Token? token = this.Peek();
-        
+
         if (token is not null)
         {
             this.currentIndex++;
@@ -132,17 +133,22 @@ public sealed class Parser
 
         while ((token = this.Peek()) is not null)
         {
-            if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
-            {
-                returnStatements.Add(new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary)));
-                await this.ExpectAndPop(TokenType.Terminator);
-                continue;
-            }
-
-            returnStatements.Add(await statement.Parse(this, token));
+            returnStatements.Add(await this.ParseStatement(token));
         }
 
         return returnStatements;
+    }
+
+    public async Task<StatementNode> ParseStatement([NotNull] Token token)
+    {
+        if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
+        {
+            StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));
+            await this.ExpectAndPop(TokenType.Terminator);
+            return returnStatement;
+        }
+
+        return await statement.Parse(this, token);
     }
 
     private async Task<BindingPower> GetPrecedence()

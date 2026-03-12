@@ -20,6 +20,7 @@ public enum TokenType
     FalseLiteral,
     If,
     Then,
+    Else,
     Int32Primitive,
     Float32Primitive,
     Plus,

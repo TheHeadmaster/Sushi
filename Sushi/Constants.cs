@@ -18,6 +18,7 @@ public static class Constants
         { "false", TokenType.FalseLiteral },
         { "if", TokenType.If },
         { "then", TokenType.Then },
+        { "else", TokenType.Else },
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },
         { "int32", TokenType.Int32Primitive },
