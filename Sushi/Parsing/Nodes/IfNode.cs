@@ -1,5 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
@@ -12,4 +13,19 @@ public class IfNode([NotNull] Token token, ExpressionNode? condition, [NotNull] 
     public IfNode? Else { get; set; } = elseNode;
 
     public override Token GetStartToken() => token;
+
+    public override async Task Verify(VerificationContext context)
+    {
+        if (this.Condition is not null)
+        {
+            await this.Condition.Verify(context);
+        }
+
+        await this.Body.Verify(context);
+
+        if (this.Else is not null)
+        {
+            await this.Else.Verify(context);
+        }
+    }
 }

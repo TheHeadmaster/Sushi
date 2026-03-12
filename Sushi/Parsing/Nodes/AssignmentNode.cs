@@ -1,8 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
@@ -13,4 +11,11 @@ public class AssignmentNode([NotNull] IdentifierNode identifier, [NotNull] Expre
     public ExpressionNode Right { get; set; } = right;
 
     public override Token GetStartToken() => this.Identifier.GetStartToken();
+
+    public override async Task Verify(VerificationContext context)
+    {
+        await this.Identifier.Verify(context);
+
+        await this.Right.Verify(context);
+    }
 }

@@ -21,6 +21,9 @@ public static class Constants
         { "else", TokenType.Else },
         { "do", TokenType.Do },
         { "while", TokenType.While },
+        { "create", TokenType.Create },
+        { "destroy", TokenType.Destroy },
+        { "void", TokenType.Void },
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },
         { "class", TokenType.Class },
@@ -47,4 +50,20 @@ public static class Constants
         { "/", TokenType.Slash },
         { ".", TokenType.Dot }
     });
+
+    public static ReadOnlyDictionary<string, string> SushiToCConversions { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>()
+    {
+        { "int32", "int32_t" },
+        { "float32", "float" }
+    });
+
+    public static string TryGetPrimitiveType(string value)
+    {
+        if (SushiToCConversions.ContainsKey(value))
+        {
+            return SushiToCConversions[value];
+        }
+
+        return string.Empty;
+    }
 }

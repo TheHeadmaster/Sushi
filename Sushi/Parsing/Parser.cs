@@ -3,6 +3,7 @@ using Sushi.Diagnostics;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers;
 using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing;
 
@@ -44,7 +45,8 @@ public sealed class Parser
         { TokenType.Namespace, new NamespaceDeclarationParser() },
         { TokenType.If, new IfParser() },
         { TokenType.While, new WhileParser() },
-        { TokenType.Do, new DoWhileParser() }
+        { TokenType.Do, new DoWhileParser() },
+        { TokenType.Destroy, new DestroyParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
@@ -91,10 +93,16 @@ public sealed class Parser
         {
             this.tokens = file.Tokens;
             this.currentIndex = 0;
-            tree.Children.AddRange(await this.ParseStatements());
+            tree.Children.Add(new FileNode(file.FilePath, file.FileName, await this.ParseStatements()));
         }
 
         tree.Messages = this.Messages;
+
+        VerificationContext context = new();
+
+        await tree.Verify(context);
+
+        tree.Messages.AddRange(context.Messages);
 
         return tree;
     }
@@ -150,6 +158,20 @@ public sealed class Parser
                 ClassNode returnClass = await ClassParser.Parse(this, token);
 
                 return returnClass;
+            }
+
+            if (token.Type is TokenType.Identifier && this.Peek(1)?.Type is TokenType.Identifier && this.Peek(2)?.Type is TokenType.OpeningParenthesis)
+            {
+                MethodDeclarationNode method = await MethodDeclarationParser.Parse(this, token);
+
+                return method;
+            }
+
+            if (token.Type is TokenType.Identifier)
+            {
+                FieldDeclarationNode field = await FieldDeclarationParser.Parse(this, token);
+
+                return field;
             }
 
             StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));

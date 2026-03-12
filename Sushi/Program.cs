@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
+using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Parsing;
 using Sushi.Tokenization;
@@ -83,9 +84,12 @@ public static class Program
     {
         Lexer lexer = new();
         Parser parser = new();
+        Compiler compiler = new();
         List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
 
         AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
+
+        await compiler.Compile(tree);
     }
 
     /// <summary>

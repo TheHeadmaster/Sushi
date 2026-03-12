@@ -21,10 +21,10 @@ public sealed class ClassParsingTests : ParsingTest
         AbstractSyntaxTree ast = await Parser.ParseSource([this.SourceFile]);
 
         ast.Children.Should().HaveCount(1);
+        ast.Children[0].Statements.Should().HaveCount(1);
+        ast.Children[0].Statements[0].Should().BeOfType<ClassNode>();
 
-        ast.Children[0].Should().BeOfType<ClassNode>();
-
-        ClassNode classNode = (ClassNode)ast.Children[0];
+        ClassNode classNode = (ClassNode)ast.Children[0].Statements[0];
 
         classNode.IsStatic.Should().BeFalse();
 
@@ -51,10 +51,10 @@ public sealed class ClassParsingTests : ParsingTest
         AbstractSyntaxTree ast = await Parser.ParseSource([this.SourceFile]);
 
         ast.Children.Should().HaveCount(1);
+        ast.Children[0].Statements.Should().HaveCount(1);
+        ast.Children[0].Statements[0].Should().BeOfType<ClassNode>();
 
-        ast.Children[0].Should().BeOfType<ClassNode>();
-
-        ClassNode classNode = (ClassNode)ast.Children[0];
+        ClassNode classNode = (ClassNode)ast.Children[0].Statements[0];
 
         classNode.IsStatic.Should().BeTrue();
 

@@ -7,11 +7,10 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class IdentifierNode([NotNull] Token token) : ExpressionNode, ICallableNode
+public class TypeNode([NotNull] Token token) : StatementNode
 {
-    public string Name { get; set; } = token.Value;
+    public string Name { get; set; } = token.Type is TokenType.Identifier ? token.Value : Constants.TryGetPrimitiveType(token.Value);
 
     public override Token GetStartToken() => token;
-    public bool ResolvesToIdentifier() => true;
     public override Task Verify(VerificationContext context) => Task.CompletedTask;
 }

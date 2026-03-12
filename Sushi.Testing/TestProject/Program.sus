@@ -1,0 +1,6 @@
+static class Program
+{
+	SomeClass member;
+
+	SomeClass GetMember() { }
+}
