@@ -1,5 +1,8 @@
-class Program
+while 3 + 5 do
 {
 }
 
-static class Derp { }
+do
+{
+}
+while 3 + 5

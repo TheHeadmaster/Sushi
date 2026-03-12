@@ -42,7 +42,9 @@ public sealed class Parser
     {
         { TokenType.Using, new UsingParser() },
         { TokenType.Namespace, new NamespaceDeclarationParser() },
-        { TokenType.If, new IfParser() }
+        { TokenType.If, new IfParser() },
+        { TokenType.While, new WhileParser() },
+        { TokenType.Do, new DoWhileParser() }
     };
 
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;

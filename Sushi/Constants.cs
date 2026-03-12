@@ -19,6 +19,8 @@ public static class Constants
         { "if", TokenType.If },
         { "then", TokenType.Then },
         { "else", TokenType.Else },
+        { "do", TokenType.Do },
+        { "while", TokenType.While },
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },
         { "class", TokenType.Class },

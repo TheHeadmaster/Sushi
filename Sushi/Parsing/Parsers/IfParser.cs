@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
@@ -10,7 +10,7 @@ public class IfParser : IStatementParser
     {
         await parser.ExpectAndPop(TokenType.If);
 
-        Token? nextToken = parser.Peek() ?? throw new NotImplementedException();
+        Token? nextToken = await parser.PeekAndExpectNotEOF();
 
         ExpressionNode condition = await parser.ParseExpression(BindingPower.Primary);
 

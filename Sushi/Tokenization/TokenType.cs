@@ -21,6 +21,8 @@ public enum TokenType
     If,
     Then,
     Else,
+    While,
+    Do,
     Int32Primitive,
     Float32Primitive,
     Plus,
@@ -32,5 +34,6 @@ public enum TokenType
     Namespace,
     Class,
     Static,
+
 }
 
