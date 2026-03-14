@@ -19,7 +19,6 @@
 	  <Compile Remove="OLD\Correctness\AssignmentTypeChecker.cs" />
 	  <Compile Remove="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <Compile Remove="OLD\ExeHelper.cs" />
-	  <Compile Remove="OLD\Extensions\ReflectionEx.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ArgumentNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\AssignmentNode.cs" />
@@ -51,7 +50,6 @@
 	  <None Include="OLD\Correctness\AssignmentTypeChecker.cs" />
 	  <None Include="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <None Include="OLD\ExeHelper.cs" />
-	  <None Include="OLD\Extensions\ReflectionEx.cs" />
 	  <None Include="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
 	  <None Include="OLD\Parsing\Nodes\ArgumentNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\AssignmentNode.cs" />
