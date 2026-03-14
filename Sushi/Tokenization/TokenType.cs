@@ -37,6 +37,8 @@ public enum TokenType
     Namespace,
     Class,
     Static,
-
+    Internal,
+    Public,
+    Private,
 }
 

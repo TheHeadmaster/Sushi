@@ -27,6 +27,9 @@ public static class Constants
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },
         { "class", TokenType.Class },
+        { "public", TokenType.Public },
+        { "internal", TokenType.Internal },
+        { "private", TokenType.Private },
         { "static", TokenType.Static },
         { "int32", TokenType.Int32Primitive },
         { "float32", TokenType.Float32Primitive }
