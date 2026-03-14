@@ -4,14 +4,14 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class UsingNode([NotNull] Token usingToken, NamespaceNode namespaceNode) : StatementNode
+public class UsingNode([NotNull] Token usingToken, ExpressionNode? identifier) : StatementNode
 {
-    public NamespaceNode Namespace { get; set; } = namespaceNode;
+    public ExpressionNode Identifier { get; set; } = identifier;
 
     public override Token GetStartToken() => usingToken;
 
     public override async Task Verify(VerificationContext context)
     {
-        await this.Namespace.Verify(context);
+        await this.Identifier.Verify(context);
     }
 }

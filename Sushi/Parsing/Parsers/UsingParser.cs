@@ -22,12 +22,7 @@ public class UsingParser : IParser
 
         ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
-        if (expression is not NamespaceNode namespaceNode)
-        {
-            throw new NotImplementedException();
-        }
-
-        UsingNode usingStatement = new(token, namespaceNode);
+        UsingNode usingStatement = new(token, expression);
 
         await parser.ExpectAndPop(TokenType.Terminator);
 

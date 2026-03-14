@@ -9,13 +9,13 @@ public class NamespaceNode([NotNull] IdentifierNode identifier, [NotNull] Expres
 {
     public ExpressionNode Right { get; set; } = right;
 
-    public IdentifierNode Identifier { get; set; } = identifier;
+    public IdentifierNode Name { get; set; } = identifier;
 
-    public override Token GetStartToken() => this.Identifier.GetStartToken();
+    public override Token GetStartToken() => this.Name.GetStartToken();
     public override async Task Verify(VerificationContext context)
     {
         await this.Right.Verify(context);
 
-        await this.Identifier.Verify(context);
+        await this.Name.Verify(context);
     }
 }
