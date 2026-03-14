@@ -4,13 +4,23 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class UsingParser : IStatementParser
+/// <summary>
+/// Handles the parsing of using statements.
+/// </summary>
+public class UsingParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Using];
+
+    /// <inheritdoc />
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Using);
 
-        ExpressionNode expression = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
         if (expression is not NamespaceNode namespaceNode)
         {
@@ -23,4 +33,7 @@ public class UsingParser : IStatementParser
 
         return usingStatement;
     }
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers;
 using Sushi.Tokenization;
@@ -12,45 +14,61 @@ namespace Sushi.Parsing;
 /// </summary>
 public sealed class Parser
 {
+    /// <summary>
+    /// The current index.
+    /// </summary>
     private int currentIndex;
 
+    /// <summary>
+    /// The <see cref="List{T}"/> of <see cref="Token"/> objects to be parsed.
+    /// </summary>
     private List<Token> tokens = null!;
 
+    /// <summary>
+    /// The list of messages accumulated from parsing errors and warnings.
+    /// </summary>
     public List<CompilerMessage> Messages { get; set; } = [];
 
-    private static readonly Dictionary<TokenType, IPrefixParser> prefixes = new()
-    {
-        { TokenType.Minus, new PrefixOperatorParser() },
-        { TokenType.NumberLiteral, new ConstantParser() },
-        { TokenType.TrueLiteral, new ConstantParser() },
-        { TokenType.FalseLiteral, new ConstantParser() },
-        { TokenType.Identifier, new IdentifierParser() },
-        { TokenType.OpeningParenthesis, new GroupParser() },
-    };
+    /// <summary>
+    /// The available parsers.
+    /// </summary>
 
-    private static readonly Dictionary<TokenType, IInfixParser> infixes = new()
-    {
-        { TokenType.Plus, new InfixOperatorParser(BindingPower.SumDifference) },
-        { TokenType.Minus, new InfixOperatorParser(BindingPower.SumDifference) },
-        { TokenType.Asterisk, new InfixOperatorParser(BindingPower.ProductQuotient) },
-        { TokenType.Slash, new InfixOperatorParser(BindingPower.ProductQuotient) },
-        { TokenType.Assignment, new AssignmentParser()  },
-        { TokenType.OpeningParenthesis, new MethodCallParser() },
-        { TokenType.Dot, new NamespaceParser() }
-    };
+    private static readonly List<IParser> parsers = ReflectionEx.GetLeafSubclasses<IParser>();
 
-    private static readonly Dictionary<TokenType, IStatementParser> statements = new()
-    {
-        { TokenType.Using, new UsingParser() },
-        { TokenType.Namespace, new NamespaceDeclarationParser() },
-        { TokenType.If, new IfParser() },
-        { TokenType.While, new WhileParser() },
-        { TokenType.Do, new DoWhileParser() },
-        { TokenType.Destroy, new DestroyParser() }
-    };
+    /// <summary>
+    /// Parsers that are allowed to be a root (top-level) statement, which means they don't have to be a sub-statement in a block.
+    /// </summary>
+    private static readonly List<IParser> allowedRootStatementParsers = [];
 
+    /// <summary>
+    /// Returns whether the parser index is at the end of the file.
+    /// </summary>
+    /// <param name="lookahead">
+    /// How many <see cref="Token"/> indices to look ahead. Defaults to 0.
+    /// </param>
+    /// <returns>
+    /// True if the index is at or after the end of the file. False otherwise.
+    /// </returns>
     private bool IsAtEnd(int lookahead = 0) => this.tokens.Count <= this.currentIndex + lookahead;
 
+    /// <summary>
+    /// Gets the parser of the specified type.
+    /// </summary>
+    /// <typeparam name="T">
+    /// The type of the parser. Must implement <see cref="IParser"/>.
+    /// </typeparam>
+    /// <returns>
+    /// The <see cref="IParser"/> with the specified type.
+    /// </returns>
+    public static IParser GetParser<T>() where T : IParser, new() => parsers.OfType<T>().First();
+
+    /// <summary>
+    /// Peeks the next <see cref="Token"/>. If lookahead is greater than 0. Peeks at the position offset from the next <see cref="Token"/>.
+    /// </summary>
+    /// <param name="lookahead">How many indices to look ahead.</param>
+    /// <returns>
+    /// The <see cref="Token"/> or null if the position would be past the end of file.
+    /// </returns>
     public Token? Peek(int lookahead = 0)
     {
         if (this.IsAtEnd(lookahead))
@@ -61,6 +79,13 @@ public sealed class Parser
         return this.tokens[this.currentIndex + lookahead];
     }
 
+    /// <summary>
+    /// Pops the next <see cref="Token"/> (does not remove it from the list, just advances the parser) and returns it.
+    /// If the parser is already at the end of file, then this will return null and not advance.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Token"/> or null if already at end of file.
+    /// </returns>
     public Token? Pop()
     {
         Token? token = this.Peek();
@@ -73,7 +98,13 @@ public sealed class Parser
         return token;
     }
 
-    private Token Previous() => this.Peek(-1)!;
+    /// <summary>
+    /// Gets the previous <see cref="Token"/> in the list.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Token"/>. This can only be null if we are on the first <see cref="Token"/> in the list.
+    /// </returns>
+    private Token? Previous() => this.Peek(-1);
 
     /// <summary>
     /// Parses the source code from a <see cref="List{T}"/> of <see cref="TokenFile"/> objects into an <see cref="AbstractSyntaxTree"/>.
@@ -86,6 +117,12 @@ public sealed class Parser
     /// </returns>
     public async Task<AbstractSyntaxTree> ParseSource([NotNull] List<TokenFile> tokenFiles)
     {
+        if (!allowedRootStatementParsers.Any())
+        {
+            allowedRootStatementParsers.Add(GetParser<UsingParser>());
+            allowedRootStatementParsers.Add(GetParser<ClassParser>());
+        }
+
         AbstractSyntaxTree tree = new();
         this.Messages = [];
 
@@ -107,34 +144,66 @@ public sealed class Parser
         return tree;
     }
 
-    public async Task<ExpressionNode> ParseExpression(BindingPower power)
+    /// <summary>
+    /// Parses the next set of tokens as an expression until the expression is complete.
+    /// </summary>
+    /// <param name="power">
+    /// The current <see cref="BindingPower"/> that the parser is at.
+    /// If the next token doesn't have a lower binding power than this
+    /// value, return what we have.
+    /// </param>
+    /// <returns>
+    /// The <see cref="ExpressionNode"/> or null if there no <see cref="Token" /> or there was an issue parsing the <see cref="Token"/>.
+    /// </returns>
+    public async Task<ExpressionNode?> ParseExpression(BindingPower power)
     {
-        Token? token = this.Pop() ?? throw new NotImplementedException();
+        Token? token = await this.PeekAndExpectNotEOF();
 
-        if (!prefixes.TryGetValue(token.Type, out IPrefixParser? prefix))
+        if (token is null)
         {
-            throw new NotImplementedException();
+            return null;
         }
 
-        ExpressionNode left = await prefix.Parse(this, token);
-
-        while ((int)power < (int)await this.GetPrecedence())
+        if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            if (this.Peek() is null)
+            this.Messages.Add(new UnexpectedPrefixOperator(token));
+            return null;
+        }
+
+        ExpressionNode? left = await prefix.ParsePrefix(this, token);
+
+        if (left is null)
+        {
+            return null;
+        }
+
+        while ((token = this.Peek()) is not null && (int)power < (int)await GetPrecedence(token))
+        {
+            this.Pop();
+
+            if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                break;
+                this.Messages.Add(new UnexpectedInfixOperator(token));
+                return left;
             }
 
-            token = this.Pop()!;
+            left = await infix.ParseInfix(this, left, token);
 
-            IInfixParser infix = infixes[token.Type];
-
-            left = await infix.Parse(this, left, token);
+            if (left is null)
+            {
+                return null;
+            }
         }
 
         return left;
     }
 
+    /// <summary>
+    /// Parses all of the statements until there is no token left.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="List{T}"/> of <see cref="StatementNode"/> objects that were parsed.
+    /// </returns>
     public async Task<List<StatementNode>> ParseStatements()
     {
         Token? token;
@@ -143,71 +212,104 @@ public sealed class Parser
 
         while ((token = this.Peek()) is not null)
         {
-            returnStatements.Add(await this.ParseStatement(token));
+            StatementNode? statement = await this.ParseStatement(token, allowedRootStatementParsers);
+
+            if (statement is null)
+            {
+                continue;
+            }
+
+            returnStatements.Add(statement);
         }
 
         return returnStatements;
     }
 
-    public async Task<StatementNode> ParseStatement([NotNull] Token token)
+    /// <summary>
+    /// Parses the next <see cref="Token"/> as a statement.
+    /// </summary>
+    /// <param name="token">
+    /// The <see cref="Token"/> to parse.
+    /// </param>
+    /// <param name="allowedParsers">
+    /// The <see cref="IParser"/> objects allowed to handle the token in this context.
+    /// </param>
+    /// <returns>
+    /// The <see cref="StatementNode"/> or null if there was an issue.
+    /// </returns>
+    public async Task<StatementNode?> ParseStatement([NotNull] Token token, IEnumerable<IParser> allowedParsers)
     {
-        if (!statements.TryGetValue(token.Type, out IStatementParser? statement))
+        if (allowedParsers.FirstOrDefault(parser => parser.Type is ParserType.Statement && parser.AllowedStartTokens.Contains(token.Type)) is not IParser statement)
         {
-            if (token.Type is TokenType.Class or TokenType.Static)
-            {
-                ClassNode returnClass = await ClassParser.Parse(this, token);
-
-                return returnClass;
-            }
-
-            if (token.Type is TokenType.Identifier && this.Peek(1)?.Type is TokenType.Identifier && this.Peek(2)?.Type is TokenType.OpeningParenthesis)
-            {
-                MethodDeclarationNode method = await MethodDeclarationParser.Parse(this, token);
-
-                return method;
-            }
-
-            if (token.Type is TokenType.Identifier)
-            {
-                FieldDeclarationNode field = await FieldDeclarationParser.Parse(this, token);
-
-                return field;
-            }
-
             StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));
             await this.ExpectAndPop(TokenType.Terminator);
             return returnStatement;
         }
 
-        return await statement.Parse(this, token);
+        return await statement.ParseStatement(this, token);
     }
 
-    private async Task<BindingPower> GetPrecedence()
+    /// <summary>
+    /// Gets the precedence of the specified <see cref="Token"/>.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="BindingPower"/> of the <see cref="Token"/>.
+    /// </returns>
+    private static async Task<BindingPower> GetPrecedence([NotNull] Token token)
     {
-        Token? token = this.Peek();
-        if (token is null || !infixes.TryGetValue(token.Type, out IInfixParser? infix))
+        if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
         {
-            return 0;
+            return BindingPower.Primary;
         }
 
-        return infix.Power();
+        return infix.Power(token.Type);
     }
 
-    public Task ExpectAndPop(TokenType type)
+    /// <summary>
+    /// Asserts that the current <see cref="Token"/> is one of the specified <see cref="TokenType"/> values,
+    /// and emits an error if it is not or if the end of file was reached.
+    /// </summary>
+    /// <param name="types">
+    /// The <see cref="TokenType"/> values to expect.
+    /// </param>
+    /// <returns>
+    /// The <see cref="Token"/> that was popped or null if the end of file was reached.
+    /// </returns>
+    public async Task<Token?> ExpectAndPop(params TokenType[] types)
     {
-        if (this.Peek()?.Type != type)
+        if (await this.PeekAndExpectNotEOF() is not Token token)
         {
-            throw new NotImplementedException();
+            return null;
+        }
+
+        if (!types.Contains(token.Type))
+        {
+            this.Messages.Add(new WrongTokenError(token, types));
         }
 
         this.Pop();
 
-        return Task.CompletedTask;
+        return token;
     }
 
-    public Task<Token> PeekAndExpectNotEOF()
+    /// <summary>
+    /// Peeks the current <see cref="Token"/> and emits an error if there isn't one.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Token"/> or null if there isn't one.
+    /// </returns>
+    public Task<Token?> PeekAndExpectNotEOF()
     {
-        Token token = this.Peek() ?? throw new NotImplementedException();
+        Token? token = this.Peek();
+
+        if (token is null)
+        {
+            // Since we filter out files that have no tokens in the lexing step,
+            // We can assume every file has at least one token, and therefore
+            // if Peek(0) returns null then Previous() must return a non-null value.
+            Token previous = this.Previous()!;
+            this.Messages.Add(new UnexpectedEndOfFile(previous));
+        }
 
         return Task.FromResult(token);
     }

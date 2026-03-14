@@ -4,20 +4,38 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class DoWhileParser : IStatementParser
+/// <summary>
+/// Handles the parsing of do while loops.
+/// </summary>
+public class DoWhileParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Do];
+
+    /// <inheritdoc />
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Do);
 
-        BlockNode blockNode = await BlockParser.Parse(parser, parser.Peek());
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek());
+
+        if (body is not BlockNode block)
+        {
+            return null;
+        }
 
         await parser.ExpectAndPop(TokenType.While);
 
-        Token nextToken = await parser.PeekAndExpectNotEOF();
+        Token? nextToken = await parser.PeekAndExpectNotEOF();
 
-        ExpressionNode condition = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? condition = await parser.ParseExpression(BindingPower.Primary);
 
-        return new DoWhileNode(token, condition, blockNode);
+        return new DoWhileNode(token, condition, block);
     }
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

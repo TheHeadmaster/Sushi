@@ -1,16 +1,46 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class InfixOperatorParser(BindingPower power) : IInfixParser
+/// <summary>
+/// Handles the parsing of infix operators, such as addition and multiplication operators.
+/// </summary>
+public class InfixOperatorParser : IParser
 {
-    public async Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] ExpressionNode left, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Infix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } =
+    [
+        TokenType.Plus,
+        TokenType.Minus,
+        TokenType.Asterisk,
+        TokenType.Slash
+    ];
+
+    /// <summary>
+    /// Maps each token to a binding power.
+    /// </summary>
+    private static readonly ReadOnlyDictionary<TokenType, BindingPower> infixBindingPowers = new(
+        new Dictionary<TokenType, BindingPower>()
     {
-        ExpressionNode right = await parser.ParseExpression(power);
+        { TokenType.Plus, BindingPower.SumDifference },
+        { TokenType.Minus, BindingPower.SumDifference },
+        { TokenType.Asterisk, BindingPower.ProductQuotient },
+        { TokenType.Slash, BindingPower.ProductQuotient },
+    });
+
+    /// <inheritdoc />
+    public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
+    {
+        ExpressionNode? right = await parser.ParseExpression(infixBindingPowers[token.Type]);
         return new BinaryExpressionNode(token, left, right);
     }
 
-    public BindingPower Power() => power;
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => infixBindingPowers[type];
 }

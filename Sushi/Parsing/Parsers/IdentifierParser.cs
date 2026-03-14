@@ -1,14 +1,23 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class IdentifierParser : IPrefixParser
+/// <summary>
+/// Handles the parsing of identifiers, which are names of variables, parameters, and members.
+/// </summary>
+public class IdentifierParser : IParser
 {
-    public Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode>(new IdentifierNode(token));
-    public BindingPower Power() => BindingPower.Primary;
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Prefix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
+
+    /// <inheritdoc />
+    public Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode?>(new IdentifierNode(token));
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

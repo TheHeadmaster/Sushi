@@ -1,20 +1,18 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ClassNode([NotNull] Token token, [NotNull] IdentifierNode identifier, [NotNull] BlockNode body, [NotNull] bool isStatic) : StatementNode
+public class ClassNode([NotNull] Token token, [NotNull] IdentifierNode identifier, [NotNull] BlockNode body) : StatementNode, ICanBeStatic, IAccessModifiable
 {
-    public bool IsStatic { get; set; } = isStatic;
+    public bool IsStatic { get; set; }
 
     public IdentifierNode Name { get; set; } = identifier;
 
     public BlockNode Body { get; set; } = body;
+    public AccessModifier AccessModifier { get; set; }
 
     public override Token GetStartToken() => token;
 

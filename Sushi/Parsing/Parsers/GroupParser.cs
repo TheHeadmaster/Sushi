@@ -1,22 +1,30 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class GroupParser : IPrefixParser
+/// <summary>
+/// Handles parsing of arbitrary grouping parenthesis, which is used to override the default precedence.
+/// </summary>
+public class GroupParser : IParser
 {
-    public async Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Prefix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.OpeningParenthesis];
+
+    /// <inheritdoc />
+    public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
-        ExpressionNode expression = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
         await parser.ExpectAndPop(TokenType.ClosingParenthesis);
 
         return expression;
     }
 
-    public BindingPower Power() => BindingPower.Primary;
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

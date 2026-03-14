@@ -1,15 +1,22 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class DestroyParser : IStatementParser
+/// <summary>
+/// Handles the parsing of the destroy statement.
+/// </summary>
+public class DestroyParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Destroy];
+
+    /// <inheritdoc />
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Destroy);
 
@@ -28,4 +35,7 @@ public class DestroyParser : IStatementParser
 
         return new DestroyNode(token, obj, expression);
     }
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

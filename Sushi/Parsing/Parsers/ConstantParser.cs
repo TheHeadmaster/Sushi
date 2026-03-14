@@ -4,8 +4,20 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class ConstantParser : IPrefixParser
+/// <summary>
+/// Handles the parsing of constants, such as 3 or true.
+/// </summary>
+public class ConstantParser : IParser
 {
-    public Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode>(new ConstantNode(token));
-    public BindingPower Power() => BindingPower.Primary;
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Prefix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.NumberLiteral, TokenType.TrueLiteral, TokenType.FalseLiteral];
+
+    /// <inheritdoc />
+    public Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode?>(new ConstantNode(token));
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

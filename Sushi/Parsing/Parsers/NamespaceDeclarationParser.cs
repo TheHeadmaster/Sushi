@@ -1,19 +1,26 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class NamespaceDeclarationParser : IStatementParser
+/// <summary>
+/// Handles the parsing of namespace declaration statements.
+/// </summary>
+public class NamespaceDeclarationParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Namespace];
+
+    /// <inheritdoc />
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Namespace);
 
-        ExpressionNode expression = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
         if (expression is not NamespaceNode namespaceNode)
         {
@@ -26,4 +33,7 @@ public class NamespaceDeclarationParser : IStatementParser
 
         return namespaceStatement;
     }
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

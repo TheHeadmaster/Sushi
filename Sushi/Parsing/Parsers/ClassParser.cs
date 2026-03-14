@@ -4,23 +4,21 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public static class ClassParser
+/// <summary>
+/// Handles the parsing of class declarations.
+/// </summary>
+public class ClassParser : IParser
 {
-    public static async Task<ClassNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Class];
+
+    /// <inheritdoc />
+    public static async Task<ClassNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        bool isStatic = false;
-
-        Token? currentToken = token;
-
-        if (currentToken.Type is TokenType.Static)
-        {
-            isStatic = true;
-            parser.Pop();
-        }
-
-        currentToken = await parser.PeekAndExpectNotEOF();
-
-        await parser.ExpectAndPop(TokenType.Class);
+        Token? currentToken = await parser.ExpectAndPop(TokenType.Class);
 
         currentToken = await parser.PeekAndExpectNotEOF();
 
@@ -30,10 +28,18 @@ public static class ClassParser
 
         currentToken = await parser.PeekAndExpectNotEOF();
 
-        BlockNode body = await BlockParser.Parse(parser, currentToken);
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, currentToken);
 
-        ClassNode classNode = new(token, identifier, body, isStatic);
+        if (body is not BlockNode block)
+        {
+            return null;
+        }
+
+        ClassNode classNode = new(token, identifier, block);
 
         return classNode;
     }
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

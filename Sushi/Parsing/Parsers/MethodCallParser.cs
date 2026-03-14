@@ -1,18 +1,25 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class MethodCallParser : IInfixParser
+/// <summary>
+/// Handles parsing method calls.
+/// </summary>
+public class MethodCallParser : IParser
 {
-    public async Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] ExpressionNode left, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Infix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.OpeningParenthesis];
+
+    /// <inheritdoc />
+    public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
     {
-        List<ExpressionNode> arguments = [];
+        List<ExpressionNode?> arguments = [];
 
         if (parser.Peek()?.Type is not TokenType.ClosingParenthesis)
         {
@@ -42,5 +49,6 @@ public class MethodCallParser : IInfixParser
         return new MethodCallNode(left, arguments);
     }
 
-    public BindingPower Power() => BindingPower.Call;
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Call;
 }

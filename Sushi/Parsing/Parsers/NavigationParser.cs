@@ -5,29 +5,29 @@ using Sushi.Tokenization;
 namespace Sushi.Parsing.Parsers;
 
 /// <summary>
-/// Handles the parsing of assignments, i.e. the = operator.
+/// Handles parsing of the navigation operator. 
 /// </summary>
-public class AssignmentParser : IParser
+public class NavigationParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Infix;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Assignment];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Dot];
 
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
     {
-        ExpressionNode? right = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? right = await parser.ParseExpression(BindingPower.Postfix);
 
         if (left is not IdentifierNode identifier)
         {
             throw new NotImplementedException();
         }
 
-        return new AssignmentNode(identifier, right);
+        return new NamespaceNode(identifier, right);
     }
 
     /// <inheritdoc />
-    public BindingPower Power(TokenType type) => BindingPower.Assignment;
+    public BindingPower Power(TokenType type) => BindingPower.Navigation;
 }

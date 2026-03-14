@@ -1,15 +1,24 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public sealed class PostfixOperatorParser : IInfixParser
+/// <summary>
+/// Parses postfix operators, such as increment.
+/// </summary>
+public sealed class PostfixOperatorParser : IParser
 {
-    public Task<ExpressionNode> Parse([NotNull] Parser parser, [NotNull] ExpressionNode left, [NotNull] Token token)
-        => Task.FromResult<ExpressionNode>(new UnaryExpressionNode(token, false, left));
-    public BindingPower Power() => BindingPower.Postfix;
+    /// <inheritdoc />
+    public ParserType Type => ParserType.Infix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens => [];
+
+    /// <inheritdoc />
+    public Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
+        => Task.FromResult<ExpressionNode?>(new UnaryExpressionNode(token, false, left));
+
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Postfix;
 }

@@ -4,32 +4,57 @@ using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers;
 
-public class IfParser : IStatementParser
+/// <summary>
+/// Handles the parsing of if then else statements.
+/// </summary>
+public class IfParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Statement;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.If];
+
+    /// <inheritdoc />
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.If);
 
         Token? nextToken = await parser.PeekAndExpectNotEOF();
 
-        ExpressionNode condition = await parser.ParseExpression(BindingPower.Primary);
+        ExpressionNode? condition = await parser.ParseExpression(BindingPower.Primary);
 
         await parser.ExpectAndPop(TokenType.Then);
 
-        BlockNode blockNode = await BlockParser.Parse(parser, parser.Peek());
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek());
+
+        if (body is not BlockNode block)
+        {
+            return null;
+        }
+
         nextToken = parser.Peek();
 
         IfNode? elseNode = null;
 
         if (nextToken is not null && nextToken.Type is TokenType.Else)
         {
-            elseNode = await this.ParseElseIfOrElse(parser, nextToken);
+            elseNode = await ParseElseIfOrElse(parser, nextToken);
         }
 
-        return new IfNode(token, condition, blockNode, elseNode);
+        return new IfNode(token, condition, block, elseNode);
     }
 
-    private async Task<IfNode> ParseElseIfOrElse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
+
+    /// <summary>
+    /// Parses the else if or else branches of an if statement.
+    /// </summary>
+    /// <param name="parser">The main parser.</param>
+    /// <param name="token">The <see cref="Token"/> to parse.</param>
+    /// <returns>An <see cref="IfNode"/> or null if there isn't an else if or else branch.</returns>
+    private static async Task<IfNode?> ParseElseIfOrElse([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Else);
 
@@ -45,16 +70,22 @@ public class IfParser : IStatementParser
             nextToken = parser.Peek() ?? throw new NotImplementedException();
         }
 
-        BlockNode blockNode = await BlockParser.Parse(parser, nextToken);
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, nextToken);
+
+        if (body is not BlockNode block)
+        {
+            return null;
+        }
+
         nextToken = parser.Peek();
 
         IfNode? elseNode = null;
 
         if (nextToken is not null && nextToken.Type is TokenType.Else)
         {
-            elseNode = (IfNode)await this.ParseElseIfOrElse(parser, nextToken);
+            elseNode = await ParseElseIfOrElse(parser, nextToken);
         }
 
-        return new IfNode(token, condition, blockNode, elseNode);
+        return new IfNode(token, condition, block, elseNode);
     }
 }
