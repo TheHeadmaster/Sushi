@@ -46,7 +46,7 @@ public sealed partial class Lexer
             Program.Exit(ExitCode.LexingSyntaxError);
         }
 
-        return sourceFiles;
+        return sourceFiles.Where(file => file.Tokens.Any()).ToList();
     });
 
     /// <summary>
