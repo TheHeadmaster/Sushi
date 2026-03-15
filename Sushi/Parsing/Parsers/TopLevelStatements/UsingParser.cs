@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.TopLevelStatements;
 
 /// <summary>
 /// Handles the parsing of using statements.

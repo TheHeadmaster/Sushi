@@ -4,6 +4,7 @@ using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers;
+using Sushi.Parsing.Parsers.TopLevelStatements;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
