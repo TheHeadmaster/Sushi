@@ -5,6 +5,7 @@ using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers;
 using Sushi.Parsing.Parsers.TopLevelStatements;
+using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -24,6 +25,10 @@ public sealed class Parser
     /// The <see cref="List{T}"/> of <see cref="Token"/> objects to be parsed.
     /// </summary>
     private List<Token> tokens = null!;
+
+    private ReferenceScope globalScope = null!;
+
+    private ReferenceScope currentScope = null!;
 
     /// <summary>
     /// The list of messages accumulated from parsing errors and warnings.
@@ -126,6 +131,8 @@ public sealed class Parser
 
         AbstractSyntaxTree tree = new();
         this.Messages = [];
+        this.globalScope = new(null);
+        this.currentScope = this.globalScope;
 
         foreach (TokenFile file in tokenFiles)
         {
@@ -141,7 +148,7 @@ public sealed class Parser
         await tree.Verify(context);
 
         tree.Messages.AddRange(context.Messages);
-
+        tree.GlobalScope = this.globalScope;
         return tree;
     }
 
@@ -158,6 +165,34 @@ public sealed class Parser
     {
         this.tokens = tokens;
         this.currentIndex = 0;
+        this.globalScope = new(null);
+        this.currentScope = this.globalScope;
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Enters a new scope that is a sub-scope of the current scope.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public Task EnterScope()
+    {
+        this.currentScope = new(this.currentScope);
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Exits the current scope and changes the scope to its parent. If there is no parent scope, it defaults to the global scope.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public Task ExitScope()
+    {
+        this.currentScope = this.currentScope.ParentScope ?? this.globalScope;
 
         return Task.CompletedTask;
     }

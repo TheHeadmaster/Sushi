@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi;
@@ -54,19 +55,28 @@ public static class Constants
         { ".", TokenType.Dot }
     });
 
+    /// <summary>
+    /// Contains conversions for sushi primitive types to C primitive types.
+    /// </summary>
     public static ReadOnlyDictionary<string, string> SushiToCConversions { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>()
     {
         { "int32", "int32_t" },
         { "float32", "float" }
     });
 
-    public static string TryGetPrimitiveType(string value)
+    /// <summary>
+    /// Tries to get the primitive type for the specified token.
+    /// </summary>
+    /// <param name="token">
+    /// The token to try to get the type for. 
+    /// </param>
+    /// <returns>
+    /// A string containing the type or an empty string if it was not found.
+    /// </returns>
+    public static string TryGetPrimitiveType([NotNull] Token token) => token.Type switch
     {
-        if (SushiToCConversions.ContainsKey(value))
-        {
-            return SushiToCConversions[value];
-        }
-
-        return string.Empty;
-    }
+        TokenType.Int32Primitive => "int32",
+        TokenType.Float32Primitive => "float32",
+        _ => string.Empty
+    };
 }

@@ -1,4 +1,4 @@
-namespace Sushi.Parsing;
+namespace Sushi.Parsing.Scope;
 
 /// <summary>
 /// Represents a scope in which identifiers and type names live. Two identifiers with the same name
@@ -34,13 +34,25 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <returns>
     /// The <see cref="SushiType"/> or null if it was not found.
     /// </returns>
-    public SushiType? ResolveType(string name)
+    public async Task<SushiType?> ResolveType(string? name)
     {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
         SushiType? existing = this.types.FirstOrDefault(x => x.Name == name);
 
         if (existing is null)
         {
-            return this.ParentScope?.ResolveType(name) ?? null;
+            if (this.ParentScope is null)
+            {
+                return null;
+            }
+            else
+            {
+                return await this.ParentScope.ResolveType(name);
+            }
         }
 
         return existing;
@@ -55,15 +67,20 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// The name of the identifier to resolve.
     /// </param>
     /// <returns>
-    /// The <see cref="SushiIdentifier"/> or null if it was not found.
+    /// An awaitable <see cref="Task"/> that returns the <see cref="SushiIdentifier"/> or null if it was not found.
     /// </returns>
-    public SushiIdentifier? ResolveIdentifier(string name, bool isFunction)
+    public async Task<SushiIdentifier?> ResolveIdentifier(string name)
     {
-        SushiIdentifier? existing = this.identifiers.FirstOrDefault(x => x.Name == name && x.IsFunction == isFunction);
+        SushiIdentifier? existing = this.identifiers.FirstOrDefault(x => x.Name == name);
 
         if (existing is null)
         {
-            return this.ParentScope?.ResolveIdentifier(name, isFunction) ?? null;
+            if (this.ParentScope is null)
+            {
+                return null;
+            }
+
+            return await this.ParentScope.ResolveIdentifier(name);
         }
 
         return existing;
@@ -78,9 +95,9 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <returns>
     /// True for success, false for name collision error.
     /// </returns>
-    public bool TryAddType(string name)
+    public async Task<bool> TryAddType(string name)
     {
-        SushiType? resolvedType = this.ResolveType(name);
+        SushiType? resolvedType = await this.ResolveType(name);
 
         if (resolvedType is not null)
         {
@@ -104,16 +121,16 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     /// <returns>
     /// True for success, false for name collision error.
     /// </returns>
-    public bool TryAddIdentifier(string name, string type, bool isFunction)
+    public async Task<bool> TryAddIdentifier(string name, string type)
     {
-        SushiIdentifier? resolvedIdentifier = this.ResolveIdentifier(name, isFunction);
+        SushiIdentifier? resolvedIdentifier = await this.ResolveIdentifier(name);
 
         if (resolvedIdentifier is not null)
         {
             return false;
         }
 
-        this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type, IsFunction = isFunction });
+        this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type });
 
         return true;
     }

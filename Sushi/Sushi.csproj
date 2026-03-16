@@ -31,11 +31,8 @@
 	  <Compile Remove="OLD\Parsing\Nodes\MethodCallNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ParameterListNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\ParameterNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\TypeNode.cs" />
 	  <Compile Remove="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <Compile Remove="OLD\Parsing\ReferenceScope.cs" />
 	  <Compile Remove="OLD\Parsing\SushiType.cs" />
-	  <Compile Remove="OLD\Parsing\SyntaxNode.cs" />
 	  <Compile Remove="OLD\Steps\CorrectnessStep.cs" />
 	  <Compile Remove="OLD\Steps\ExecutableCompilingStep.cs" />
 	  <Compile Remove="OLD\Steps\ParsingStep.cs" />
@@ -59,11 +56,7 @@
 	  <None Include="OLD\Parsing\Nodes\MethodCallNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\ParameterListNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\ParameterNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\TypeNode.cs" />
 	  <None Include="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <None Include="OLD\Parsing\ReferenceScope.cs" />
-	  <None Include="OLD\Parsing\SushiType.cs" />
-	  <None Include="OLD\Parsing\SyntaxNode.cs" />
 	  <None Include="OLD\Steps\CorrectnessStep.cs" />
 	  <None Include="OLD\Steps\ExecutableCompilingStep.cs" />
 	  <None Include="OLD\Steps\ParsingStep.cs" />

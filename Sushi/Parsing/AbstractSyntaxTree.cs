@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.RegularExpressions;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -14,6 +14,8 @@ namespace Sushi.Parsing;
 public sealed class AbstractSyntaxTree : SyntaxNode
 {
     public List<FileNode> Children { get; set; } = [];
+
+    public ReferenceScope GlobalScope { get; set; } = null!;
 
     /// <summary>
     /// Contains the messages emitted by the parser, such as errors and warnings.
