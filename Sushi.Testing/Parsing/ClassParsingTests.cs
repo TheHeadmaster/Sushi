@@ -32,8 +32,8 @@ public sealed class ClassParsingTests : ParsingTest
         classNode.Name.Name.Should().Be("SomeClass");
 
         classNode.Body.Should().NotBeNull();
-        classNode.Body.Body.Should().NotBeNull();
-        classNode.Body.Body.Count.Should().Be(0);
+        classNode.Body.Statements.Should().NotBeNull();
+        classNode.Body.Statements.Count.Should().Be(0);
     }
 
     [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A Static Class")]
@@ -62,7 +62,7 @@ public sealed class ClassParsingTests : ParsingTest
         classNode.Name.Name.Should().Be("Monolith");
 
         classNode.Body.Should().NotBeNull();
-        classNode.Body.Body.Should().NotBeNull();
-        classNode.Body.Body.Count.Should().Be(0);
+        classNode.Body.Statements.Should().NotBeNull();
+        classNode.Body.Statements.Count.Should().Be(0);
     }
 }

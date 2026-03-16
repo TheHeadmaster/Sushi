@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.SubStatements;
 
 /// <summary>
 /// Handles the parsing of while loops.
@@ -20,17 +20,24 @@ public class WhileParser : IParser
     {
         await parser.ExpectAndPop(TokenType.While);
 
-        Token? nextToken = await parser.PeekAndExpectNotEOF();
+        await parser.PeekAndExpectNotEOF();
 
         ExpressionNode? condition = await parser.ParseExpression(BindingPower.Primary);
 
         await parser.ExpectAndPop(TokenType.Do);
 
-        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek());
+        Token? statementToken = await parser.PeekAndExpectNotEOF();
+
+        if (statementToken is null)
+        {
+            return new WhileNode(token, condition, null);
+        }
+
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, statementToken);
 
         if (body is not BlockNode block)
         {
-            return null;
+            return new WhileNode(token, condition, null);
         }
 
         return new WhileNode(token, condition, block);

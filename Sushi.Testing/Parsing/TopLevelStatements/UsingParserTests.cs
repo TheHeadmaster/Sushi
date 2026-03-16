@@ -3,7 +3,7 @@ using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Testing.Parsing;
+namespace Sushi.Testing.Parsing.TopLevelStatements;
 
 public sealed class UsingParserTests : ParsingTest
 {

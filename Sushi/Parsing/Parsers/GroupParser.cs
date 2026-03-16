@@ -18,6 +18,8 @@ public class GroupParser : IParser
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
+        await parser.ExpectAndPop(TokenType.OpeningParenthesis);
+
         ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
         await parser.ExpectAndPop(TokenType.ClosingParenthesis);

@@ -79,5 +79,8 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Diagnostics\Warnings\" />
+	  <Folder Include="Parsing\Parsers\Infixes\" />
+	  <Folder Include="Parsing\Parsers\Postfixes\" />
+	  <Folder Include="Parsing\Parsers\Prefixes\" />
 	</ItemGroup>
 </Project>
