@@ -1,6 +1,8 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Parsers;
+using Sushi.Parsing.Parsers.SubStatements;
 using Sushi.Tokenization;
 
 namespace Sushi.Testing.Parsing.SubStatements;
@@ -10,12 +12,10 @@ public sealed class WhileParserTests : ParsingTest
     [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A While Statement")]
     public async Task ParserShouldEmit_0()
     {
-        this.SourceFile.Tokens.AddRange
+        await Parser.UseSnippet
         ([
             DummyToken(TokenType.While),
-            DummyToken(TokenType.OpeningParenthesis),
-            DummyToken(TokenType.TrueLiteral),
-            DummyToken(TokenType.ClosingParenthesis),
+            DummyToken(TokenType.TrueLiteral, "true"),
             DummyToken(TokenType.Do),
             DummyToken(TokenType.OpeningSquiggly),
             DummyToken(TokenType.Identifier, "amount"),
@@ -24,16 +24,16 @@ public sealed class WhileParserTests : ParsingTest
             DummyToken(TokenType.Plus),
             DummyToken(TokenType.NumberLiteral, "5"),
             DummyToken(TokenType.Terminator),
-            DummyToken(TokenType.ClosingSquiggly)
+            DummyToken(TokenType.ClosingSquiggly),
         ]);
 
-        AbstractSyntaxTree ast = await Parser.ParseSource([this.SourceFile]);
+        IParser whileParser = Parser.GetParser<WhileParser>();
 
-        ast.Children.Should().HaveCount(1);
-        ast.Children[0].Statements.Should().HaveCount(1);
-        ast.Children[0].Statements[0].Should().BeOfType<WhileNode>();
+        StatementNode? whileStatement = await whileParser.ParseStatement(Parser, Parser.Peek()!);
 
-        WhileNode whileNode = (WhileNode)ast.Children[0].Statements[0];
+        whileStatement.Should().NotBeNull();
+
+        WhileNode whileNode = (WhileNode)whileStatement;
 
         whileNode.Condition.Should().NotBeNull();
         whileNode.Condition.Should().BeOfType<ConstantNode>();

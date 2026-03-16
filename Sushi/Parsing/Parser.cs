@@ -146,6 +146,23 @@ public sealed class Parser
     }
 
     /// <summary>
+    /// Uses a snippet of tokens as the source instead of a source file. Mostly used for testing.
+    /// </summary>
+    /// <param name="tokens">
+    /// The tokens that comprise the snippet.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public Task UseSnippet([NotNull] List<Token> tokens)
+    {
+        this.tokens = tokens;
+        this.currentIndex = 0;
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// Parses the next set of tokens as an expression until the expression is complete.
     /// </summary>
     /// <param name="power">
