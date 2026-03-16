@@ -139,6 +139,7 @@ public sealed class Parser
             this.tokens = file.Tokens;
             this.currentIndex = 0;
             tree.Children.Add(new FileNode(file.FilePath, file.FileName, await this.ParseStatements()));
+            await this.ResetScope();
         }
 
         tree.Messages = this.Messages;
@@ -172,6 +173,12 @@ public sealed class Parser
     }
 
     /// <summary>
+    /// Returns the current scope.
+    /// </summary>
+    /// <returns></returns>
+    public Task<ReferenceScope> GetScope() => Task.FromResult(this.currentScope);
+
+    /// <summary>
     /// Enters a new scope that is a sub-scope of the current scope.
     /// </summary>
     /// <returns>
@@ -193,6 +200,19 @@ public sealed class Parser
     public Task ExitScope()
     {
         this.currentScope = this.currentScope.ParentScope ?? this.globalScope;
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Exits the current scope and resets the scope back to the global scope.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public Task ResetScope()
+    {
+        this.currentScope = this.globalScope;
 
         return Task.CompletedTask;
     }
