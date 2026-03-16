@@ -3,12 +3,12 @@ using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers.SubStatements;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.TopLevelStatements;
 
 /// <summary>
 /// Handles the parsing of class declarations.
 /// </summary>
-public class ClassParser : IParser
+public sealed class ClassParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;
@@ -17,23 +17,22 @@ public class ClassParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Class];
 
     /// <inheritdoc />
+    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
+
+    /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        Token? currentToken = await parser.ExpectAndPop(TokenType.Class);
+        await parser.ExpectAndPop(TokenType.Class);
 
-        currentToken = await parser.PeekAndExpectNotEOF();
+        Token? identifierToken = await parser.ExpectAndPop(TokenType.Identifier);
 
-        await parser.ExpectAndPop(TokenType.Identifier);
+        IdentifierNode? identifier = identifierToken is null ? null : new(identifierToken);
 
-        IdentifierNode identifier = new(currentToken);
-
-        currentToken = await parser.PeekAndExpectNotEOF();
-
-        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, currentToken);
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek()!);
 
         if (body is not BlockNode block)
         {
-            return null;
+            return new ClassNode(token, identifier, null);
         }
 
         ClassNode classNode = new(token, identifier, block);
