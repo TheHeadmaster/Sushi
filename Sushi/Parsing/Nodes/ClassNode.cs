@@ -1,18 +1,21 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
+using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ClassNode([NotNull] Token token, IdentifierNode? identifier, BlockNode? body) : StatementNode, ICanBeStatic, IAccessModifiable
+public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? body, [NotNull] ReferenceScope scope) : StatementNode, ICanBeStatic, IAccessModifiable
 {
     public bool IsStatic { get; set; }
 
-    public IdentifierNode? Name { get; set; } = identifier;
+    public TypeNode? Name { get; set; } = identifier;
 
     public BlockNode? Body { get; set; } = body;
     public AccessModifier AccessModifier { get; set; }
+
+    public ReferenceScope Scope { get; set; } = scope;
 
     public override Token GetStartToken() => token;
 
@@ -49,6 +52,18 @@ public class ClassNode([NotNull] Token token, IdentifierNode? identifier, BlockN
         }
 
         await compiler.DedentHeader();
-        await compiler.WriteHeaderLine($"}} {this.Name?.Name};");
+
+        SushiType? resolvedType = null;
+
+        string resolvedName;
+
+        if (this.Name is not null)
+        {
+            resolvedType = await this.Scope.ResolveType(this.Name.Name);
+        }
+
+        resolvedName = resolvedType is null ? string.Empty : resolvedType.Name;
+
+        await compiler.WriteHeaderLine($"}} {resolvedName};");
     }
 }

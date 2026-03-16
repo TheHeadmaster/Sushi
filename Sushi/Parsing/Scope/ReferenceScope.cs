@@ -19,6 +19,11 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
     private readonly List<SushiIdentifier> identifiers = [];
 
     /// <summary>
+    /// The namespaces collected from traversing the source.
+    /// </summary>
+    private readonly List<SushiNamespace> namespaces = [];
+
+    /// <summary>
     /// The scope that this scope exists within. If the scope does not have a parent, then it is the global scope.
     /// </summary>
     public ReferenceScope? ParentScope { get; set; } = parentScope;
@@ -133,5 +138,10 @@ public sealed class ReferenceScope(ReferenceScope? parentScope)
         this.identifiers.Add(new SushiIdentifier() { Name = name, Type = type });
 
         return true;
+    }
+
+    public async Task AddNamespaceDistinct(string name)
+    {
+
     }
 }

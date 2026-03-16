@@ -11,6 +11,11 @@ public sealed class SushiType
     public required string Name { get; set; }
 
     /// <summary>
+    /// The namespace of the type.
+    /// </summary>
+    public required string Namespace { get; set; }
+
+    /// <summary>
     /// Returns whether the specified type is assignable to this type.
     /// </summary>
     /// <param name="type">
