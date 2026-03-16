@@ -105,7 +105,7 @@ public sealed class Parser
     /// <returns>
     /// The <see cref="Token"/>. This can only be null if we are on the first <see cref="Token"/> in the list.
     /// </returns>
-    private Token? Previous() => this.Peek(-1);
+    public Token? Previous() => this.Peek(-1);
 
     /// <summary>
     /// Parses the source code from a <see cref="List{T}"/> of <see cref="TokenFile"/> objects into an <see cref="AbstractSyntaxTree"/>.

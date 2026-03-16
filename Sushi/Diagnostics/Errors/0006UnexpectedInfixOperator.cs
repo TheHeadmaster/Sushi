@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
@@ -12,7 +12,7 @@ namespace Sushi.Diagnostics.Errors;
 public sealed class UnexpectedInfixOperator([NotNull] Token token) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition)
 {
     /// <inheritdoc />
-    public override int MessageNumber => 5;
+    public override int MessageNumber => 6;
 
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
