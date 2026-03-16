@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
@@ -28,7 +28,7 @@ public class AccessModifierParser : IParser
             return null;
         }
 
-        StatementNode? right = await parser.ParseStatement(token, [Parser.GetParser<ClassParser>(), Parser.GetParser<StaticParser>()]);
+        StatementNode? right = await parser.ParseStatement(token, ParserRole.AccessModifier);
 
         if (right is not IAccessModifiable accessNode)
         {

@@ -232,7 +232,7 @@ public sealed class Parser
 
         while ((token = this.Peek()) is not null)
         {
-            StatementNode? statement = await this.ParseStatement(token, allowedRootStatementParsers);
+            StatementNode? statement = await this.ParseStatement(token, ParserRole.TopLevelStatement);
 
             if (statement is null)
             {
@@ -251,15 +251,15 @@ public sealed class Parser
     /// <param name="token">
     /// The <see cref="Token"/> to parse.
     /// </param>
-    /// <param name="allowedParsers">
-    /// The <see cref="IParser"/> objects allowed to handle the token in this context.
+    /// <param name="role">
+    /// The <see cref="ParserRole"/> that determines what parsers can actually handle the statement.
     /// </param>
     /// <returns>
     /// The <see cref="StatementNode"/> or null if there was an issue.
     /// </returns>
-    public async Task<StatementNode?> ParseStatement([NotNull] Token token, IEnumerable<IParser> allowedParsers)
+    public async Task<StatementNode?> ParseStatement([NotNull] Token token, [NotNull] ParserRole role)
     {
-        if (allowedParsers.FirstOrDefault(parser => parser.Type is ParserType.Statement && parser.AllowedStartTokens.Contains(token.Type)) is not IParser statement)
+        if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Statement && parser.Roles.Contains(role) && parser.AllowedStartTokens.Contains(token.Type)) is not IParser statement)
         {
             StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));
             await this.ExpectAndPop(TokenType.Terminator);

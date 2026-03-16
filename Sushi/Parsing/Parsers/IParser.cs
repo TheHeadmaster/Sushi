@@ -26,6 +26,11 @@ public interface IParser
     public ParserType Type { get; }
 
     /// <summary>
+    /// A list of roles that are used to determine when the parser can actually parse a statement.
+    /// </summary>
+    public List<ParserRole> Roles => [];
+
+    /// <summary>
     /// The tokens which are recognized as being a starting point for this parser to consume them.
     /// </summary>
     public List<TokenType> AllowedStartTokens { get; }

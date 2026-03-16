@@ -4,11 +4,11 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class DoWhileNode([NotNull] Token token, ExpressionNode? condition, [NotNull] BlockNode body) : StatementNode
+public class DoWhileNode([NotNull] Token token, ExpressionNode? condition, BlockNode? body) : StatementNode
 {
     public ExpressionNode? Condition { get; set; } = condition;
 
-    public BlockNode Body { get; set; } = body;
+    public BlockNode? Body { get; set; } = body;
 
     public override Token GetStartToken() => token;
     public override async Task Verify(VerificationContext context)
@@ -18,6 +18,9 @@ public class DoWhileNode([NotNull] Token token, ExpressionNode? condition, [NotN
             await this.Condition.Verify(context);
         }
 
-        await this.Body.Verify(context);
+        if (this.Body is not null)
+        {
+            await this.Body.Verify(context);
+        }
     }
 }

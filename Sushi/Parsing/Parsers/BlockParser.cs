@@ -27,7 +27,7 @@ public class BlockParser : IParser
 
         while ((currentToken = parser.Peek()) is not null && currentToken.Type is not TokenType.ClosingSquiggly)
         {
-            statements.Add(await parser.ParseStatement(currentToken, [Parser.GetParser<WhileParser>()]));
+            statements.Add(await parser.ParseStatement(currentToken, ParserRole.BlockStatement));
         }
 
         await parser.ExpectAndPop(TokenType.ClosingSquiggly);

@@ -16,6 +16,9 @@ public sealed class WhileParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.While];
 
     /// <inheritdoc />
+    public List<ParserRole> Roles { get; } = [ParserRole.BlockStatement];
+
+    /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.While);

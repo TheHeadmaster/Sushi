@@ -16,22 +16,34 @@ public sealed class DoWhileParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Do];
 
     /// <inheritdoc />
+    public List<ParserRole> Roles { get; } = [ParserRole.BlockStatement];
+
+    /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Do);
 
-        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek());
+        Token? statementToken = await parser.PeekAndExpectNotEOF();
 
-        if (body is not BlockNode block)
+        if (statementToken is null)
         {
-            return null;
+            return new DoWhileNode(token, null, null);
         }
+
+        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, statementToken);
 
         await parser.ExpectAndPop(TokenType.While);
 
-        Token? nextToken = await parser.PeekAndExpectNotEOF();
+        await parser.PeekAndExpectNotEOF();
 
         ExpressionNode? condition = await parser.ParseExpression(BindingPower.Primary);
+
+        await parser.ExpectAndPop(TokenType.Terminator);
+
+        if (body is not BlockNode block)
+        {
+            return new DoWhileNode(token, condition, null);
+        }
 
         return new DoWhileNode(token, condition, block);
     }

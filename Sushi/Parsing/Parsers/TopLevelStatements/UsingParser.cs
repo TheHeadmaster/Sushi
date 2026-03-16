@@ -16,6 +16,9 @@ public sealed class UsingParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Using];
 
     /// <inheritdoc />
+    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
+
+    /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.Using);
