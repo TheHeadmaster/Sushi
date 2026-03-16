@@ -16,7 +16,7 @@ public class ClassParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Class];
 
     /// <inheritdoc />
-    public static async Task<ClassNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         Token? currentToken = await parser.ExpectAndPop(TokenType.Class);
 

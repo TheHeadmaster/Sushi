@@ -16,7 +16,7 @@ public class MemberDeclarationParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
 
     /// <inheritdoc />
-    public static async Task<FieldDeclarationNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         Token? currentToken = token;
 
@@ -32,7 +32,7 @@ public class MemberDeclarationParser : IParser
 
         await parser.ExpectAndPop(TokenType.Terminator);
 
-        return new FieldDeclarationNode(token, typeNode, identifierNode);
+        return new MemberDeclarationNode(token, typeNode, identifierNode);
     }
 
     /// <inheritdoc />

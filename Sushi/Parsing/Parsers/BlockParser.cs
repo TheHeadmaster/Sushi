@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers.SubStatements;
 using Sushi.Tokenization;
@@ -17,7 +17,7 @@ public class BlockParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.OpeningSquiggly];
 
     /// <inheritdoc />
-    public static async Task<BlockNode> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
+    public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
         await parser.ExpectAndPop(TokenType.OpeningSquiggly);
 
