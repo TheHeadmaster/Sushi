@@ -7,14 +7,13 @@ using Sushi.Tokenization;
 
 namespace Sushi.Testing.Parsing.SubStatements;
 
-public sealed class DoWhileParserTests : ParsingTest
+public sealed class BlockParserTests : ParsingTest
 {
-    [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A Do While Statement")]
+    [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A Block Statement")]
     public async Task ParserShouldEmit_0()
     {
         await Parser.UseSnippet
         ([
-            DummyToken(TokenType.Do),
             DummyToken(TokenType.OpeningSquiggly),
             DummyToken(TokenType.Identifier, "amount"),
             DummyToken(TokenType.Assignment),
@@ -22,34 +21,20 @@ public sealed class DoWhileParserTests : ParsingTest
             DummyToken(TokenType.Plus),
             DummyToken(TokenType.NumberLiteral, "5"),
             DummyToken(TokenType.Terminator),
-            DummyToken(TokenType.ClosingSquiggly),
-            DummyToken(TokenType.While),
-            DummyToken(TokenType.TrueLiteral, "true"),
-            DummyToken(TokenType.Terminator)
+            DummyToken(TokenType.ClosingSquiggly)
         ]);
 
-        IParser doWhileParser = Parser.GetParser<DoWhileParser>();
+        IParser blockParser = Parser.GetParser<BlockParser>();
 
-        StatementNode? doWhileStatement = await doWhileParser.ParseStatement(Parser, Parser.Peek()!);
+        StatementNode? blockStatement = await blockParser.ParseStatement(Parser, Parser.Peek()!);
 
-        doWhileStatement.Should().NotBeNull();
+        blockStatement.Should().NotBeNull();
+        blockStatement.Should().BeOfType<BlockNode>();
 
-        DoWhileNode whileNode = (DoWhileNode)doWhileStatement;
+        BlockNode block = (BlockNode)blockStatement;
 
-        whileNode.Condition.Should().NotBeNull();
-        whileNode.Condition.Should().BeOfType<ConstantNode>();
-
-        ConstantNode constant = (ConstantNode)whileNode.Condition;
-
-        constant.Value.Should().Be("true");
-
-        whileNode.Body.Should().NotBeNull();
-        whileNode.Body.Should().BeOfType<BlockNode>();
-
-        BlockNode block = whileNode.Body;
-
-        whileNode.Body.Statements.Should().HaveCount(1);
-        whileNode.Body.Statements[0].Should().BeOfType<ExpressionStatementNode>();
+        block.Statements.Should().HaveCount(1);
+        block.Statements[0].Should().BeOfType<ExpressionStatementNode>();
 
         ExpressionStatementNode statement = (ExpressionStatementNode)block.Statements[0];
 

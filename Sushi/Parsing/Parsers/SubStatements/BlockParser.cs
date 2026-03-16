@@ -1,14 +1,13 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
-using Sushi.Parsing.Parsers.SubStatements;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.SubStatements;
 
 /// <summary>
 /// Handles the parsing of block statements.
 /// </summary>
-public class BlockParser : IParser
+public sealed class BlockParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;
@@ -27,7 +26,10 @@ public class BlockParser : IParser
 
         while ((currentToken = parser.Peek()) is not null && currentToken.Type is not TokenType.ClosingSquiggly)
         {
-            statements.Add(await parser.ParseStatement(currentToken, ParserRole.BlockStatement));
+            if (await parser.ParseStatement(currentToken, ParserRole.BlockStatement) is { } statement)
+            {
+                statements.Add(statement);
+            }
         }
 
         await parser.ExpectAndPop(TokenType.ClosingSquiggly);

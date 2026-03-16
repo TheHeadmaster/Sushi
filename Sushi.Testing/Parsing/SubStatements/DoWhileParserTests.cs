@@ -7,13 +7,15 @@ using Sushi.Tokenization;
 
 namespace Sushi.Testing.Parsing.SubStatements;
 
-public sealed class DoWhileParserTests : ParsingTest
+public sealed class WhileParserTests : ParsingTest
 {
-    [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A Do While Statement")]
+    [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A While Statement")]
     public async Task ParserShouldEmit_0()
     {
         await Parser.UseSnippet
         ([
+            DummyToken(TokenType.While),
+            DummyToken(TokenType.TrueLiteral, "true"),
             DummyToken(TokenType.Do),
             DummyToken(TokenType.OpeningSquiggly),
             DummyToken(TokenType.Identifier, "amount"),
@@ -23,18 +25,15 @@ public sealed class DoWhileParserTests : ParsingTest
             DummyToken(TokenType.NumberLiteral, "5"),
             DummyToken(TokenType.Terminator),
             DummyToken(TokenType.ClosingSquiggly),
-            DummyToken(TokenType.While),
-            DummyToken(TokenType.TrueLiteral, "true"),
-            DummyToken(TokenType.Terminator)
         ]);
 
-        IParser doWhileParser = Parser.GetParser<DoWhileParser>();
+        IParser whileParser = Parser.GetParser<WhileParser>();
 
-        StatementNode? doWhileStatement = await doWhileParser.ParseStatement(Parser, Parser.Peek()!);
+        StatementNode? whileStatement = await whileParser.ParseStatement(Parser, Parser.Peek()!);
 
-        doWhileStatement.Should().NotBeNull();
+        whileStatement.Should().NotBeNull();
 
-        DoWhileNode whileNode = (DoWhileNode)doWhileStatement;
+        WhileNode whileNode = (WhileNode)whileStatement;
 
         whileNode.Condition.Should().NotBeNull();
         whileNode.Condition.Should().BeOfType<ConstantNode>();
