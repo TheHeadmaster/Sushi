@@ -31,7 +31,6 @@
 	</ItemGroup>
 	<ItemGroup>
 	  <Folder Include="Parsing\Infixes\" />
-	  <Folder Include="Parsing\Prefixes\" />
 	  <Folder Include="Parsing\Postfixes\" />
 	</ItemGroup>
 </Project>

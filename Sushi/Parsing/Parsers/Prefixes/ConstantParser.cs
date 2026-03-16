@@ -2,12 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.Prefixes;
 
 /// <summary>
 /// Handles the parsing of constants, such as 3 or true.
 /// </summary>
-public class ConstantParser : IParser
+public sealed class ConstantParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Prefix;
