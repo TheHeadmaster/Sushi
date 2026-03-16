@@ -8,7 +8,7 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class FieldDeclarationNode([NotNull] Token token, [NotNull] IdentifierNode type, [NotNull] IdentifierNode identifier) : StatementNode
+public class MemberDeclarationNode([NotNull] Token token, [NotNull] IdentifierNode type, [NotNull] IdentifierNode identifier) : StatementNode
 {
     public IdentifierNode Type { get; set; } = type;
 
