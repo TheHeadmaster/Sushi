@@ -7,7 +7,7 @@ namespace Sushi.Parsing.Parsers.SubStatements;
 /// <summary>
 /// Handles the parsing of while loops.
 /// </summary>
-public class WhileParser : IParser
+public sealed class WhileParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;

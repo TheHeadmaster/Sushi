@@ -2,12 +2,12 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.SubStatements;
 
 /// <summary>
 /// Handles the parsing of do while loops.
 /// </summary>
-public class DoWhileParser : IParser
+public sealed class DoWhileParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;

@@ -7,7 +7,7 @@ namespace Sushi.Parsing.Parsers.TopLevelStatements;
 /// <summary>
 /// Handles the parsing of using statements.
 /// </summary>
-public class UsingParser : IParser
+public sealed class UsingParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;
