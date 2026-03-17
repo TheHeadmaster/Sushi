@@ -1,3 +1,7 @@
+using SomeStuff.Yes;
+
+namespace Test;
+
 static class Program
 {
 	SomeClass member;
