@@ -16,6 +16,16 @@ public sealed class SushiType
     public required string Namespace { get; set; }
 
     /// <summary>
+    /// The path that the file that contains the type is located in.
+    /// </summary>
+    public required string FilePath { get; set; }
+
+    /// <summary>
+    /// The full name of the type.
+    /// </summary>
+    public string FullName => $"{this.Namespace}.{this.Name}";
+
+    /// <summary>
     /// Returns whether the specified type is assignable to this type.
     /// </summary>
     /// <param name="type">

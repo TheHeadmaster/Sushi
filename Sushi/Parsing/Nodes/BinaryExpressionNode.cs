@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -22,10 +19,18 @@ public class BinaryExpressionNode([NotNull] Token token, [NotNull] ExpressionNod
 
     public ExpressionNode Right { get; set; } = right;
 
-    public override Token GetStartToken() => this.Left.GetStartToken();
+    public override Token? GetStartToken() => this.Left.GetStartToken();
     public override async Task Verify(VerificationContext context)
     {
-        await this.Left.Verify(context);
-        await this.Right.Verify(context);
+        if (this.Left is not null)
+        {
+
+            await this.Left.Verify(context);
+        }
+
+        if (this.Right is not null)
+        {
+            await this.Right.Verify(context);
+        }
     }
 }

@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using System.Xml.Linq;
-using Sushi.Parsing;
+using Sushi.Precompilation;
 
 namespace Sushi.Compilation;
 
@@ -30,8 +27,11 @@ public sealed class Compiler
     private bool firstOfLine = true;
     private bool headerFirstOfLine = true;
 
-    public async Task Compile([NotNull] ICompilerNode root)
+    public ReferenceResolver Reference { get; private set; } = null!;
+
+    public async Task Compile([NotNull] ICompilerNode root, [NotNull] ReferenceResolver reference)
     {
+        this.Reference = reference;
         DirectoryInfo intermediate = new(Path.Combine(AppMeta.Options.ProjectPath, "intermediate"));
 
         if (Directory.Exists(intermediate.FullName))
@@ -88,7 +88,6 @@ public sealed class Compiler
                 tempHeaderSb.AppendLine($"#include <{include}.h>");
             }
 
-            tempHeaderSb.AppendLine();
             tempHeaderSb.Append(headerSBString);
 
             string fileName = Path.ChangeExtension(
@@ -107,7 +106,6 @@ public sealed class Compiler
                 StringBuilder tempSb = new();
 
                 tempSb.AppendLine($"#include \"{Path.ChangeExtension(this.relativeFilePath, ".h")}\"");
-                tempSb.AppendLine();
                 tempSb.Append(sbString);
 
                 sbString = tempSb.ToString().Trim();
@@ -125,7 +123,6 @@ public sealed class Compiler
                 tempSb.AppendLine($"#include <{include}.h>");
             }
 
-            tempSb.AppendLine();
             tempSb.Append(sbString);
 
             await File.WriteAllTextAsync(

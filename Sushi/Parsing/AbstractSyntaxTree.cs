@@ -15,8 +15,6 @@ public sealed class AbstractSyntaxTree : SyntaxNode
 {
     public List<FileNode> Children { get; set; } = [];
 
-    public ReferenceScope GlobalScope { get; set; } = null!;
-
     /// <summary>
     /// Contains the messages emitted by the parser, such as errors and warnings.
     /// </summary>

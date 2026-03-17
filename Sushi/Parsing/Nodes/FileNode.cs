@@ -19,11 +19,26 @@ public class FileNode([NotNull] string filePath, [NotNull] string fileName, [Not
         foreach (StatementNode statement in this.Statements)
         {
             await statement.Compile(compiler);
+        }
 
+        await this.CompileHeader(compiler);
+
+        await compiler.EndFile();
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        string headerGuard = $"__H_{Path.GetFileNameWithoutExtension(this.FileName)}";
+        await compiler.WriteHeaderLine($"#ifndef {headerGuard}");
+        await compiler.WriteHeaderLine($"#define {headerGuard}");
+
+        foreach (StatementNode statement in this.Statements)
+        {
             await statement.CompileHeader(compiler);
         }
 
-        await compiler.EndFile();
+        await compiler.WriteHeaderLine("");
+        await compiler.WriteHeaderLine("#endif");
     }
 
     public override Token GetStartToken() => this.Statements.First().GetStartToken();

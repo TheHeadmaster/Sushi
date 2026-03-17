@@ -22,7 +22,7 @@ public sealed class InvalidNamespaceError([NotNull] Token startToken, [NotNull] 
     public override CompilerMessageType Type => CompilerMessageType.Error;
 
     /// <inheritdoc />
-    public override Task<string> GetDescription() => Task.FromResult($"Namespace expressions can only contain identifiers and the dot operator.");
+    public override Task<string> GetDescription() => Task.FromResult($"Namespace expressions can only contain identifiers and the dot operator");
 
     /// <inheritdoc />
     public override Task<int> GetMessageSpan() => Task.FromResult(endToken.LinePosition - startToken.LinePosition + endToken.Value.Length);

@@ -31,11 +31,12 @@ public sealed class NamespaceDeclarationParser : IParser
             parser.Messages.Add(new InvalidNamespaceError(token, parser.Previous()!));
         }
 
-        NamespaceDeclarationNode namespaceStatement = new(token, expression, await parser.GetScope());
+        NamespaceDeclarationNode namespaceStatement = new(token, expression);
 
         await parser.ExpectAndPop(TokenType.Terminator);
 
-        await parser.EnterScope();
+        await parser.Reference.StartNamespace(namespaceStatement);
+
         return namespaceStatement;
     }
 

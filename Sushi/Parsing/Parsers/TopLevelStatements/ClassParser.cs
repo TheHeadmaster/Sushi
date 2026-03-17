@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers.SubStatements;
 using Sushi.Tokenization;
@@ -26,7 +27,15 @@ public sealed class ClassParser : IParser
 
         Token? identifierToken = await parser.ExpectAndPop(TokenType.Identifier);
 
-        IdentifierNode? identifier = identifierToken is null ? null : new(identifierToken);
+        TypeNode? identifier = identifierToken is null ? null : new(identifierToken);
+
+        if (identifier is not null)
+        {
+            if (!await parser.Reference.TryAddType(identifier))
+            {
+                parser.Messages.Add(new TypeNameCollisionError(identifierToken!));
+            }
+        }
 
         StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek()!);
 

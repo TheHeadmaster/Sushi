@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -16,6 +17,11 @@ public class TypeNode([NotNull] Token token) : StatementNode
     /// The name of the type.
     /// </summary>
     public string Name { get; set; } = token.Type is TokenType.Identifier ? token.Value : Constants.TryGetPrimitiveType(token);
+
+    /// <summary>
+    /// The resolved type of the node.
+    /// </summary>
+    public SushiType? ResolvedType { get; set; }
 
     /// <inheritdoc />
     public override Token GetStartToken() => token;

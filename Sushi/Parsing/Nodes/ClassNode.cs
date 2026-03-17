@@ -1,12 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
-using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? body, [NotNull] ReferenceScope scope) : StatementNode, ICanBeStatic, IAccessModifiable
+public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? body) : StatementNode, ICanBeStatic, IAccessModifiable
 {
     public bool IsStatic { get; set; }
 
@@ -14,8 +13,6 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
 
     public BlockNode? Body { get; set; } = body;
     public AccessModifier AccessModifier { get; set; }
-
-    public ReferenceScope Scope { get; set; } = scope;
 
     public override Token GetStartToken() => token;
 
@@ -32,6 +29,7 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
         }
     }
 
+    /// <inheritdoc />
     public override async Task Compile([NotNull] Compiler compiler)
     {
         if (this.Body is not null)
@@ -40,6 +38,7 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
         }
     }
 
+    /// <inheritdoc />
     public override async Task CompileHeader([NotNull] Compiler compiler)
     {
         await compiler.WriteHeaderLine("typedef struct");
@@ -53,16 +52,7 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
 
         await compiler.DedentHeader();
 
-        SushiType? resolvedType = null;
-
-        string resolvedName;
-
-        if (this.Name is not null)
-        {
-            resolvedType = await this.Scope.ResolveType(this.Name.Name);
-        }
-
-        resolvedName = resolvedType is null ? string.Empty : resolvedType.Name;
+        string resolvedName = this.Name is null ? string.Empty : this.Name.ResolvedType is null ? this.Name.Name : this.Name.ResolvedType.FullName.Replace('.', '_');
 
         await compiler.WriteHeaderLine($"}} {resolvedName};");
     }

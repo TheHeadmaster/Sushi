@@ -18,7 +18,9 @@ public class NavigationParser : IParser
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
     {
-        ExpressionNode? right = await parser.ParseExpression(BindingPower.Postfix);
+        ExpressionNode? right = parser.Peek()?.Type is TokenType.Asterisk
+            ? new IdentifierNode(parser.Pop()!)
+            : await parser.ParseExpression(BindingPower.Postfix);
 
         if (left is not IdentifierNode identifier)
         {

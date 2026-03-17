@@ -89,7 +89,7 @@ public static class Program
 
         AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
 
-        await compiler.Compile(tree);
+        await compiler.Compile(tree, parser.Reference);
     }
 
     /// <summary>
