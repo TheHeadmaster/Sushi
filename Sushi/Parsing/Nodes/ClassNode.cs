@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
+using Sushi.Parsing.Core;
 using Sushi.Tokenization;
 using Sushi.Verification;
 

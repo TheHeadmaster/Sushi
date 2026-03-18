@@ -1,12 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
-using Sushi.Parsing.Nodes;
-using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
-namespace Sushi.Parsing;
+namespace Sushi.Parsing.Nodes;
 
 /// <summary>
 /// Represents the entire syntax tree of the project.

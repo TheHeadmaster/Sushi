@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Core;
 
 /// <summary>
 /// Represents a parser that can parse a specific token configuration.

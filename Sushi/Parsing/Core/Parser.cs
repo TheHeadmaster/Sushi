@@ -3,13 +3,12 @@ using System.Reflection;
 using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
-using Sushi.Parsing.Parsers;
 using Sushi.Parsing.Parsers.TopLevelStatements;
 using Sushi.Precompilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
-namespace Sushi.Parsing;
+namespace Sushi.Parsing.Core;
 
 /// <summary>
 /// Handles parsing a <see cref="List{T}"/> of <see cref="TokenFile"/> objects.

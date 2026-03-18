@@ -4,7 +4,8 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
-using Sushi.Parsing;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi;

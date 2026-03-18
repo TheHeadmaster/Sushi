@@ -1,4 +1,4 @@
-using Sushi.Parsing;
+using Sushi.Parsing.Core;
 using Sushi.Tokenization;
 
 namespace Sushi.Testing.Parsing;

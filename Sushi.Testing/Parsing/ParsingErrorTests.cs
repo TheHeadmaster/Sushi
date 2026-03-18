@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing;
+using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
 namespace Sushi.Testing.Parsing;

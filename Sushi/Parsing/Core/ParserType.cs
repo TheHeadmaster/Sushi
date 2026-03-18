@@ -1,4 +1,4 @@
-﻿namespace Sushi.Parsing;
+﻿namespace Sushi.Parsing.Core;
 
 /// <summary>
 /// Represents the type of parser that a parser is, such as statement or prefix parser.

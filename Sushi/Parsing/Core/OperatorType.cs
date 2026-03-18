@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Sushi.Parsing;
+namespace Sushi.Parsing.Core;
 
 public enum OperatorType
 {

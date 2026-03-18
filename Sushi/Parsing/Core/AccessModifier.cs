@@ -1,4 +1,4 @@
-﻿namespace Sushi.Parsing;
+﻿namespace Sushi.Parsing.Core;
 
 public enum AccessModifier
 {

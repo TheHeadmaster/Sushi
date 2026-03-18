@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
-using Sushi.Parsing;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Scope;
 

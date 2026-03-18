@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 

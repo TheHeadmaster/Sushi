@@ -1,4 +1,6 @@
-﻿namespace Sushi.Parsing.Nodes;
+﻿using Sushi.Parsing.Core;
+
+namespace Sushi.Parsing.Nodes;
 
 public interface IAccessModifiable
 {
