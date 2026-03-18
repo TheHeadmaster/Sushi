@@ -12,5 +12,7 @@ public enum ParserRole
     TopLevelStatement,
     AccessModifier,
     StaticModifier,
-    BlockStatement
+    BlockStatement,
+    MemberDeclaration,
+    Parameter
 }

@@ -1,16 +1,13 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class MemberDeclarationNode([NotNull] Token token, [NotNull] IdentifierNode type, [NotNull] IdentifierNode identifier) : StatementNode
+public class MemberDeclarationNode([NotNull] Token token, [NotNull] TypeNode type, [NotNull] IdentifierNode identifier) : StatementNode
 {
-    public IdentifierNode Type { get; set; } = type;
+    public TypeNode Type { get; set; } = type;
 
     public IdentifierNode Identifier { get; set; } = identifier;
 
@@ -23,6 +20,8 @@ public class MemberDeclarationNode([NotNull] Token token, [NotNull] IdentifierNo
 
     public override async Task CompileHeader([NotNull] Compiler compiler)
     {
-        await compiler.WriteHeaderLine($"{this.Type.Name} {this.Identifier.Name};");
+        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.WriteHeaderLine($"{resolvedName} {this.Identifier.Name};");
     }
 }

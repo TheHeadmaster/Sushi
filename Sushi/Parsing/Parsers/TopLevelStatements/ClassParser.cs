@@ -19,7 +19,7 @@ public sealed class ClassParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Class];
 
     /// <inheritdoc />
-    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
+    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement, ParserRole.StaticModifier];
 
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
@@ -38,14 +38,25 @@ public sealed class ClassParser : IParser
             }
         }
 
-        StatementNode? body = await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek()!);
+        await parser.ExpectAndPop(TokenType.OpeningSquiggly);
 
-        if (body is not BlockNode block)
+        List<StatementNode> statements = [];
+
+        Token? statementToken;
+
+        while ((statementToken = parser.Peek()) is { } && statementToken.Type is not TokenType.ClosingSquiggly)
         {
-            return new ClassNode(token, identifier, null);
+            StatementNode? statement = await parser.ParseStatement(statementToken, ParserRole.MemberDeclaration);
+
+            if (statement is not null)
+            {
+                statements.Add(statement);
+            }
         }
 
-        ClassNode classNode = new(token, identifier, block);
+        await parser.ExpectAndPop(TokenType.ClosingSquiggly);
+
+        ClassNode classNode = new(token, identifier, statements);
 
         return classNode;
     }

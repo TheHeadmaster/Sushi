@@ -6,13 +6,13 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? body) : StatementNode, ICanBeStatic, IAccessModifiable
+public class ClassNode([NotNull] Token token, TypeNode? identifier, [NotNull] List<StatementNode> body) : StatementNode, ICanBeStatic, IAccessModifiable
 {
     public bool IsStatic { get; set; }
 
     public TypeNode? Name { get; set; } = identifier;
 
-    public BlockNode? Body { get; set; } = body;
+    public List<StatementNode> Body { get; set; } = body;
     public AccessModifier AccessModifier { get; set; }
 
     public override Token GetStartToken() => token;
@@ -24,18 +24,19 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
             await this.Name.Verify(context);
         }
 
-        if (this.Body is not null)
+        foreach (StatementNode node in this.Body)
         {
-            await this.Body.Verify(context);
+
+            await node.Verify(context);
         }
     }
 
     /// <inheritdoc />
     public override async Task Compile([NotNull] Compiler compiler)
     {
-        if (this.Body is not null)
+        foreach (StatementNode node in this.Body)
         {
-            await this.Body.Compile(compiler);
+            await node.Compile(compiler);
         }
     }
 
@@ -46,9 +47,9 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
         await compiler.WriteHeaderLine("{");
         await compiler.IndentHeader();
 
-        if (this.Body is not null)
+        foreach (StatementNode node in this.Body)
         {
-            await this.Body.CompileHeader(compiler);
+            await node.CompileHeader(compiler);
         }
 
         await compiler.DedentHeader();

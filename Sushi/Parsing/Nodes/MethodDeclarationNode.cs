@@ -8,11 +8,15 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, [NotNull] IdentifierNode name) : StatementNode
+public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, IdentifierNode? name, List<ParameterNode> parameters, BlockNode? body) : StatementNode
 {
     public TypeNode? ReturnType { get; set; } = returnType;
 
-    public IdentifierNode Name { get; set; } = name;
+    public IdentifierNode? Name { get; set; } = name;
+
+    public List<ParameterNode> Parameters { get; set; } = parameters;
+
+    public BlockNode? Body { get; set; } = body;
 
     public override Token GetStartToken() => token;
     public override async Task Verify(VerificationContext context)

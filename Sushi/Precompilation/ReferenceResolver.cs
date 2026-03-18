@@ -139,6 +139,8 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// </returns>
     public async Task<SushiType?> ResolveType(string name) => this.types.FirstOrDefault(x => x.Name == name && this.includedNamespaces.Contains(x.Namespace));
 
+    public async Task<SushiType?> ResolveType(TypeNode type) => await this.ResolveType(type.Name);
+
     public async Task StartFile(string filePath) => this.currentFilePath = filePath;
 
     public async Task<List<string>> GetNamespaceFilePaths(string namespaceString)
@@ -175,10 +177,11 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <inheritdoc />
     protected override async Task VisitFile(FileNode file)
     {
+        this.includedNamespaces.Clear();
+        this.currentFilePath = file.FilePath;
+
         foreach (StatementNode statement in file.Statements)
         {
-            this.includedNamespaces.Clear();
-            this.currentFilePath = file.FilePath;
             await this.Visit(statement);
         }
     }
@@ -199,7 +202,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
             root = chain.Value;
         }
 
-        if (match.Success && match.Groups.ContainsKey("wildcard"))
+        if (match.Success && match.Groups["wildcard"].Value == "*")
         {
             hasWildcard = true;
         }
@@ -223,6 +226,19 @@ public sealed partial class ReferenceResolver : ASTVisitor
         List<string> namespaceChain = await namespaceDeclaration.BuildNamespace();
 
         this.includedNamespaces.Add(string.Join('.', namespaceChain));
+    }
+
+    protected override async Task VisitClass(ClassNode classNode)
+    {
+        foreach (StatementNode statement in classNode.Body)
+        {
+            await this.Visit(statement);
+        }
+    }
+
+    protected override async Task VisitMemberDeclaration(MemberDeclarationNode member)
+    {
+        member.Type.ResolvedType = await this.ResolveType(member.Type);
     }
 
     /// <summary>
