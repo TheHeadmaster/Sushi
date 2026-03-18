@@ -40,5 +40,6 @@ public enum TokenType
     Internal,
     Public,
     Private,
+    StringLiteral,
 }
 

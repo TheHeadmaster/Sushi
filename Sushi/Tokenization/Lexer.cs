@@ -126,6 +126,12 @@ public sealed partial class Lexer
             tokenValue = identifier;
             type = TokenType.Identifier;
         }
+        else if (IsString(remainingInput, out string? stringLiteral))
+        {
+            handled = true;
+            tokenValue = stringLiteral;
+            type = TokenType.StringLiteral;
+        }
         else if (IsNumber(remainingInput, out string? number))
         {
             handled = true;
@@ -359,6 +365,29 @@ public sealed partial class Lexer
     }
 
     /// <summary>
+    /// Returns whether the specified input can be consumed as a string.
+    /// </summary>
+    /// <param name="remainingInput">The remaining input of the source file.</param>
+    /// <param name="stringLiteral">The string literal that gets generated, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
+    private static bool IsString(string remainingInput, [NotNullWhen(true)] out string? stringLiteral)
+    {
+        stringLiteral = null;
+
+        Match match = StringLiteral().Match(remainingInput);
+
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        stringLiteral = match.Value;
+        return true;
+    }
+
+    /// <summary>
     /// Appends an unknown token to the token list, or appends a character to an existing unknown token.
     /// </summary>
     /// <param name="file">
@@ -398,6 +427,15 @@ public sealed partial class Lexer
     /// </returns>
     [GeneratedRegex(@"^@?[a-zA-Z][a-zA-Z0-9]*")]
     private static partial Regex Identifier();
+
+    /// <summary>
+    /// Matches valid string literal strings.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Regex"/>.
+    /// </returns>
+    [GeneratedRegex("^\"(.*?(?<!\\\\))\"")]
+    private static partial Regex StringLiteral();
 
     /// <summary>
     /// Matches valid number literal strings.

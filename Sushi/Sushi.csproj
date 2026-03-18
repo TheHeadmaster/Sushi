@@ -13,12 +13,14 @@
 		<ApplicationIcon>Sushi.ico</ApplicationIcon>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="OLD\ConstantNode.cs" />
+	  <Compile Remove="OLD\ExecutableCompilingStep.cs" />
 	  <Compile Remove="OLD\ExeHelper.cs" />
 	</ItemGroup>
 	<ItemGroup>
-	  <None Include="OLD\ExeHelper.cs" />
 	  <None Include="OLD\ConstantNode.cs" />
 	  <None Include="OLD\ExecutableCompilingStep.cs" />
+	  <None Include="OLD\ExeHelper.cs" />
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />

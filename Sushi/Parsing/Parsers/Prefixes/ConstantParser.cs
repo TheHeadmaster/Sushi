@@ -14,7 +14,7 @@ public sealed class ConstantParser : IParser
     public ParserType Type { get; } = ParserType.Prefix;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [TokenType.NumberLiteral, TokenType.TrueLiteral, TokenType.FalseLiteral];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.NumberLiteral, TokenType.TrueLiteral, TokenType.FalseLiteral, TokenType.StringLiteral];
 
     /// <inheritdoc />
     public Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode?>(new ConstantNode(token));
