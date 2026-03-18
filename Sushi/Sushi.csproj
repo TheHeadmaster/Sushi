@@ -13,53 +13,12 @@
 		<ApplicationIcon>Sushi.ico</ApplicationIcon>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="OLD\Constants.cs" />
-	  <Compile Remove="OLD\Correctness\AssignmentTypeChecker.cs" />
-	  <Compile Remove="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <Compile Remove="OLD\ExeHelper.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ArgumentNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\AssignmentNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\BlockNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ConstantNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ExpressionableNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ExpressionNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\FileNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\FunctionDeclarationNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\IdentifierNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\IfNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\MethodCallNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ParameterListNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\ParameterNode.cs" />
-	  <Compile Remove="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <Compile Remove="OLD\Parsing\SushiType.cs" />
-	  <Compile Remove="OLD\Steps\CorrectnessStep.cs" />
-	  <Compile Remove="OLD\Steps\ExecutableCompilingStep.cs" />
-	  <Compile Remove="OLD\Steps\ParsingStep.cs" />
 	</ItemGroup>
 	<ItemGroup>
-	  <None Include="OLD\Constants.cs" />
-	  <None Include="OLD\Correctness\AssignmentTypeChecker.cs" />
-	  <None Include="OLD\Correctness\CorrectnessVisitor.cs" />
 	  <None Include="OLD\ExeHelper.cs" />
-	  <None Include="OLD\Parsing\Nodes\AbstractSyntaxTree.cs" />
-	  <None Include="OLD\Parsing\Nodes\ArgumentNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\AssignmentNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\BlockNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\ConstantNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\ExpressionableNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\ExpressionNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\FileNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\FunctionDeclarationNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\IdentifierNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\IfNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\MethodCallNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\ParameterListNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\ParameterNode.cs" />
-	  <None Include="OLD\Parsing\Nodes\VariableDeclarationNode.cs" />
-	  <None Include="OLD\Steps\CorrectnessStep.cs" />
-	  <None Include="OLD\Steps\ExecutableCompilingStep.cs" />
-	  <None Include="OLD\Steps\ParsingStep.cs" />
+	  <None Include="OLD\ConstantNode.cs" />
+	  <None Include="OLD\ExecutableCompilingStep.cs" />
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
