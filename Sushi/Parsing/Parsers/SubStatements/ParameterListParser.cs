@@ -19,7 +19,7 @@ public sealed class ParameterListParser : IParser
     /// <inheritdoc />
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.OpeningParenthesis];
 
-    public List<ParserRole> Roles { get; } = [ParserRole.Parameter];
+    public List<ParserRole> Roles { get; } = [ParserRole.ParameterList];
 
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
@@ -28,23 +28,30 @@ public sealed class ParameterListParser : IParser
 
         Token? currentToken;
 
-        List<S> statements = [];
+        List<ParameterNode> statements = [];
 
-        while ((currentToken = parser.Peek()) is not null && currentToken.Type is not TokenType.ClosingSquiggly)
+        while ((currentToken = parser.Peek()) is not null && currentToken.Type is not TokenType.ClosingParenthesis)
         {
-            if (await parser.ParseStatement(currentToken, ParserRole.BlockStatement) is { } statement)
+            if (await parser.ParseStatement(currentToken, ParserRole.Parameter) is { } statement)
             {
-                statements.Add(statement);
+                statements.Add((ParameterNode)statement);
             }
+
+            if ((currentToken = parser.Peek()) is null || currentToken.Type is not TokenType.Comma)
+            {
+                break;
+            }
+
+            await parser.ExpectAndPop(TokenType.Comma);
         }
 
-        await parser.ExpectAndPop(TokenType.ClosingSquiggly);
+        await parser.ExpectAndPop(TokenType.ClosingParenthesis);
 
-        BlockNode block = new(token, statements);
+        ParameterListNode node = new(token, statements);
 
-        return block;
+        return node;
     }
 
     /// <inheritdoc />
-    public BindingPower power(TokenType type) => BindingPower.Primary;
+    public BindingPower Power(TokenType type) => BindingPower.Primary;
 }

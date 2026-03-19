@@ -9,13 +9,13 @@ namespace Sushi.Parsing.Parsers;
 /// <summary>
 /// Handles member declarations, such as method declarations and fields/properties.
 /// </summary>
-public class MemberDeclarationParser : IParser
+public class DestroyerDeclarationParser : IParser
 {
     /// <inheritdoc />
     public ParserType Type { get; } = ParserType.Statement;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Destroyer];
 
     public List<ParserRole> Roles { get; } = [ParserRole.MemberDeclaration];
 
@@ -24,24 +24,11 @@ public class MemberDeclarationParser : IParser
     {
         Token? currentToken = token;
 
-        await parser.ExpectAndPop(TokenType.Identifier);
+        await parser.ExpectAndPop(TokenType.Destroyer);
 
-        TypeNode typeNode = new(currentToken);
-
-        currentToken = await parser.PeekAndExpectNotEOF();
-
-        await parser.ExpectAndPop(TokenType.Identifier);
+        currentToken = await parser.ExpectAndPop(TokenType.Identifier);
 
         IdentifierNode identifierNode = new(currentToken);
-
-        currentToken = await parser.PeekAndExpectNotEOF();
-
-        if (currentToken?.Type is TokenType.Terminator)
-        {
-            await parser.ExpectAndPop(TokenType.Terminator);
-
-            return new MemberDeclarationNode(token, typeNode, identifierNode);
-        }
 
         currentToken = await parser.PeekAndExpectNotEOF();
 
@@ -49,7 +36,7 @@ public class MemberDeclarationParser : IParser
 
         BlockNode? block = (BlockNode?)await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek()!);
 
-        return new MethodDeclarationNode(token, typeNode, identifierNode, parameterList, block);
+        return new DestroyerDeclarationNode(token, identifierNode, parameterList, block);
     }
 
     /// <inheritdoc />

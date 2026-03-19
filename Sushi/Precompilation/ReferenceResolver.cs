@@ -1,7 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Scope;
 
@@ -121,7 +119,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
         }
         else
         {
-            existing = new SushiType() { Name = node.Name, Namespace = this.currentNamespace!, FilePath = this.currentFilePath };
+            existing = new SushiType() { Name = node.Name, Namespace = this.currentNamespace!, FilePath = this.currentFilePath ?? string.Empty };
             this.types.Add(existing);
             node.ResolvedType = existing;
             return true;
@@ -139,10 +137,35 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// </returns>
     public async Task<SushiType?> ResolveType(string name) => this.types.FirstOrDefault(x => x.Name == name && this.includedNamespaces.Contains(x.Namespace));
 
-    public async Task<SushiType?> ResolveType(TypeNode type) => await this.ResolveType(type.Name);
+    /// <summary>
+    /// Resolves the type based on the current scope of the resolver.
+    /// </summary>
+    /// <param name="type">
+    /// The type to resolve.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the <see cref="SushiType"/> or null if it was not resolved.
+    /// </returns>
+    public async Task<SushiType?> ResolveType([NotNull] TypeNode type) => await this.ResolveType(type.Name);
 
+    /// <summary>
+    /// Starts the current file. All subsequent visits will be tied to this file path until another <see cref="StartFile(string)"/> is called.
+    /// </summary>
+    /// <param name="filePath">The file path.</param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public async Task StartFile(string filePath) => this.currentFilePath = filePath;
 
+    /// <summary>
+    /// Gets the file paths for the specified namespace.
+    /// </summary>
+    /// <param name="namespaceString">
+    /// The namespace.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of strings.
+    /// </returns>
     public async Task<List<string>> GetNamespaceFilePaths(string namespaceString)
     {
         List<string> namespaceFilePaths = [];
@@ -228,6 +251,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
         this.includedNamespaces.Add(string.Join('.', namespaceChain));
     }
 
+    /// <inheritdoc />
     protected override async Task VisitClass(ClassNode classNode)
     {
         foreach (StatementNode statement in classNode.Body)
@@ -236,11 +260,41 @@ public sealed partial class ReferenceResolver : ASTVisitor
         }
     }
 
-    protected override async Task VisitMemberDeclaration(MemberDeclarationNode member)
+    /// <inheritdoc />
+    protected override async Task VisitMemberDeclaration(MemberDeclarationNode member) => member.Type.ResolvedType = await this.ResolveType(member.Type);
+
+    /// <inheritdoc />
+    protected override async Task VisitMethodDeclaration(MethodDeclarationNode method)
     {
-        member.Type.ResolvedType = await this.ResolveType(member.Type);
+        method.ReturnType?.ResolvedType = await this.ResolveType(method.ReturnType);
+
+        if (method.ParameterList is not null)
+        {
+            await this.Visit(method.ParameterList);
+        }
     }
 
+    /// <inheritdoc />
+    protected override async Task VisitParameterList(ParameterListNode parameterList)
+    {
+        foreach (ParameterNode parameter in parameterList.Parameters)
+        {
+            await this.Visit(parameter);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameter(ParameterNode parameter) => parameter.Type?.ResolvedType = await this.ResolveType(parameter.Type);
+
+    /// <inheritdoc />
+    protected override async Task VisitDestroyerDeclaration(DestroyerDeclarationNode destroyer)
+    {
+        if (destroyer.ParameterList is not null)
+        {
+            await this.Visit(destroyer.ParameterList);
+        }
+    }
+    
     /// <summary>
     /// Matches valid identifier strings.
     /// </summary>

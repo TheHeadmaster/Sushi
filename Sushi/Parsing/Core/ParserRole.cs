@@ -14,5 +14,6 @@ public enum ParserRole
     StaticModifier,
     BlockStatement,
     MemberDeclaration,
-    Parameter
+    Parameter,
+    ParameterList
 }

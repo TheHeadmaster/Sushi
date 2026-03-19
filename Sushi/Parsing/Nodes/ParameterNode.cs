@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -22,5 +24,19 @@ public class ParameterNode(TypeNode? type, IdentifierNode? identifier) : Stateme
         {
             await this.Name.Verify(context);
         }
+    }
+
+    public override async Task Compile([NotNull] Compiler compiler)
+    {
+        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.Write($"{resolvedName} {this.Name?.Name ?? string.Empty}");
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.WriteHeader($"{resolvedName} {this.Name?.Name ?? string.Empty}");
     }
 }

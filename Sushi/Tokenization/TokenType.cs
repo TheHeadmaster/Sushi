@@ -25,6 +25,7 @@ public enum TokenType
     Do,
     Create,
     Destroy,
+    Destroyer,
     Void,
     Int32Primitive,
     Float32Primitive,

@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -14,5 +16,19 @@ public class ExpressionStatementNode(ExpressionNode? expression) : StatementNode
         {
             await this.Expression.Verify(context);
         }
+    }
+
+    public override async Task Compile([NotNull] Compiler compiler)
+    {
+        await this.Expression.Compile(compiler);
+        await compiler.Write(";");
+        await compiler.EndLine();
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        await this.Expression.CompileHeader(compiler);
+        await compiler.WriteHeader(";");
+        await compiler.HeaderEndLine();
     }
 }

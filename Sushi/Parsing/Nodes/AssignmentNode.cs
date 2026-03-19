@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -17,5 +18,19 @@ public class AssignmentNode([NotNull] IdentifierNode identifier, [NotNull] Expre
         await this.Identifier.Verify(context);
 
         await this.Right.Verify(context);
+    }
+
+    public override async Task Compile([NotNull] Compiler compiler)
+    {
+        await compiler.Write($"{this.Identifier.Name} = ");
+
+        await this.Right.Compile(compiler);
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        await compiler.WriteHeader($"{this.Identifier.Name} = ");
+
+        await this.Right.CompileHeader(compiler);
     }
 }

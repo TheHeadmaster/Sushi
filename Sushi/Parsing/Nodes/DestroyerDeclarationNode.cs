@@ -5,24 +5,14 @@ using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, IdentifierNode? name, ParameterListNode? parameterList, BlockNode? body) : StatementNode
+public class DestroyerDeclarationNode([NotNull] Token token, IdentifierNode? name, ParameterListNode? parameterList, BlockNode? body) : StatementNode
 {
-    public TypeNode? ReturnType { get; set; } = returnType;
-
     public IdentifierNode? Name { get; set; } = name;
-
     public ParameterListNode? ParameterList { get; set; } = parameterList;
-
     public BlockNode? Body { get; set; } = body;
-
     public override Token GetStartToken() => token;
     public override async Task Verify(VerificationContext context)
     {
-        if (this.ReturnType is not null)
-        {
-            await this.ReturnType.Verify(context);
-        }
-
         if (this.Name is not null)
         {
             await this.Name.Verify(context);
@@ -41,12 +31,7 @@ public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, 
 
     public override async Task Compile([NotNull] Compiler compiler)
     {
-        if (this.ReturnType is not null)
-        {
-            await this.ReturnType.Compile(compiler);
-        }
-
-        await compiler.Write(" ");
+        await compiler.Write("void ");
 
         if (this.Name is not null)
         {
@@ -77,12 +62,7 @@ public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, 
 
     public override async Task CompileHeader([NotNull] Compiler compiler)
     {
-        if (this.ReturnType is not null)
-        {
-            await this.ReturnType.CompileHeader(compiler);
-        }
-
-        await compiler.WriteHeader(" (*");
+        await compiler.WriteHeader("void (*");
 
         if (this.Name is not null)
         {
