@@ -14,23 +14,23 @@ public abstract class SyntaxNode : ICompilerNode
     /// Called during the compile step to translate this node into intermediate source code.
     /// </summary>
     /// <param name="compiler">
-    /// The <see cref="Compiler"/> object used to write.
+    /// The <see cref="CompilerVisitor"/> object used to write.
     /// </param>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public virtual Task Compile([NotNull] Compiler compiler) => Task.CompletedTask;
+    public virtual Task Compile([NotNull] CompilerVisitor compiler) => Task.CompletedTask;
 
     /// <summary>
     /// Called during the compile step to translate this node into intermediate header code.
     /// </summary>
     /// <param name="compiler">
-    /// The <see cref="Compiler"/> object used to write.
+    /// The <see cref="CompilerVisitor"/> object used to write.
     /// </param>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public virtual Task CompileHeader([NotNull] Compiler compiler) => Task.CompletedTask;
+    public virtual Task CompileHeader([NotNull] CompilerVisitor compiler) => Task.CompletedTask;
 
     /// <summary>
     /// Gets the starting <see cref="Token"/> for this node.

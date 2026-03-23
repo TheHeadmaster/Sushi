@@ -74,7 +74,7 @@ public class UsingNode([NotNull] Token usingToken, ExpressionNode? identifier) :
     }
 
     /// <inheritdoc />
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         foreach (string namespaceString in this.ResolvedNamespaces)
         {
@@ -86,7 +86,7 @@ public class UsingNode([NotNull] Token usingToken, ExpressionNode? identifier) :
     }
 
     /// <inheritdoc />
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         foreach (string namespaceString in this.ResolvedNamespaces)
         {

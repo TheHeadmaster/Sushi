@@ -19,7 +19,7 @@ public class BlockNode([NotNull] Token token, List<StatementNode> statements) : 
         }
     }
 
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         foreach (StatementNode node in this.Statements)
         {
@@ -27,7 +27,7 @@ public class BlockNode([NotNull] Token token, List<StatementNode> statements) : 
         }
     }
 
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         foreach (StatementNode node in this.Statements)
         {

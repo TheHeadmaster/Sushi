@@ -85,7 +85,7 @@ public static class Program
     {
         Lexer lexer = new();
         Parser parser = new();
-        Compiler compiler = new();
+        CompilerVisitor compiler = new();
         List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
 
         AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);

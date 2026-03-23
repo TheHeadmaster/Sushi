@@ -21,7 +21,7 @@ public class MemberDeclarationNode([NotNull] Token token, [NotNull] IdentifierNo
         await this.Identifier.Verify(context);
     }
 
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         await compiler.WriteHeaderLine($"{this.Type.Name} {this.Identifier.Name};");
     }

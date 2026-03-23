@@ -31,7 +31,7 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
     }
 
     /// <inheritdoc />
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         if (this.Body is not null)
         {
@@ -40,7 +40,7 @@ public class ClassNode([NotNull] Token token, TypeNode? identifier, BlockNode? b
     }
 
     /// <inheritdoc />
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         await compiler.WriteHeaderLine("typedef struct");
         await compiler.WriteHeaderLine("{");

@@ -12,7 +12,7 @@ public class FileNode([NotNull] string filePath, [NotNull] string fileName, [Not
 
     public List<StatementNode> Statements { get; set; } = statements;
 
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         await compiler.StartFile(this.FilePath);
 
@@ -26,7 +26,7 @@ public class FileNode([NotNull] string filePath, [NotNull] string fileName, [Not
         await compiler.EndFile();
     }
 
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         string headerGuard = $"__H_{Path.GetFileNameWithoutExtension(this.FileName)}";
         await compiler.WriteHeaderLine($"#ifndef {headerGuard}");

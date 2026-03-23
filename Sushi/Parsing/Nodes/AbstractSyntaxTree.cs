@@ -26,7 +26,7 @@ public sealed class AbstractSyntaxTree : SyntaxNode
         }
     }
 
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         string mainFileName = "main.sus";
         while (this.Children.Any(x => x.FileName.Equals(mainFileName, StringComparison.OrdinalIgnoreCase)))

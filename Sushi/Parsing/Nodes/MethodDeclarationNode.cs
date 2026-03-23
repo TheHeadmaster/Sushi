@@ -25,7 +25,7 @@ public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, 
         await this.Name.Verify(context);
     }
 
-    public override async Task Compile([NotNull] Compiler compiler)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
         await compiler.Write($"{this.ReturnType?.Name ?? "void"} {this.Name.Name}");
         await compiler.Write("()");
@@ -37,7 +37,7 @@ public class MethodDeclarationNode([NotNull] Token token, TypeNode? returnType, 
         await compiler.WriteLine("}");
     }
 
-    public override async Task CompileHeader([NotNull] Compiler compiler)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
         await compiler.WriteHeaderLine($"{this.ReturnType?.Name ?? "void"} {this.Name.Name};");
     }
