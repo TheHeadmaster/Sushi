@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 
 namespace Sushi.Precompilation;
@@ -57,7 +58,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitTree(AbstractSyntaxTree tree) => Task.CompletedTask;
+    protected virtual Task VisitTree([NotNull] AbstractSyntaxTree tree) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="AssignmentNode"/>.
@@ -68,7 +69,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitAssignment(AssignmentNode assignment) => Task.CompletedTask;
+    protected virtual Task VisitAssignment([NotNull] AssignmentNode assignment) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="BinaryExpressionNode"/>.
@@ -79,7 +80,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitBinary(BinaryExpressionNode binary) => Task.CompletedTask;
+    protected virtual Task VisitBinary([NotNull] BinaryExpressionNode binary) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="BlockNode"/>.
@@ -90,7 +91,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitBlock(BlockNode block) => Task.CompletedTask;
+    protected virtual Task VisitBlock([NotNull] BlockNode block) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="ClassNode"/>.
@@ -101,7 +102,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitClass(ClassNode classNode) => Task.CompletedTask;
+    protected virtual Task VisitClass([NotNull] ClassNode classNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="ConstantNode"/>.
@@ -112,7 +113,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitConstant(ConstantNode constant) => Task.CompletedTask;
+    protected virtual Task VisitConstant([NotNull] ConstantNode constant) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="DestroyNode"/>.
@@ -123,7 +124,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitDestroy(DestroyNode destroy) => Task.CompletedTask;
+    protected virtual Task VisitDestroy([NotNull] DestroyNode destroy) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="DoWhileNode"/>.
@@ -134,7 +135,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitDoWhile(DoWhileNode doWhile) => Task.CompletedTask;
+    protected virtual Task VisitDoWhile([NotNull] DoWhileNode doWhile) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="ExpressionStatementNode"/>.
@@ -145,7 +146,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitExpressionStatement(ExpressionStatementNode expression) => Task.CompletedTask;
+    protected virtual Task VisitExpressionStatement([NotNull] ExpressionStatementNode expression) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="FileNode"/>.
@@ -156,7 +157,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitFile(FileNode file) => Task.CompletedTask;
+    protected virtual Task VisitFile([NotNull] FileNode file) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="IdentifierNode"/>.
@@ -167,7 +168,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitIdentifier(IdentifierNode identifier) => Task.CompletedTask;
+    protected virtual Task VisitIdentifier([NotNull] IdentifierNode identifier) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="IfNode"/>.
@@ -178,7 +179,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitIf(IfNode ifNode) => Task.CompletedTask;
+    protected virtual Task VisitIf([NotNull] IfNode ifNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="MemberDeclarationNode"/>.
@@ -189,7 +190,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitMemberDeclaration(MemberDeclarationNode member) => Task.CompletedTask;
+    protected virtual Task VisitMemberDeclaration([NotNull] MemberDeclarationNode member) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="MethodCallNode"/>.
@@ -200,7 +201,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitMethodCall(MethodCallNode method) => Task.CompletedTask;
+    protected virtual Task VisitMethodCall([NotNull] MethodCallNode method) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="MethodDeclarationNode"/>.
@@ -211,7 +212,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitMethodDeclaration(MethodDeclarationNode method) => Task.CompletedTask;
+    protected virtual Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="NamespaceDeclarationNode"/>.
@@ -222,7 +223,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitNamespaceDeclaration(NamespaceDeclarationNode namespaceDeclaration) => Task.CompletedTask;
+    protected virtual Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="NamespaceNode"/>.
@@ -233,7 +234,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitNamespace(NamespaceNode namespaceNode) => Task.CompletedTask;
+    protected virtual Task VisitNamespace([NotNull] NamespaceNode namespaceNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="TypeNode"/>.
@@ -244,7 +245,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitType(TypeNode type) => Task.CompletedTask;
+    protected virtual Task VisitType([NotNull] TypeNode type) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="UnaryExpressionNode"/>.
@@ -255,7 +256,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitUnary(UnaryExpressionNode unary) => Task.CompletedTask;
+    protected virtual Task VisitUnary([NotNull] UnaryExpressionNode unary) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="UsingNode"/>.
@@ -266,7 +267,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitUsing(UsingNode usingNode) => Task.CompletedTask;
+    protected virtual Task VisitUsing([NotNull] UsingNode usingNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="WhileNode"/>.
@@ -277,7 +278,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitWhile(WhileNode whileNode) => Task.CompletedTask;
+    protected virtual Task VisitWhile([NotNull] WhileNode whileNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="ParameterListNode"/>.
@@ -288,7 +289,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitParameterList(ParameterListNode parameterList) => Task.CompletedTask;
+    protected virtual Task VisitParameterList([NotNull] ParameterListNode parameterList) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="ParameterNode"/>.
@@ -299,7 +300,7 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitParameter(ParameterNode parameter) => Task.CompletedTask;
+    protected virtual Task VisitParameter([NotNull] ParameterNode parameter) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="DestroyerDeclarationNode"/>.
@@ -310,5 +311,5 @@ public abstract class ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    protected virtual Task VisitDestroyerDeclaration(DestroyerDeclarationNode destroyer) => Task.CompletedTask;
+    protected virtual Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer) => Task.CompletedTask;
 }
