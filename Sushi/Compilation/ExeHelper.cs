@@ -1,7 +1,8 @@
 using System.Diagnostics;
 using Serilog;
+using Sushi.Diagnostics;
 
-namespace Sushi;
+namespace Sushi.Compilation;
 
 /// <summary>
 /// Contains helper methods for running other executables.

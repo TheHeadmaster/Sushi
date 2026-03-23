@@ -10,5 +10,7 @@ public enum ExitCode
     ProjectPathNotSpecified,
     ProjectPathNotFound,
     InvalidParameterSyntax,
-    LexingSyntaxError
+    LexingSyntaxError,
+    ProcessFailedToStart,
+    ProcessFailedDuringExecution
 }

@@ -93,6 +93,11 @@ public static class Program
         List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
 
         await WriteFilesToDisk(compiledFiles);
+
+        if (!AppMeta.Options.IntermediateOnly)
+        {
+            await ExeCompiler.Compile("Project");
+        }
     }
 
     /// <summary>
