@@ -85,12 +85,31 @@ public static class Program
     {
         Lexer lexer = new();
         Parser parser = new();
-        CompilerVisitor compiler = new();
+        CCompilerVisitor compiler = new();
         List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
 
         AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
 
-        await compiler.Compile(tree, parser.Reference);
+        List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
+
+        await WriteFilesToDisk(compiledFiles);
+    }
+
+    /// <summary>
+    /// Writes the specified files to disk.
+    /// </summary>
+    /// <param name="compiledFiles">
+    /// The <see cref="List{T}"/> of <see cref="CompiledFile" /> objects to write to disk.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task WriteFilesToDisk(List<CompiledFile> compiledFiles)
+    {
+        foreach (CompiledFile compiledFile in compiledFiles)
+        {
+            await File.WriteAllTextAsync(compiledFile.FilePath, compiledFile.Content, Encoding.UTF8);
+        }
     }
 
     /// <summary>
