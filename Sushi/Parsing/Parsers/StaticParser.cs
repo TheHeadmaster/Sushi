@@ -14,7 +14,9 @@ public class StaticParser : IParser
     public ParserType Type { get; } = ParserType.Statement;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Static];
+
+    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
 
     /// <inheritdoc />
     public BindingPower Power(TokenType type) => BindingPower.Primary;
@@ -29,7 +31,7 @@ public class StaticParser : IParser
             return null;
         }
 
-        StatementNode? right = await parser.ParseStatement(token, ParserRole.StaticModifier);
+        StatementNode? right = await parser.ParseStatement(parser.Peek()!, ParserRole.StaticModifier);
 
         if (right is not ICanBeStatic staticNode)
         {

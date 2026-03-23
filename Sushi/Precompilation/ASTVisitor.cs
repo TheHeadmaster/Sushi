@@ -41,6 +41,9 @@ public abstract class ASTVisitor
             UnaryExpressionNode unary => this.VisitUnary(unary),
             UsingNode usingNode => this.VisitUsing(usingNode),
             WhileNode whileNode => this.VisitWhile(whileNode),
+            ParameterListNode parameterList => this.VisitParameterList(parameterList),
+            ParameterNode parameter => this.VisitParameter(parameter),
+            DestroyerDeclarationNode destroyer => this.VisitDestroyerDeclaration(destroyer),
             _ => Task.CompletedTask
         });
     }
@@ -275,4 +278,37 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitWhile(WhileNode whileNode) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="ParameterListNode"/>.
+    /// </summary>
+    /// <param name="parameterList">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitParameterList(ParameterListNode parameterList) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="ParameterNode"/>.
+    /// </summary>
+    /// <param name="parameter">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitParameter(ParameterNode parameter) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="DestroyerDeclarationNode"/>.
+    /// </summary>
+    /// <param name="destroyer">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitDestroyerDeclaration(DestroyerDeclarationNode destroyer) => Task.CompletedTask;
 }

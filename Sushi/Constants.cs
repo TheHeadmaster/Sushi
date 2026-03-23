@@ -24,6 +24,7 @@ public static class Constants
         { "while", TokenType.While },
         { "create", TokenType.Create },
         { "destroy", TokenType.Destroy },
+        { "destroyer", TokenType.Destroyer },
         { "void", TokenType.Void },
         { "using", TokenType.Using },
         { "namespace", TokenType.Namespace },

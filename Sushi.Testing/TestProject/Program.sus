@@ -6,8 +6,12 @@ static class Program
 {
 	SomeClass member;
 
-	SomeClass GetMember()
+	SomeClass GetMember(SomeClass inClass)
     {
         s = "You know it";
+    }
+
+    destroyer Default(SomeClass destroyedClass)
+    {
     }
 }

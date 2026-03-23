@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
 using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 using Sushi.Verification;
@@ -28,4 +29,18 @@ public class TypeNode([NotNull] Token token) : StatementNode
 
     /// <inheritdoc />
     public override Task Verify(VerificationContext context) => Task.CompletedTask;
+
+    public override async Task Compile([NotNull] Compiler compiler)
+    {
+        string resolvedName = this.ResolvedType is null ? this.Name : this.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.Write(resolvedName);
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        string resolvedName = this.ResolvedType is null ? this.Name : this.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.WriteHeader(resolvedName);
+    }
 }

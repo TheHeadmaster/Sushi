@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
 using Sushi.Tokenization;
 using Sushi.Verification;
 
@@ -11,4 +12,8 @@ public class IdentifierNode([NotNull] Token token) : ExpressionNode, ICallableNo
     public override Token GetStartToken() => token;
     public bool ResolvesToIdentifier() => true;
     public override Task Verify(VerificationContext context) => Task.CompletedTask;
+
+    public override async Task Compile([NotNull] Compiler compiler) => await compiler.Write(this.Name);
+
+    public override async Task CompileHeader([NotNull] Compiler compiler) => await compiler.WriteHeader(this.Name);
 }
