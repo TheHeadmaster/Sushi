@@ -2,7 +2,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Serilog;
 using Serilog.Formatting.Compact;
-using Sushi.Extensions;
+using Sushi.Compilation;
+using Sushi.Diagnostics;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
+using Sushi.Tokenization;
 
 namespace Sushi;
 
@@ -22,22 +26,19 @@ public static class Program
     /// </returns>
     private static async Task Main(string[] args)
     {
+#pragma warning disable CA1031 // Do not catch general exception types
         try
         {
-            DateTime startTime = DateTime.Now;
             await Initialize(args);
 
-            CompileJob job = new();
-
-            await job.Run();
-
-            Log.Information("Compilation completed in {Time}.", startTime.TimeSinceAsString());
+            await Diag.MonitorAsync("Compilation", Run);
         }
         catch (Exception exception)
         {
             Log.Error(exception, "Unhandled Exception");
             Environment.Exit((int)ExitCode.UnhandledException);
         }
+#pragma warning restore CA1031 // Do not catch general exception types
     }
 
     /// <summary>
@@ -49,7 +50,7 @@ public static class Program
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    private static async Task Initialize(string[] args)
+    public static async Task Initialize(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -72,6 +73,48 @@ public static class Program
         AppDomain.CurrentDomain.ProcessExit += OnExit;
 
         AppMeta.Options = await CompilerOptions.FromCommandLineArguments(args);
+    }
+
+    /// <summary>
+    /// Runs the compiler.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public static async Task Run()
+    {
+        Lexer lexer = new();
+        Parser parser = new();
+        CCompilerVisitor compiler = new();
+        List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
+
+        AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
+
+        List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
+
+        await WriteFilesToDisk(compiledFiles);
+
+        if (!AppMeta.Options.IntermediateOnly)
+        {
+            await ExeCompiler.Compile("Project");
+        }
+    }
+
+    /// <summary>
+    /// Writes the specified files to disk.
+    /// </summary>
+    /// <param name="compiledFiles">
+    /// The <see cref="List{T}"/> of <see cref="CompiledFile" /> objects to write to disk.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task WriteFilesToDisk(List<CompiledFile> compiledFiles)
+    {
+        foreach (CompiledFile compiledFile in compiledFiles)
+        {
+            await File.WriteAllTextAsync(compiledFile.FilePath, compiledFile.Content, Encoding.UTF8);
+        }
     }
 
     /// <summary>

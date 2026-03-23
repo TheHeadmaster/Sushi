@@ -1,40 +1,46 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Compilation;
+using Sushi.Parsing.Scope;
+using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
 /// Represents a type that is defined somewhere else in the code.
 /// </summary>
-/// <param name="startToken">
+/// <param name="token">
 /// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-/// <param name="scope">
-/// The scope that the node exists in.
-/// </param>
-public sealed class TypeNode(Token startToken, ReferenceScope scope) : ExpressionableNode(startToken, scope)
+public class TypeNode([NotNull] Token token) : StatementNode
 {
     /// <summary>
     /// The name of the type.
     /// </summary>
-    public string? Name { get; set; }
+    public string Name { get; set; } = token.Type is TokenType.Identifier ? token.Value : Constants.TryGetPrimitiveType(token);
+
+    /// <summary>
+    /// The resolved type of the node.
+    /// </summary>
+    public SushiType? ResolvedType { get; set; }
 
     /// <inheritdoc />
-    public override Task<bool> VisitKeyword([NotNull] ParsingContext context)
+    public override Token GetStartToken() => token;
+
+    /// <inheritdoc />
+    public override Task Verify(VerificationContext context) => Task.CompletedTask;
+
+    public override async Task Compile([NotNull] Compiler compiler)
     {
-        Token token = context.Peek()!;
-        if (Constants.PrimitiveTypes.ContainsKey(token.Value))
-        {
-            this.Name = Constants.PrimitiveTypes[token.Value];
+        string resolvedName = this.ResolvedType is null ? this.Name : this.ResolvedType.FullName.Replace('.', '_');
 
-            context.Pop();
-
-            return Task.FromResult(true);
-        }
-
-        return Task.FromResult(false);
+        await compiler.Write(resolvedName);
     }
 
-    /// <inheritdoc />
-    public override SushiType? EvaluateType() => this.Scope.ResolveType(this.Name!);
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        string resolvedName = this.ResolvedType is null ? this.Name : this.ResolvedType.FullName.Replace('.', '_');
+
+        await compiler.WriteHeader(resolvedName);
+    }
 }

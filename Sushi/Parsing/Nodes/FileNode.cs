@@ -1,107 +1,53 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Compilation;
+using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-/// <summary>
-/// Represents a source file that contains <see cref="SyntaxNode"/> objects.
-/// </summary>
-/// <param name="tree">
-/// The syntax tree that this node exists under.
-/// </param>
-public sealed class FileNode(AbstractSyntaxTree tree) : SyntaxNode(null, tree.Scope)
+public class FileNode([NotNull] string filePath, [NotNull] string fileName, [NotNull] List<StatementNode> statements) : SyntaxNode
 {
-    /// <summary>
-    /// The child nodes in the file.
-    /// </summary>
-    public List<SyntaxNode> Children { get; } = [];
+    public string FilePath { get; set; } = filePath;
+    public string FileName { get; set; } = fileName;
 
-    /// <summary>
-    /// The list of <see cref="Token"/> objects waiting to be processed.
-    /// </summary>
-    public required List<Token> Tokens { get; init; }
+    public List<StatementNode> Statements { get; set; } = statements;
 
-    /// <summary>
-    /// The path of the file.
-    /// </summary>
-    public required string FilePath { get; init; }
-
-    /// <summary>
-    /// The name of the file with extension.
-    /// </summary>
-    public required string FileName { get; init; }
-
-    /// <summary>
-    /// The raw source code of the file, or the contents.
-    /// </summary>
-    public required string RawSourceCode { get; init; }
-
-    /// <inheritdoc />
-    public override async Task<bool> Visit([NotNull] ParsingContext context)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
-        while (!context.IsAtEnd())
-        {
-            bool handled = await base.Visit(context);
+        await compiler.StartFile(this.FilePath);
 
-            if (!handled)
-            {
-                return false;
-            }
+        foreach (StatementNode statement in this.Statements)
+        {
+            await statement.Compile(compiler);
         }
 
-        return true;
-    }
-    /// <inheritdoc />
-    public override async Task<bool> VisitKeyword([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
+        await this.CompileHeader(compiler);
 
-        if (Constants.PrimitiveTypes.ContainsKey(token.Value))
-        {
-            // Look ahead to see if this is the start of a variable or function declaration
-
-            if (IsVariableDeclaration(context))
-            {
-                VariableDeclarationNode varDeclarationNode = new(token, this.Scope);
-                this.Children.Add(varDeclarationNode);
-
-                return await varDeclarationNode.Visit(context);
-            }
-
-            FunctionDeclarationNode funcDeclarationNode = new(token, this.Scope);
-            this.Children.Add(funcDeclarationNode);
-
-            return await funcDeclarationNode.Visit(context);
-        }
-
-        context.Errors.Add(new CompilerError(token)
-        {
-            ErrorReason = $"Unexpected keyword in top-level statement ({token.Value})."
-        });
-
-        return false;
+        await compiler.EndFile();
     }
 
-    private static bool IsVariableDeclaration([NotNull] ParsingContext context)
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
     {
-        Token? name = context.Peek(2);
-        Token? assignment = context.Peek(3);
+        string headerGuard = $"__H_{Path.GetFileNameWithoutExtension(this.FileName)}";
+        await compiler.WriteHeaderLine($"#ifndef {headerGuard}");
+        await compiler.WriteHeaderLine($"#define {headerGuard}");
 
-        if (assignment?.Type is TokenType.Whitespace)
+        foreach (StatementNode statement in this.Statements)
         {
-            assignment = context.Peek(4);
+            await statement.CompileHeader(compiler);
         }
 
-        if (name?.Type is TokenType.Identifier && assignment?.Type is TokenType.AssignmentOperator)
-        {
-            return true;
-        }
+        await compiler.WriteHeaderLine("");
+        await compiler.WriteHeaderLine("#endif");
+    }
 
-        if (name?.Type is TokenType.Identifier && assignment?.Type is TokenType.Terminator)
-        {
-            return true;
-        }
+    public override Token GetStartToken() => this.Statements.First().GetStartToken();
 
-        return false;
+    public override async Task Verify(VerificationContext context)
+    {
+        foreach (StatementNode statement in this.Statements)
+        {
+            await statement.Verify(context);
+        }
     }
 }

@@ -1,123 +1,49 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Compilation;
+using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-/// <summary>
-/// Represents a variable declaration.
-/// </summary>
-/// <param name="startToken">
-/// The <see cref="Token"/> used to mark the start of the node.
-/// </param>
-/// <param name="scope">
-/// The scope that the node exists in.
-/// </param>
-public sealed class VariableDeclarationNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
+public class VariableDeclarationNode(TypeNode? type, AssignmentNode? assignment) : StatementNode
 {
-    /// <summary>
-    /// The type of the variable.
-    /// </summary>
-    public TypeNode? Type { get; set; }
+    public TypeNode? Type { get; set; } = type;
 
-    /// <summary>
-    /// The name of the variable.
-    /// </summary>
-    public IdentifierNode? Name { get; set; }
+    public AssignmentNode? Assignment { get; set; } = assignment;
 
-    /// <summary>
-    /// The right hand side of the variable declaration, if there is one.
-    /// </summary>
-    public ExpressionNode? Assignment { get; set; }
-
-    /// <inheritdoc />
-    public override async Task<bool> Visit([NotNull] ParsingContext context)
+    public override Token? GetStartToken() => this.Type?.GetStartToken();
+    public override async Task Verify(VerificationContext context)
     {
-        Token? token = context.Peek();
-
-        if (token is null)
+        if (this.Type is not null)
         {
-            context.Errors.Add(new CompilerError(context.EndOfFileToken())
-            {
-                ErrorReason = "Unexpected end of file."
-            });
-
-            return false;
+            await this.Type.Verify(context);
         }
 
-        if (this.Type is null)
+        if (this.Assignment is not null)
         {
-            TypeNode type = new(token, this.Scope);
-            if (!await type.Visit(context))
-            {
-                return false;
-            }
+            await this.Assignment.Verify(context);
+        }
+    }
 
-            this.Type = type;
-
-            return await this.Visit(context);
+    public override async Task Compile([NotNull] Compiler compiler)
+    {
+        if (this.Assignment is not null)
+        {
+            await this.Assignment.Compile(compiler);
         }
 
-        if (this.Name is null)
+        await compiler.Write(";");
+        await compiler.EndLine();
+    }
+
+    public override async Task CompileHeader([NotNull] Compiler compiler)
+    {
+        if (this.Assignment is not null)
         {
-            IdentifierNode name = new(token, this.Scope, false);
-
-            if (!await name.Visit(context))
-            {
-                return false;
-            }
-
-            if (!name.AssignType(context, this.Type))
-            {
-                return false;
-            }
-
-            this.Name = name;
-
-            return await this.Visit(context);
+            await this.Assignment.CompileHeader(compiler);
         }
 
-        if (this.Assignment is null && token.Type is TokenType.AssignmentOperator)
-        {
-            context.Pop();
-
-            if (context.IsAtEnd())
-            {
-                context.Errors.Add(new CompilerError(context.EndOfFileToken())
-                {
-                    ErrorReason = "Unexpected end of file."
-                });
-
-                return false;
-            }
-
-            ExpressionNode expression = new(token, this.Scope);
-            if (!await expression.Visit(context))
-            {
-                return false;
-            }
-
-            this.Assignment = expression;
-
-            return await this.Visit(context);
-        }
-
-        if (token.Type is TokenType.Terminator)
-        {
-            context.Pop();
-
-            return true;
-        }
-
-        if (!await base.Visit(context))
-        {
-            context.Errors.Add(new CompilerError(token)
-            {
-                ErrorReason = "Unexpected token in variable declaration."
-            });
-
-            return false;
-        }
-
-        return true;
+        await compiler.WriteHeader(";");
+        await compiler.HeaderEndLine();
     }
 }

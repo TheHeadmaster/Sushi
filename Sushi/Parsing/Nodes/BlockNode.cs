@@ -1,91 +1,37 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Compilation;
+using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-/// <summary>
-/// Represents a block body, such as a function block or an if block.
-/// </summary>
-/// <param name="startToken">
-/// The <see cref="Token"/> used to mark the start of the node.
-/// </param>
-/// <param name="scope">
-/// The scope that the node exists in.
-/// </param>
-public sealed class BlockNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
+public class BlockNode([NotNull] Token token, List<StatementNode> statements) : StatementNode
 {
-    public List<SyntaxNode> Statements { get; set; } = [];
+    public List<StatementNode> Statements { get; set; } = statements;
 
-    private bool IsOpened { get; set; }
+    public override Token GetStartToken() => token;
 
-    /// <inheritdoc />
-    public override async Task<bool> VisitOpeningSquiggly([NotNull] ParsingContext context)
+    public override async Task Verify(VerificationContext context)
     {
-        if (this.IsOpened)
+        foreach (StatementNode node in this.Statements)
         {
-            context.Errors.Add(new CompilerError(context.Peek()!)
-            {
-                ErrorReason = "Unexpected '{' token in block body."
-            });
-
-            return false;
+            await node.Verify(context);
         }
-
-        this.IsOpened = true;
-
-        context.Pop();
-
-        while (true)
-        {
-            if (context.IsAtEnd())
-            {
-                context.Errors.Add(new CompilerError(context.EndOfFileToken())
-                {
-                    ErrorReason = "Unexpected end of file."
-                });
-
-                return false;
-            }
-
-            Token currentToken = context.Peek()!;
-
-            if (currentToken.Type is TokenType.Whitespace or TokenType.Newline)
-            {
-                context.Pop();
-                continue;
-            }
-
-            if (currentToken.Type is TokenType.ClosingSquiggly)
-            {
-                break;
-            }
-
-            SyntaxNode statement = currentToken.Type is TokenType.Keyword && currentToken.Value == "if"
-                ? new IfNode(currentToken, this.Scope)
-                : currentToken.Type is not TokenType.Identifier
-                    ? new VariableDeclarationNode(currentToken, this.Scope)
-                    : new AssignmentNode(currentToken, this.Scope);
-
-            this.Statements.Add(statement);
-
-            bool result = await statement.Visit(context);
-
-            if (!result)
-            {
-                return false;
-            }
-
-            continue;
-        }
-
-        return await this.Visit(context);
     }
 
-    /// <inheritdoc />
-    public override async Task<bool> VisitClosingSquiggly([NotNull] ParsingContext context)
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
     {
-        context.Pop();
+        foreach (StatementNode node in this.Statements)
+        {
+            await node.Compile(compiler);
+        }
+    }
 
-        return true;
+    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
+    {
+        foreach (StatementNode node in this.Statements)
+        {
+            await node.CompileHeader(compiler);
+        }
     }
 }

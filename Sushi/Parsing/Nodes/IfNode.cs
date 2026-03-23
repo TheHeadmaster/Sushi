@@ -1,110 +1,31 @@
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using Sushi.Lexing.Tokenization;
+using Sushi.Tokenization;
+using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public sealed class IfNode(Token startToken, ReferenceScope scope) : SyntaxNode(startToken, scope)
+public class IfNode([NotNull] Token token, ExpressionNode? condition, [NotNull] BlockNode body, IfNode? elseNode) : StatementNode
 {
-    public ExpressionNode Expression { get; set; }
+    public ExpressionNode? Condition { get; set; } = condition;
 
-    public BlockNode Body { get; set; }
+    public BlockNode Body { get; set; } = body;
 
-    private readonly ReferenceScope blockScope = new(scope);
+    public IfNode? Else { get; set; } = elseNode;
 
-    private bool IfConsumed { get; set; }
+    public override Token GetStartToken() => token;
 
-    private bool ThenConsumed { get; set; }
-
-    /// <inheritdoc />
-    public override async Task<bool> Visit([NotNull] ParsingContext context)
+    public override async Task Verify(VerificationContext context)
     {
-        Token token = context.Peek()!;
-        Token? realToken = context.PeekNextNonWhiteSpaceNonReturnToken(0);
-
-        if (token is null)
+        if (this.Condition is not null)
         {
-            context.Errors.Add(new CompilerError(context.EndOfFileToken())
-            {
-                ErrorReason = "Unexpected end of file."
-            });
-
-            return false;
+            await this.Condition.Verify(context);
         }
 
-        if (this.IfConsumed && token.Type is TokenType.Keyword && token.Value == "if")
+        await this.Body.Verify(context);
+
+        if (this.Else is not null)
         {
-            context.Errors.Add(new CompilerError(realToken)
-            {
-                ErrorReason = "Unexpected if keyword in if statement."
-            });
-
-            return false;
+            await this.Else.Verify(context);
         }
-        else if (!this.IfConsumed && token.Type is TokenType.Keyword && token.Value == "if")
-        {
-            this.IfConsumed = true;
-            context.Pop();
-            return await this.Visit(context);
-        }
-
-        if (this.Expression is null)
-        {
-            ExpressionNode expression = new(token, this.blockScope);
-
-            if (!await expression.Visit(context))
-            {
-                return false;
-            }
-
-            this.Expression = expression;
-
-            return await this.Visit(context);
-        }
-
-        if (realToken is null)
-        {
-            context.Errors.Add(new CompilerError(context.EndOfFileToken())
-            {
-                ErrorReason = "Unexpected end of file."
-            });
-
-            return false;
-        }
-
-        if (this.ThenConsumed && realToken.Type is TokenType.Keyword && realToken.Value == "then")
-        {
-            context.Errors.Add(new CompilerError(realToken)
-            {
-                ErrorReason = "Unexpected then keyword in if statement."
-            });
-
-            return false;
-        }
-        else if (!this.ThenConsumed && realToken.Type is TokenType.Keyword && realToken.Value == "then")
-        {
-            this.ThenConsumed = true;
-            context.PopUntilNonWhiteSpaceNonReturnTokenOrEndOfFile();
-            context.Pop();
-            return await this.Visit(context);
-        }
-
-        if (this.Body is null)
-        {
-            BlockNode body = new(token, this.blockScope);
-
-            if (!await body.Visit(context))
-            {
-                return false;
-            }
-
-            this.Body = body;
-
-            return await this.Visit(context);
-        }
-
-        return true;
     }
 }

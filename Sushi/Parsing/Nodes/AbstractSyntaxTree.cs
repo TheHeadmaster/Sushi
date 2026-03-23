@@ -1,3 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
+using Sushi.Compilation;
+using Sushi.Diagnostics;
+using Sushi.Tokenization;
+using Sushi.Verification;
+
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
@@ -5,16 +11,42 @@ namespace Sushi.Parsing.Nodes;
 /// </summary>
 public sealed class AbstractSyntaxTree : SyntaxNode
 {
-    public AbstractSyntaxTree() : base(null, new ReferenceScope(null))
+    public List<FileNode> Children { get; set; } = [];
+
+    /// <summary>
+    /// Contains the messages emitted by the parser, such as errors and warnings.
+    /// </summary>
+    public List<CompilerMessage> Messages { get; set; } = [];
+    public override Token GetStartToken() => this.Children.First().GetStartToken();
+    public override async Task Verify(VerificationContext context)
     {
-        foreach (string type in Constants.PrimitiveTypes.Values)
+        foreach (SyntaxNode child in this.Children)
         {
-            this.Scope.TryAddType(type); // We assume that this will succeed because its the first types that get registered
+            await child.Verify(context);
         }
     }
 
-    /// <summary>
-    /// The child nodes of the tree.
-    /// </summary>
-    public List<SyntaxNode> Children { get; } = [];
+    public override async Task Compile([NotNull] CompilerVisitor compiler)
+    {
+        string mainFileName = "main.sus";
+        while (this.Children.Any(x => x.FileName.Equals(mainFileName, StringComparison.OrdinalIgnoreCase)))
+        {
+            mainFileName = $"_{mainFileName}";
+        }
+
+        await compiler.StartFile(Path.Combine(AppMeta.Options.ProjectPath, mainFileName));
+
+        await compiler.WriteLine("int main()");
+        await compiler.WriteLine("{");
+        await compiler.Indent();
+        await compiler.WriteLine("return 0;");
+        await compiler.Dedent();
+        await compiler.WriteLine("}");
+        await compiler.EndFile();
+
+        foreach (FileNode child in this.Children)
+        {
+            await child.Compile(compiler);
+        }
+    }
 }

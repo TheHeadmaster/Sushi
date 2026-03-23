@@ -1,31 +1,17 @@
-// Inline Comment
+using SomeStuff.Yes;
 
-int32 Main()
+namespace Test;
+
+static class Program
 {
-    int32 count = 5;
-    float32 xPosition = 10.5;
-    bool isRunning = true;
-    bool isNotRunning = false;
-    isNotRunning = IsDevelopment(isRunning, isRunning);
+	SomeClass member;
 
-    if isRunning then
+	SomeClass GetMember(SomeClass inClass)
     {
-        bool ifScope = true;
-        count = 4;
+        s = "You know it";
     }
 
-    if isRunning then
+    destroyer Default(SomeClass destroyedClass)
     {
-        ifScope = false;
     }
 }
-
-bool IsDevelopment(bool isDebug, bool isForceReleaseMode)
-{
-    int32 something;
-
-}
-
-/* 
-Block Comment
-*/

@@ -1,5 +1,5 @@
-using Microsoft.Extensions.Options;
 using Serilog;
+using Sushi.Diagnostics;
 
 namespace Sushi;
 

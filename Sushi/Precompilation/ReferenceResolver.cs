@@ -1,0 +1,306 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
+using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Scope;
+
+namespace Sushi.Precompilation;
+
+/// <summary>
+/// Handles the resolution and tracking of references, such as types, namespaces, and identifiers.
+/// </summary>
+public sealed partial class ReferenceResolver : ASTVisitor
+{
+    /// <summary>
+    /// The list of currently tracked namespaces.
+    /// </summary>
+    private readonly List<string> namespaces = [];
+
+    /// <summary>
+    /// The namespace currently in-scope.
+    /// </summary>
+    private string? currentNamespace;
+
+    /// <summary>
+    /// The file path currently in-scope.
+    /// </summary>
+    private string? currentFilePath;
+
+    /// <summary>
+    /// The list of types registered in the resolver.
+    /// </summary>
+    private readonly List<SushiType> types = [];
+
+    /// <summary>
+    /// The currently included namespaces in the resolving scope.
+    /// </summary>
+    private readonly List<string> includedNamespaces = [];
+
+    /// <summary>
+    /// Starts a new namespace scope. All type declarations inside of this scope will be a part of this namespace.
+    /// </summary>
+    /// <param name="node">
+    /// The node to use as a namespace scope.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task StartNamespace([NotNull] NamespaceDeclarationNode node)
+    {
+        ExpressionNode? currentNode = node.Body;
+
+        List<string> namespaceChain = [];
+
+        while (true)
+        {
+            if (currentNode is null)
+            {
+                break;
+            }
+
+            currentNode = await this.ConsumeNamespaceOrIdentifier(currentNode, namespaceChain);
+        }
+
+        this.currentNamespace = string.Join('.', namespaceChain);
+    }
+
+    /// <summary>
+    /// Consumes a namespace or identifier node and adds the namespace part to the namespaces list.
+    /// </summary>
+    /// <param name="node">
+    /// The node to consume.
+    /// </param>
+    /// <param name="namespaceChain">
+    /// The namespace chain to modify.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the next node in the chain.
+    /// </returns>
+    private Task<ExpressionNode?> ConsumeNamespaceOrIdentifier([NotNull] ExpressionNode node, [NotNull] List<string> namespaceChain)
+    {
+        ExpressionNode? nextNode = null;
+
+        if (node is NamespaceNode namespaceNode && namespaceNode.Name is not null)
+        {
+            namespaceChain.Add(namespaceNode.Name.Name);
+            nextNode = namespaceNode.Right;
+        }
+        else if (node is IdentifierNode identifier)
+        {
+            namespaceChain.Add(identifier.Name);
+            nextNode = null;
+        }
+
+        string ns = string.Join('.', namespaceChain);
+
+        if (!this.namespaces.Contains(ns))
+        {
+            this.namespaces.Add(ns);
+        }
+
+        return Task.FromResult(nextNode);
+    }
+
+    /// <summary>
+    /// Tries to add a type node, and returns false if there is a naming conflict within the scope.
+    /// </summary>
+    /// <param name="node">
+    /// The type node.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns whether the operation succeeded.
+    /// </returns>
+    public async Task<bool> TryAddType([NotNull] TypeNode node)
+    {
+        SushiType? existing = this.types.FirstOrDefault(x => x.Name == node.Name && x.Namespace == this.currentNamespace);
+
+        if (existing is not null)
+        {
+            return false;
+        }
+        else
+        {
+            existing = new SushiType() { Name = node.Name, Namespace = this.currentNamespace!, FilePath = this.currentFilePath ?? string.Empty };
+            this.types.Add(existing);
+            node.ResolvedType = existing;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Resolves the type based on the current scope of the resolver.
+    /// </summary>
+    /// <param name="name">
+    /// The type name to resolve.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the <see cref="SushiType"/> or null if it was not resolved.
+    /// </returns>
+    public async Task<SushiType?> ResolveType(string name) => this.types.FirstOrDefault(x => x.Name == name && this.includedNamespaces.Contains(x.Namespace));
+
+    /// <summary>
+    /// Resolves the type based on the current scope of the resolver.
+    /// </summary>
+    /// <param name="type">
+    /// The type to resolve.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the <see cref="SushiType"/> or null if it was not resolved.
+    /// </returns>
+    public async Task<SushiType?> ResolveType([NotNull] TypeNode type) => await this.ResolveType(type.Name);
+
+    /// <summary>
+    /// Starts the current file. All subsequent visits will be tied to this file path until another <see cref="StartFile(string)"/> is called.
+    /// </summary>
+    /// <param name="filePath">The file path.</param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task StartFile(string filePath) => this.currentFilePath = filePath;
+
+    /// <summary>
+    /// Gets the file paths for the specified namespace.
+    /// </summary>
+    /// <param name="namespaceString">
+    /// The namespace.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of strings.
+    /// </returns>
+    public async Task<List<string>> GetNamespaceFilePaths(string namespaceString)
+    {
+        List<string> namespaceFilePaths = [];
+
+        foreach (SushiType type in this.types.Where(x => x.Namespace == namespaceString))
+        {
+            Uri fullUri = new(type.FilePath);
+
+            string projectPath = $"{AppMeta.Options.ProjectPath.TrimEnd('/', '\\')}{Path.DirectorySeparatorChar}";
+
+            Uri baseUri = new(projectPath);
+
+            Uri relativeUri = baseUri.MakeRelativeUri(fullUri);
+
+            string relativeFilePath = Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
+
+            namespaceFilePaths.Add(relativeFilePath);
+        }
+
+        return [..namespaceFilePaths.Distinct()];
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitTree(AbstractSyntaxTree tree)
+    {
+        foreach (FileNode child in tree.Children)
+        {
+            await this.Visit(child);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitFile(FileNode file)
+    {
+        this.includedNamespaces.Clear();
+        this.currentFilePath = file.FilePath;
+
+        foreach (StatementNode statement in file.Statements)
+        {
+            await this.Visit(statement);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitUsing(UsingNode usingNode)
+    {
+        List<string> namespaceChain = await usingNode.BuildNamespace();
+
+        Match match = NamespaceChain().Match(string.Join('.', namespaceChain));
+
+        string root = string.Empty;
+
+        bool hasWildcard = false;
+
+        if (match.Success && match.Groups.TryGetValue("chain", out Group? chain))
+        {
+            root = chain.Value;
+        }
+
+        if (match.Success && match.Groups["wildcard"].Value == "*")
+        {
+            hasWildcard = true;
+        }
+
+        if (hasWildcard)
+        {
+            IEnumerable<string> addNamespaces = this.namespaces.Where(x => x.StartsWith(root, StringComparison.Ordinal));
+            this.includedNamespaces.AddRange(addNamespaces);
+            usingNode.ResolvedNamespaces.AddRange(addNamespaces);
+        }
+        else
+        {
+            this.includedNamespaces.Add(root);
+            usingNode.ResolvedNamespaces.Add(root);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitNamespaceDeclaration(NamespaceDeclarationNode namespaceDeclaration)
+    {
+        List<string> namespaceChain = await namespaceDeclaration.BuildNamespace();
+
+        this.includedNamespaces.Add(string.Join('.', namespaceChain));
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitClass(ClassNode classNode)
+    {
+        foreach (StatementNode statement in classNode.Body)
+        {
+            await this.Visit(statement);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitMemberDeclaration(MemberDeclarationNode member) => member.Type.ResolvedType = await this.ResolveType(member.Type);
+
+    /// <inheritdoc />
+    protected override async Task VisitMethodDeclaration(MethodDeclarationNode method)
+    {
+        method.ReturnType?.ResolvedType = await this.ResolveType(method.ReturnType);
+
+        if (method.ParameterList is not null)
+        {
+            await this.Visit(method.ParameterList);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameterList(ParameterListNode parameterList)
+    {
+        foreach (ParameterNode parameter in parameterList.Parameters)
+        {
+            await this.Visit(parameter);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameter(ParameterNode parameter) => parameter.Type?.ResolvedType = await this.ResolveType(parameter.Type);
+
+    /// <inheritdoc />
+    protected override async Task VisitDestroyerDeclaration(DestroyerDeclarationNode destroyer)
+    {
+        if (destroyer.ParameterList is not null)
+        {
+            await this.Visit(destroyer.ParameterList);
+        }
+    }
+    
+    /// <summary>
+    /// Matches valid identifier strings.
+    /// </summary>
+    /// <returns>
+    /// The <see cref="Regex"/>.
+    /// </returns>
+    [GeneratedRegex(@"^(?<chain>(?:@?[a-zA-Z][a-zA-Z0-9]*)(?:\.@?[a-zA-Z][a-zA-Z0-9]*)*)(?<wildcard>(?:\.\*)?)")]
+    private static partial Regex NamespaceChain();
+}
