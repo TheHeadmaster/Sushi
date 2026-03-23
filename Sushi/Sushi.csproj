@@ -13,13 +13,6 @@
 		<ApplicationIcon>Sushi.ico</ApplicationIcon>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="OLD\ConstantNode.cs" />
-	  <Compile Remove="OLD\ExeHelper.cs" />
-	</ItemGroup>
-	<ItemGroup>
-	  <None Include="OLD\ConstantNode.cs" />
-	</ItemGroup>
-	<ItemGroup>
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
 		<PackageReference Include="Serilog" Version="4.3.1" />
 		<PackageReference Include="Serilog.Extensions.Hosting" Version="10.0.0" />
