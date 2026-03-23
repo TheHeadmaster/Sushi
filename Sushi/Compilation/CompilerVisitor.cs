@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Sushi.Parsing.Nodes;
 using Sushi.Precompilation;
 
@@ -31,53 +33,44 @@ public abstract class CompilerVisitor : ASTVisitor
     protected abstract Task<string> WriteComment(string generatedComment);
 
     /// <summary>
-    /// Compiles an <see cref="AbstractSyntaxTree"/> into a <see cref="List{T}"/> of <see cref="CompiledFile"/> objects.
+    /// The indentation level used to format the generated file.
     /// </summary>
-    /// <param name="tree">
-    /// The <see cref="AbstractSyntaxTree"/> to compile.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompiledFile"/> objects.
-    /// </returns>
-    public async Task<List<CompiledFile>> Compile(AbstractSyntaxTree tree)
-    {
-        await this.Visit(tree);
-
-        return this.CompiledFiles;
-    }
-
-    /// <inheritdoc />
-    protected override Task VisitFile(FileNode file)
-    {
-
-    }
-
-    /*
-    private static readonly List<string> implicitIncludes =
-    [
-        "stdint"
-    ];
-
-    private StringBuilder sb = new();
-
-    private StringBuilder headerSB = new();
-
     private int indentLevel;
-    private int headerIndentLevel;
 
+    /// <summary>
+    /// Indicates whether the <see cref="StringBuilder"/> is currently on the first write of the line,
+    /// so that it knows whether or not to include the indent in the next append.
+    /// </summary>
+    private bool firstOfLine = true;
+
+    /// <summary>
+    /// The current file being compiled.
+    /// </summary>
+    private CompiledFile currentFile = null!;
+
+    /// <summary>
+    /// The <see cref="StringBuilder"/> used to build the file contents.
+    /// </summary>
+    private readonly StringBuilder sb = new();
+
+    /// <summary>
+    /// The intermediate folder that will contain the generated files.
+    /// </summary>
     private string intermediateFolder = string.Empty;
 
-    private string absoluteFilePath = string.Empty;
+    /// <summary>
+    /// The <see cref="ReferenceResolver"/> used for resolving references and expanding scoped names to their full names.
+    /// </summary>
+    protected ReferenceResolver Reference { get; private set; } = null!;
 
-    private string relativeFilePath = string.Empty;
-    private bool firstOfLine = true;
-    private bool headerFirstOfLine = true;
-
-    public ReferenceResolver Reference { get; private set; } = null!;
-
-    public async Task Compile([NotNull] ICompilerNode root, [NotNull] ReferenceResolver reference)
+    /// <summary>
+    /// Sets the intermediate folder path.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private async Task SetIntermediateFolder()
     {
-        this.Reference = reference;
         DirectoryInfo intermediate = new(Path.Combine(AppMeta.Options.ProjectPath, "intermediate"));
 
         if (Directory.Exists(intermediate.FullName))
@@ -88,19 +81,25 @@ public abstract class CompilerVisitor : ASTVisitor
         Directory.CreateDirectory(intermediate.FullName);
 
         this.intermediateFolder = intermediate.FullName;
-
-        await root.Compile(this);
     }
 
-    public async Task StartFile([NotNull] string filePath)
+    /// <summary>
+    /// Converts a source file path to an intermediate file path.
+    /// </summary>
+    /// <param name="sourcePath">
+    /// The source path.
+    /// </param>
+    /// <param name="newExtension">
+    /// The new extension of the file.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the source path.
+    /// </returns>
+    private async Task<string> ConvertSourcePathToIntermediatePath(string sourcePath, string newExtension)
     {
-        this.sb = new StringBuilder();
-        this.headerSB = new StringBuilder();
-        this.indentLevel = 0;
-        this.headerIndentLevel = 0;
-        this.absoluteFilePath = Path.GetFullPath(filePath);
+        string absoluteFilePath = Path.GetFullPath(sourcePath);
 
-        Uri fullUri = new(this.absoluteFilePath);
+        Uri fullUri = new(absoluteFilePath);
 
         string projectPath = $"{AppMeta.Options.ProjectPath.TrimEnd('/', '\\')}{Path.DirectorySeparatorChar}";
 
@@ -108,92 +107,115 @@ public abstract class CompilerVisitor : ASTVisitor
 
         Uri relativeUri = baseUri.MakeRelativeUri(fullUri);
 
-        this.relativeFilePath = Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
+        string relativeFilePath = Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
 
-        string fileDirectory = Path.GetDirectoryName(Path.Combine(this.intermediateFolder, this.relativeFilePath)) ?? string.Empty;
+        string newFilePath = Path.Combine(this.intermediateFolder, relativeFilePath);
+
+        string fileDirectory = Path.GetDirectoryName(newFilePath) ?? string.Empty;
 
         if (!Directory.Exists(fileDirectory))
         {
             Directory.CreateDirectory(fileDirectory);
         }
+
+        return Path.ChangeExtension(newFilePath, newExtension);
     }
 
-    public async Task EndFile()
+    /// <summary>
+    /// Compiles an <see cref="AbstractSyntaxTree"/> into a <see cref="List{T}"/> of <see cref="CompiledFile"/> objects.
+    /// </summary>
+    /// <param name="tree">
+    /// The <see cref="AbstractSyntaxTree"/> to compile.
+    /// </param>
+    /// <param name="reference">
+    /// The <see cref="ReferenceResolver"/> used to resolve references and expand scoped names into full names.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompiledFile"/> objects.
+    /// </returns>
+    public async Task<List<CompiledFile>> Compile([NotNull] AbstractSyntaxTree tree, [NotNull] ReferenceResolver reference)
     {
-        string sbString = this.sb.ToString().Trim();
-        string headerSBString = this.headerSB.ToString().Trim();
+        this.Reference = reference;
 
-        if (!string.IsNullOrWhiteSpace(headerSBString))
-        {
-            StringBuilder tempHeaderSb = new();
+        await this.SetIntermediateFolder();
 
-            tempHeaderSb.AppendLine(GeneratedFileComment);
+        await this.Visit(tree);
 
-            foreach (string include in implicitIncludes)
-            {
-                tempHeaderSb.AppendLine($"#include <{include}.h>");
-            }
-
-            tempHeaderSb.Append(headerSBString);
-
-            string fileName = Path.ChangeExtension(
-                    Path.Combine(
-                        this.intermediateFolder,
-                        this.relativeFilePath),
-                    ".h");
-
-            await File.WriteAllTextAsync(
-                fileName,
-                tempHeaderSb.ToString().Trim(),
-                Encoding.UTF8);
-
-            if (!string.IsNullOrWhiteSpace(sbString))
-            {
-                StringBuilder tempSb = new();
-
-                tempSb.AppendLine($"#include \"{Path.ChangeExtension(this.relativeFilePath, ".h")}\"");
-                tempSb.Append(sbString);
-
-                sbString = tempSb.ToString().Trim();
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(sbString))
-        {
-            StringBuilder tempSb = new();
-
-            tempSb.AppendLine(GeneratedFileComment);
-
-            foreach (string include in implicitIncludes)
-            {
-                tempSb.AppendLine($"#include <{include}.h>");
-            }
-
-            tempSb.Append(sbString);
-
-            await File.WriteAllTextAsync(
-                Path.ChangeExtension(
-                    Path.Combine(
-                        this.intermediateFolder,
-                        this.relativeFilePath),
-                    ".c"),
-                tempSb.ToString().Trim(),
-                Encoding.UTF8);
-        }
+        return this.CompiledFiles;
     }
 
-    private string Pad(bool header = false)
+    /// <summary>
+    /// Starts a new file to be written.
+    /// </summary>
+    /// <param name="filePath">
+    /// The location to write the file in.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected async Task StartFile(string filePath)
+    {
+        this.sb.Clear();
+        this.indentLevel = 0;
+        CompiledFile compiledFile = new()
+        {
+            FilePath = filePath,
+        };
+        this.currentFile = compiledFile;
+    }
+
+    /// <summary>
+    /// Closes out the file currently being written and cleans it up.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected async Task EndFile()
+    {
+        string contents = this.sb.ToString().Trim();
+
+        // If the file contents are empty, don't even create one
+        if (string.IsNullOrWhiteSpace(contents))
+        {
+            return;
+        }
+
+        this.CompiledFiles.Add(this.currentFile);
+
+        StringBuilder contentsSB = new();
+
+        contentsSB.AppendLine(await this.WriteComment(GeneratedFileComment));
+        contentsSB.AppendLine(contents);
+        this.currentFile.Content = contentsSB.ToString().Trim();
+    }
+
+    /// <summary>
+    /// Creates a pad string that can be used to prepend the next line for indentation.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the string padding.
+    /// </returns>
+    private Task<string> Pad()
     {
         StringBuilder pad = new();
 
-        for (int i = 0; i < (header ? this.headerIndentLevel : this.indentLevel) * 4; i++)
+        for (int i = 0; i < this.indentLevel * 4; i++)
         {
             pad.Append(' ');
         }
 
-        return pad.ToString();
+        return Task.FromResult(pad.ToString());
     }
 
+    /// <summary>
+    /// Writes a line to the current file.
+    /// </summary>
+    /// <param name="line">
+    /// The line to write.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public Task WriteLine([NotNull] string line)
     {
         this.sb.AppendLine($"{this.Pad()}{line}");
@@ -201,13 +223,15 @@ public abstract class CompilerVisitor : ASTVisitor
         return Task.CompletedTask;
     }
 
-    public Task WriteHeaderLine([NotNull] string line)
-    {
-        this.headerSB.AppendLine($"{this.Pad(true)}{line}");
-        this.headerFirstOfLine = true;
-        return Task.CompletedTask;
-    }
-
+    /// <summary>
+    /// Appends some text to the current line of the current file.
+    /// </summary>
+    /// <param name="text">
+    /// The text to append. If it is the first text of the line, padding will be prepended.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public Task Write([NotNull] string text)
     {
         if (this.firstOfLine)
@@ -224,22 +248,13 @@ public abstract class CompilerVisitor : ASTVisitor
         return Task.CompletedTask;
     }
 
-    public Task WriteHeader([NotNull] string text)
-    {
-        if (this.headerFirstOfLine)
-        {
-            this.headerSB.Append($"{this.Pad(true)}{text}");
-        }
-        else
-        {
-            this.headerSB.Append(text);
-        }
-
-        this.headerFirstOfLine = false;
-
-        return Task.CompletedTask;
-    }
-
+    /// <summary>
+    /// Ends the current line. Used to reset the head of the string builder
+    /// and ensure the next text gets indented.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public Task EndLine()
     {
         this.sb.AppendLine();
@@ -247,35 +262,28 @@ public abstract class CompilerVisitor : ASTVisitor
         return Task.CompletedTask;
     }
 
-    public Task HeaderEndLine()
-    {
-        this.headerSB.AppendLine();
-        this.headerFirstOfLine = true;
-        return Task.CompletedTask;
-    }
-
+    /// <summary>
+    /// Increases the current indentation level.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public Task Indent()
     {
         this.indentLevel++;
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Decreases the current indentation level.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public Task Dedent()
     {
         this.indentLevel--;
         return Task.CompletedTask;
     }
 
-    public Task IndentHeader()
-    {
-        this.headerIndentLevel++;
-        return Task.CompletedTask;
-    }
-
-    public Task DedentHeader()
-    {
-        this.headerIndentLevel--;
-        return Task.CompletedTask;
-    }
-    */
 }
