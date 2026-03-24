@@ -29,6 +29,11 @@ public sealed class CCompilerVisitor : CompilerVisitor
     /// </summary>
     private bool hasHeader;
 
+    /// <summary>
+    /// The name of the class definition currently in context. Used to prepend the name to method declarations.
+    /// </summary>
+    private string currentClassName = string.Empty;
+
     /// <inheritdoc />
     protected override Task<string> WriteComment(string generatedComment) => Task.FromResult($"// {generatedComment}");
 
@@ -159,6 +164,11 @@ public sealed class CCompilerVisitor : CompilerVisitor
     /// <inheritdoc />
     protected override async Task VisitClass([NotNull] ClassNode classNode)
     {
+        if (classNode.TypeName is not null)
+        {
+            this.currentClassName = classNode.TypeName.Name;
+        }
+
         if (this.IsWritingHeader)
         {
             await this.WriteLine("typedef struct");
@@ -228,6 +238,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
             if (method.Name is not null)
             {
+                await this.Write($"__{this.currentClassName}_");
                 await this.Visit(method.Name);
             }
 
@@ -256,6 +267,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
             if (method.Name is not null)
             {
+                await this.Write($"__{this.currentClassName}_");
                 await this.Visit(method.Name);
             }
 
@@ -385,7 +397,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
             if (destroyer.Name is not null)
             {
-                await this.Write("__destroyer_");
+                await this.Write($"__{this.currentClassName}_destroyer_");
                 await this.Visit(destroyer.Name);
             }
 
@@ -407,7 +419,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
             if (destroyer.Name is not null)
             {
-                await this.Write("__destroyer_");
+                await this.Write($"__{this.currentClassName}_destroyer_");
                 await this.Visit(destroyer.Name);
             }
 
