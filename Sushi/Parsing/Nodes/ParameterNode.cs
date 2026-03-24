@@ -1,42 +1,29 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ParameterNode(TypeNode? type, IdentifierNode? identifier) : StatementNode
+/// <summary>
+/// Represents a single parameter.
+/// </summary>
+/// <param name="type">
+/// The type of the parameter.
+/// </param>
+/// <param name="identifier">
+/// The identifier of the parameter.
+/// </param>
+public sealed class ParameterNode(TypeNode? type, IdentifierNode? identifier) : StatementNode
 {
+    /// <summary>
+    /// The type of the paramter.
+    /// </summary>
     public TypeNode? Type { get; set; } = type;
 
+    /// <summary>
+    /// The identifier of the parameter.
+    /// </summary>
     public IdentifierNode? Name { get; set; } = identifier;
 
+    /// <inheritdoc />
     public override Token? GetStartToken() => this.Type?.GetStartToken();
-
-    public override async Task Verify(VerificationContext context)
-    {
-        if (this.Type is not null)
-        {
-            await this.Type.Verify(context);
-        }
-
-        if (this.Name is not null)
-        {
-            await this.Name.Verify(context);
-        }
-    }
-
-    public override async Task Compile([NotNull] Compiler compiler)
-    {
-        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
-
-        await compiler.Write($"{resolvedName} {this.Name?.Name ?? string.Empty}");
-    }
-
-    public override async Task CompileHeader([NotNull] Compiler compiler)
-    {
-        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
-
-        await compiler.WriteHeader($"{resolvedName} {this.Name?.Name ?? string.Empty}");
-    }
 }

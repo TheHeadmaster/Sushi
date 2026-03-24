@@ -28,12 +28,12 @@ public sealed class ClassParsingTests : ParsingTest
 
         classNode.IsStatic.Should().BeFalse();
 
-        classNode.Name.Should().NotBeNull();
-        classNode.Name.Name.Should().Be("SomeClass");
+        classNode.TypeName.Should().NotBeNull();
+        classNode.TypeName.Name.Should().Be("SomeClass");
 
-        classNode.Body.Should().NotBeNull();
-        classNode.Body.Statements.Should().NotBeNull();
-        classNode.Body.Statements.Count.Should().Be(0);
+        classNode.Members.Should().NotBeNull();
+        classNode.Members.Statements.Should().NotBeNull();
+        classNode.Members.Statements.Count.Should().Be(0);
     }
 
     [TestCase(TestName = "Parser Should Emit Proper AST When Parsing A Static Class")]
@@ -58,11 +58,11 @@ public sealed class ClassParsingTests : ParsingTest
 
         classNode.IsStatic.Should().BeTrue();
 
-        classNode.Name.Should().NotBeNull();
-        classNode.Name.Name.Should().Be("Monolith");
+        classNode.TypeName.Should().NotBeNull();
+        classNode.TypeName.Name.Should().Be("Monolith");
 
-        classNode.Body.Should().NotBeNull();
-        classNode.Body.Statements.Should().NotBeNull();
-        classNode.Body.Statements.Count.Should().Be(0);
+        classNode.Members.Should().NotBeNull();
+        classNode.Members.Statements.Should().NotBeNull();
+        classNode.Members.Statements.Count.Should().Be(0);
     }
 }

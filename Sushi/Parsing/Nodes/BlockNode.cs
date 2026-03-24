@@ -1,37 +1,25 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class BlockNode([NotNull] Token token, List<StatementNode> statements) : StatementNode
+/// <summary>
+/// Represents a block of statements that is associated with another declaration, such as a method declaration.
+/// </summary>
+/// <param name="token">
+/// The token that starts the block.
+/// </param>
+/// <param name="statements">
+/// The statements in the block.
+/// </param>
+public sealed class BlockNode([NotNull] Token token, List<StatementNode> statements) : StatementNode
 {
+    /// <summary>
+    /// The statements in the block.
+    /// </summary>
     public List<StatementNode> Statements { get; set; } = statements;
 
-    public override Token GetStartToken() => token;
-
-    public override async Task Verify(VerificationContext context)
-    {
-        foreach (StatementNode node in this.Statements)
-        {
-            await node.Verify(context);
-        }
-    }
-
-    public override async Task Compile([NotNull] CompilerVisitor compiler)
-    {
-        foreach (StatementNode node in this.Statements)
-        {
-            await node.Compile(compiler);
-        }
-    }
-
-    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
-    {
-        foreach (StatementNode node in this.Statements)
-        {
-            await node.CompileHeader(compiler);
-        }
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 }

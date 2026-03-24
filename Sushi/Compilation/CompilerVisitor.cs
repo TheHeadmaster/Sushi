@@ -33,6 +33,22 @@ public abstract class CompilerVisitor : ASTVisitor
     protected abstract Task<string> WriteComment(string generatedComment);
 
     /// <summary>
+    /// Writes any additional text to the top of the file before the main body of the file is written.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the prepend string.
+    /// </returns>
+    protected abstract Task<string> WritePrepend();
+
+    /// <summary>
+    /// Writes any additional text to the bottom of the file after the main body of the file is written.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the append string.
+    /// </returns>
+    protected abstract Task<string> WriteAppend();
+
+    /// <summary>
     /// The indentation level used to format the generated file.
     /// </summary>
     private int indentLevel;
@@ -46,7 +62,7 @@ public abstract class CompilerVisitor : ASTVisitor
     /// <summary>
     /// The current file being compiled.
     /// </summary>
-    private CompiledFile currentFile = null!;
+    protected CompiledFile CurrentFile { get; private set; } = null!;
 
     /// <summary>
     /// The <see cref="StringBuilder"/> used to build the file contents.
@@ -57,6 +73,11 @@ public abstract class CompilerVisitor : ASTVisitor
     /// The intermediate folder that will contain the generated files.
     /// </summary>
     private string intermediateFolder = string.Empty;
+
+    /// <summary>
+    /// The relative file path of the current file.
+    /// </summary>
+    protected string RelativeFilePath { get; private set; } = string.Empty;
 
     /// <summary>
     /// The <see cref="ReferenceResolver"/> used for resolving references and expanding scoped names to their full names.
@@ -95,7 +116,7 @@ public abstract class CompilerVisitor : ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns the source path.
     /// </returns>
-    private async Task<string> ConvertSourcePathToIntermediatePath(string sourcePath, string newExtension)
+    protected async Task<string> ConvertSourcePathToIntermediatePath(string sourcePath, string newExtension)
     {
         string absoluteFilePath = Path.GetFullPath(sourcePath);
 
@@ -107,9 +128,9 @@ public abstract class CompilerVisitor : ASTVisitor
 
         Uri relativeUri = baseUri.MakeRelativeUri(fullUri);
 
-        string relativeFilePath = Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
+        this.RelativeFilePath = Uri.UnescapeDataString(relativeUri.ToString()).Replace('/', Path.DirectorySeparatorChar);
 
-        string newFilePath = Path.Combine(this.intermediateFolder, relativeFilePath);
+        string newFilePath = Path.Combine(this.intermediateFolder, this.RelativeFilePath);
 
         string fileDirectory = Path.GetDirectoryName(newFilePath) ?? string.Empty;
 
@@ -161,32 +182,48 @@ public abstract class CompilerVisitor : ASTVisitor
         {
             FilePath = filePath,
         };
-        this.currentFile = compiledFile;
+        this.CurrentFile = compiledFile;
     }
 
     /// <summary>
     /// Closes out the file currently being written and cleans it up.
     /// </summary>
     /// <returns>
-    /// An awaitable <see cref="Task"/>.
+    /// An awaitable <see cref="Task"/> that returns whether the file was created.
     /// </returns>
-    protected async Task EndFile()
+    protected async Task<bool> EndFile()
     {
         string contents = this.sb.ToString().Trim();
 
         // If the file contents are empty, don't even create one
         if (string.IsNullOrWhiteSpace(contents))
         {
-            return;
+            return false;
         }
 
-        this.CompiledFiles.Add(this.currentFile);
+        this.CompiledFiles.Add(this.CurrentFile);
 
         StringBuilder contentsSB = new();
 
         contentsSB.AppendLine(await this.WriteComment(GeneratedFileComment));
+        
+        string prepend = await this.WritePrepend();
+        if (!string.IsNullOrWhiteSpace(prepend))
+        {
+            contentsSB.AppendLine(await this.WritePrepend());
+        }
+
         contentsSB.AppendLine(contents);
-        this.currentFile.Content = contentsSB.ToString().Trim();
+        
+        string append = await this.WriteAppend();
+        if (!string.IsNullOrWhiteSpace(append))
+        {
+            contentsSB.AppendLine(await this.WriteAppend());
+        }
+
+        this.CurrentFile.Content = contentsSB.ToString().Trim();
+
+        return true;
     }
 
     /// <summary>
@@ -216,11 +253,10 @@ public abstract class CompilerVisitor : ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public Task WriteLine([NotNull] string line)
+    public async Task WriteLine([NotNull] string line)
     {
-        this.sb.AppendLine($"{this.Pad()}{line}");
+        this.sb.AppendLine($"{await this.Pad()}{line}");
         this.firstOfLine = true;
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -232,11 +268,11 @@ public abstract class CompilerVisitor : ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public Task Write([NotNull] string text)
+    public async Task Write([NotNull] string text)
     {
         if (this.firstOfLine)
         {
-            this.sb.Append($"{this.Pad()}{text}");
+            this.sb.Append($"{await this.Pad()}{text}");
         }
         else
         {
@@ -244,8 +280,6 @@ public abstract class CompilerVisitor : ASTVisitor
         }
 
         this.firstOfLine = false;
-
-        return Task.CompletedTask;
     }
 
     /// <summary>

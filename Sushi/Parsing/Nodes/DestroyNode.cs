@@ -1,25 +1,32 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Parsing.Parsers;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class DestroyNode([NotNull] Token token, [NotNull] IdentifierNode obj, ExpressionNode? destroyer) : StatementNode
+/// <summary>
+/// Represents a destroy statement.
+/// </summary>
+/// <param name="token">
+/// The starting token of the statement.
+/// </param>
+/// <param name="obj">
+/// The identifier of the object to destroy.
+/// </param>
+/// <param name="destroyer">
+/// The expression that resolves to the destroyer.
+/// </param>
+public sealed class DestroyNode([NotNull] Token token, IdentifierNode? obj, ExpressionNode? destroyer) : StatementNode
 {
-    public IdentifierNode Object { get; set; } = obj;
+    /// <summary>
+    /// The identifier of the object to destroy.
+    /// </summary>
+    public IdentifierNode? Object { get; set; } = obj;
 
+    /// <summary>
+    /// The expression that resolves to the destroyer.
+    /// </summary>
     public ExpressionNode? Destroyer { get; set; } = destroyer;
 
+    /// <inheritdoc />
     public override Token GetStartToken() => token;
-
-    public override async Task Verify(VerificationContext context)
-    {
-        await this.Object.Verify(context);
-
-        if (this.Destroyer is not null)
-        {
-            await this.Destroyer.Verify(context);
-        }
-    }
 }

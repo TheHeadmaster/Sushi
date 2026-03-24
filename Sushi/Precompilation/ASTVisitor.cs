@@ -28,6 +28,7 @@ public abstract class ASTVisitor
             ClassNode classNode => this.VisitClass(classNode),
             ConstantNode constant => this.VisitConstant(constant),
             DestroyNode destroy => this.VisitDestroy(destroy),
+            DestroyerDeclarationNode destroyer => this.VisitDestroyerDeclaration(destroyer),
             DoWhileNode doWhile => this.VisitDoWhile(doWhile),
             ExpressionStatementNode expression => this.VisitExpressionStatement(expression),
             FileNode file => this.VisitFile(file),
@@ -38,13 +39,13 @@ public abstract class ASTVisitor
             MethodDeclarationNode method => this.VisitMethodDeclaration(method),
             NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
             NamespaceNode namespaceNode => this.VisitNamespace(namespaceNode),
+            ParameterListNode parameterList => this.VisitParameterList(parameterList),
+            ParameterNode parameter => this.VisitParameter(parameter),
             TypeNode type => this.VisitType(type),
             UnaryExpressionNode unary => this.VisitUnary(unary),
             UsingNode usingNode => this.VisitUsing(usingNode),
+            VariableDeclarationNode variable => this.VisitVariableDeclaration(variable),
             WhileNode whileNode => this.VisitWhile(whileNode),
-            ParameterListNode parameterList => this.VisitParameterList(parameterList),
-            ParameterNode parameter => this.VisitParameter(parameter),
-            DestroyerDeclarationNode destroyer => this.VisitDestroyerDeclaration(destroyer),
             _ => Task.CompletedTask
         });
     }
@@ -312,4 +313,15 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="VariableDeclarationNode"/>.
+    /// </summary>
+    /// <param name="variable">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitVariableDeclaration([NotNull] VariableDeclarationNode variable) => Task.CompletedTask;
 }

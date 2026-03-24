@@ -1,36 +1,29 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class AssignmentNode([NotNull] IdentifierNode identifier, [NotNull] ExpressionNode right) : ExpressionNode
+/// <summary>
+/// Represents an assignment of an expression to a variable.
+/// </summary>
+/// <param name="identifier">
+/// The identifier on the left-hand side.
+/// </param>
+/// <param name="right">
+/// The expression on the right-hand side.
+/// </param>
+public sealed class AssignmentNode(IdentifierNode? identifier, ExpressionNode? right) : ExpressionNode
 {
-    public IdentifierNode Identifier { get; set; } = identifier;
+    /// <summary>
+    /// The identifier on the left-hand side.
+    /// </summary>
+    public IdentifierNode? Identifier { get; set; } = identifier;
 
-    public ExpressionNode Right { get; set; } = right;
+    /// <summary>
+    /// The expression on the right-hand side.
+    /// </summary>
+    public ExpressionNode? Right { get; set; } = right;
 
-    public override Token GetStartToken() => this.Identifier.GetStartToken();
-
-    public override async Task Verify(VerificationContext context)
-    {
-        await this.Identifier.Verify(context);
-
-        await this.Right.Verify(context);
-    }
-
-    public override async Task Compile([NotNull] Compiler compiler)
-    {
-        await compiler.Write($"{this.Identifier.Name} = ");
-
-        await this.Right.Compile(compiler);
-    }
-
-    public override async Task CompileHeader([NotNull] Compiler compiler)
-    {
-        await compiler.WriteHeader($"{this.Identifier.Name} = ");
-
-        await this.Right.CompileHeader(compiler);
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => this.Identifier?.GetStartToken();
 }

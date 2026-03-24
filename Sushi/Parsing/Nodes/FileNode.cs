@@ -1,53 +1,37 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class FileNode([NotNull] string filePath, [NotNull] string fileName, [NotNull] List<StatementNode> statements) : SyntaxNode
+/// <summary>
+/// Represents a file in the form of a <see cref="SyntaxNode"/>.
+/// </summary>
+/// <param name="filePath">
+/// The path of the file.
+/// </param>
+/// <param name="fileName">
+/// The name of the file.
+/// </param>
+/// <param name="statements">
+/// The statements contained in the file.
+/// </param>
+public sealed class FileNode([NotNull] string filePath, [NotNull] string fileName, [NotNull] List<StatementNode> statements) : SyntaxNode
 {
+    /// <summary>
+    /// The path of the file.
+    /// </summary>
     public string FilePath { get; set; } = filePath;
+
+    /// <summary>
+    /// The name of the file.
+    /// </summary>
     public string FileName { get; set; } = fileName;
 
+    /// <summary>
+    /// The statements contained in the file.
+    /// </summary>
     public List<StatementNode> Statements { get; set; } = statements;
 
-    public override async Task Compile([NotNull] CompilerVisitor compiler)
-    {
-        await compiler.StartFile(this.FilePath);
-
-        foreach (StatementNode statement in this.Statements)
-        {
-            await statement.Compile(compiler);
-        }
-
-        await this.CompileHeader(compiler);
-
-        await compiler.EndFile();
-    }
-
-    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
-    {
-        string headerGuard = $"__H_{Path.GetFileNameWithoutExtension(this.FileName)}";
-        await compiler.WriteHeaderLine($"#ifndef {headerGuard}");
-        await compiler.WriteHeaderLine($"#define {headerGuard}");
-
-        foreach (StatementNode statement in this.Statements)
-        {
-            await statement.CompileHeader(compiler);
-        }
-
-        await compiler.WriteHeaderLine("");
-        await compiler.WriteHeaderLine("#endif");
-    }
-
-    public override Token GetStartToken() => this.Statements.First().GetStartToken();
-
-    public override async Task Verify(VerificationContext context)
-    {
-        foreach (StatementNode statement in this.Statements)
-        {
-            await statement.Verify(context);
-        }
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => this.Statements.FirstOrDefault()?.GetStartToken();
 }

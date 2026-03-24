@@ -254,7 +254,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <inheritdoc />
     protected override async Task VisitClass(ClassNode classNode)
     {
-        foreach (StatementNode statement in classNode.Body)
+        foreach (StatementNode statement in classNode.Members)
         {
             await this.Visit(statement);
         }

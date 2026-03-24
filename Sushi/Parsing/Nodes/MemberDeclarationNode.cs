@@ -1,27 +1,33 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class MemberDeclarationNode([NotNull] Token token, [NotNull] TypeNode type, [NotNull] IdentifierNode identifier) : StatementNode
+/// <summary>
+/// Represents a member declaration, such as a field.
+/// </summary>
+/// <param name="token">
+/// The starting <see cref="Token"/> of the member declaration.
+/// </param>
+/// <param name="type">
+/// The type of the member.
+/// </param>
+/// <param name="identifier">
+/// The identifier of the membe.r
+/// </param>
+public sealed class MemberDeclarationNode([NotNull] Token token, TypeNode? type, IdentifierNode? identifier) : StatementNode
 {
-    public TypeNode Type { get; set; } = type;
+    /// <summary>
+    /// The type of the member.
+    /// </summary>
+    public TypeNode? Type { get; set; } = type;
 
-    public IdentifierNode Identifier { get; set; } = identifier;
+    /// <summary>
+    /// The identifier of the member.
+    /// </summary>
+    public IdentifierNode? Identifier { get; set; } = identifier;
 
-    public override Token GetStartToken() => token;
-    public override async Task Verify(VerificationContext context)
-    {
-        await this.Type.Verify(context);
-        await this.Identifier.Verify(context);
-    }
-
-    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
-    {
-        string resolvedName = this.Type is null ? string.Empty : this.Type.ResolvedType is null ? this.Type.Name : this.Type.ResolvedType.FullName.Replace('.', '_');
-
-        await compiler.WriteHeaderLine($"{resolvedName} {this.Identifier.Name};");
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 }

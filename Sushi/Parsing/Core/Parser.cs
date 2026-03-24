@@ -6,7 +6,6 @@ using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Parsers.TopLevelStatements;
 using Sushi.Precompilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Core;
 
@@ -144,11 +143,10 @@ public sealed class Parser
 
         await this.Reference.Visit(tree);
 
-        VerificationContext context = new();
+        VerificationVisitor verification = new();
 
-        await tree.Verify(context);
+        await verification.Visit(tree);
 
-        tree.Messages.AddRange(context.Messages);
         return tree;
     }
 

@@ -1,14 +1,21 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class ConstantNode([NotNull] Token token) : ExpressionNode
+/// <summary>
+/// Writes the constant value.
+/// </summary>
+/// <param name="token">
+/// The constant token.
+/// </param>
+public sealed class ConstantNode([NotNull] Token token) : ExpressionNode
 {
+    /// <summary>
+    /// The constant value.
+    /// </summary>
     public string Value { get; set; } = token.Value;
 
-    public override Token GetStartToken() => token;
-
-    public override Task Verify(VerificationContext context) => Task.CompletedTask;
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 }

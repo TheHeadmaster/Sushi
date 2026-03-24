@@ -1,23 +1,26 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class NamespaceDeclarationNode([NotNull] Token token, ExpressionNode? body) : StatementNode
+/// <summary>
+/// Represents a namespace declaration.
+/// </summary>
+/// <param name="token">
+/// The starting token of the namespace declaration.
+/// </param>
+/// <param name="body">
+/// The expression body of the namespace.
+/// </param>
+public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNode? body) : StatementNode
 {
+    /// <summary>
+    /// The expression body of the namespace.
+    /// </summary>
     public ExpressionNode? Body { get; set; } = body;
 
-    public override Token GetStartToken() => token;
-    
-    public override async Task Verify(VerificationContext context)
-    {
-        if (this.Body is not null)
-        {
-            await this.Body.Verify(context);
-        }
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 
     /// <summary>
     /// Builds a namespace chain from this using node's namespace expression.

@@ -1,22 +1,31 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
 using Sushi.Tokenization;
-using Sushi.Verification;
 
 namespace Sushi.Parsing.Nodes;
 
-public class UsingNode([NotNull] Token usingToken, ExpressionNode? identifier) : StatementNode
+/// <summary>
+/// Represents a using statement.
+/// </summary>
+/// <param name="token">
+/// The token that starts the using statement.
+/// </param>
+/// <param name="identifier">
+/// The identifier expression.
+/// </param>
+public sealed class UsingNode([NotNull] Token token, ExpressionNode? identifier) : StatementNode
 {
-    public ExpressionNode Identifier { get; set; } = identifier;
+    /// <summary>
+    /// The identifier expression.
+    /// </summary>
+    public ExpressionNode? Identifier { get; set; } = identifier;
 
+    /// <summary>
+    /// Contains the resolved namespaces expanded from the using statement.
+    /// </summary>
     public List<string> ResolvedNamespaces { get; set; } = [];
 
-    public override Token GetStartToken() => usingToken;
-
-    public override async Task Verify(VerificationContext context)
-    {
-        await this.Identifier.Verify(context);
-    }
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 
     /// <summary>
     /// Builds a namespace chain from this using node's namespace expression.
@@ -71,29 +80,5 @@ public class UsingNode([NotNull] Token usingToken, ExpressionNode? identifier) :
         }
 
         return Task.FromResult(nextNode);
-    }
-
-    /// <inheritdoc />
-    public override async Task Compile([NotNull] CompilerVisitor compiler)
-    {
-        foreach (string namespaceString in this.ResolvedNamespaces)
-        {
-            foreach (string path in await compiler.Reference.GetNamespaceFilePaths(namespaceString))
-            {
-                await compiler.WriteLine($"#include \"{Path.ChangeExtension(path, ".h")}\"");
-            }
-        }
-    }
-
-    /// <inheritdoc />
-    public override async Task CompileHeader([NotNull] CompilerVisitor compiler)
-    {
-        foreach (string namespaceString in this.ResolvedNamespaces)
-        {
-            foreach (string path in await compiler.Reference.GetNamespaceFilePaths(namespaceString))
-            {
-                await compiler.WriteHeaderLine($"#include \"{Path.ChangeExtension(path, ".h")}\"");
-            }
-        }
     }
 }

@@ -1,4 +1,8 @@
-﻿using Sushi.Parsing.Nodes;
+using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using Serilog.Parsing;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
 
 namespace Sushi.Compilation;
 
@@ -7,76 +11,623 @@ namespace Sushi.Compilation;
 /// </summary>
 public sealed class CCompilerVisitor : CompilerVisitor
 {
-    /// <inheritdoc />
-    protected override Task<string> WriteComment(string generatedComment) => Task.FromResult($"// {generatedComment}");
-
-    /*
+    /// <summary>
+    /// Includes that are prepended to the beginning of every C file.
+    /// </summary>
     private static readonly List<string> implicitIncludes =
     [
         "stdint"
     ];
 
-    public async Task EndFile()
+    /// <summary>
+    /// The current ID used to deconflict header guards.
+    /// </summary>
+    private int currentHeaderGuardID;
+
+    /// <summary>
+    /// Whether the current file has a header file or not.
+    /// </summary>
+    private bool hasHeader;
+
+    /// <inheritdoc />
+    protected override Task<string> WriteComment(string generatedComment) => Task.FromResult($"// {generatedComment}");
+
+    /// <inheritdoc />
+    protected override async Task<string> WritePrepend()
     {
-        if (!string.IsNullOrWhiteSpace(headerSBString))
+        StringBuilder sb = new();
+
+        if (this.IsWritingHeader)
         {
-            StringBuilder tempHeaderSb = new();
-
-            tempHeaderSb.AppendLine(GeneratedFileComment);
-
-            foreach (string include in implicitIncludes)
-            {
-                tempHeaderSb.AppendLine($"#include <{include}.h>");
-            }
-
-            tempHeaderSb.Append(headerSBString);
-
-            string fileName = Path.ChangeExtension(
-                    Path.Combine(
-                        this.intermediateFolder,
-                        this.relativeFilePath),
-                    ".h");
-
-            await File.WriteAllTextAsync(
-                fileName,
-                tempHeaderSb.ToString().Trim(),
-                Encoding.UTF8);
-
-            if (!string.IsNullOrWhiteSpace(sbString))
-            {
-                StringBuilder tempSb = new();
-
-                tempSb.AppendLine($"#include \"{Path.ChangeExtension(this.relativeFilePath, ".h")}\"");
-                tempSb.Append(sbString);
-
-                sbString = tempSb.ToString().Trim();
-            }
+            string headerGuard = $"__H_{this.currentHeaderGuardID:0000}";
+            this.currentHeaderGuardID++;
+            sb.AppendLine($"#ifndef {headerGuard}");
+            sb.AppendLine($"#define {headerGuard}");
+            sb.AppendLine("");
         }
 
-        if (!string.IsNullOrWhiteSpace(sbString))
+        foreach (string include in implicitIncludes)
         {
-            StringBuilder tempSb = new();
+            sb.AppendLine($"#include <{include}.h>");
+        }
 
-            tempSb.AppendLine(GeneratedFileComment);
+        if (!this.IsWritingHeader && this.hasHeader)
+        {
+            sb.AppendLine($"#include \"{Path.ChangeExtension(this.RelativeFilePath, "h")}\"");
+        }
 
-            foreach (string include in implicitIncludes)
-            {
-                tempSb.AppendLine($"#include <{include}.h>");
-            }
+        return sb.ToString();
+    }
 
-            tempSb.Append(sbString);
+    /// <inheritdoc />
+    protected override async Task<string> WriteAppend()
+    {
+        StringBuilder sb = new();
 
-            await File.WriteAllTextAsync(
-                Path.ChangeExtension(
-                    Path.Combine(
-                        this.intermediateFolder,
-                        this.relativeFilePath),
-                    ".c"),
-                tempSb.ToString().Trim(),
-                Encoding.UTF8);
+        if (this.IsWritingHeader)
+        {
+            sb.AppendLine("");
+            sb.AppendLine("#endif");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Whether the current file being written to is a header file.
+    /// </summary>
+    private bool IsWritingHeader => this.CurrentFile.FileExtension == ".h";
+
+    /// <inheritdoc />
+    protected override async Task VisitTree([NotNull] AbstractSyntaxTree tree)
+    {
+        string mainFileName = "main.sus";
+        while (tree.Children.Any(x => x.FileName.Equals(mainFileName, StringComparison.OrdinalIgnoreCase)))
+        {
+            mainFileName = $"_{mainFileName}";
+        }
+
+        string mainPath = await this.ConvertSourcePathToIntermediatePath(Path.Combine(AppMeta.Options.ProjectPath, mainFileName), "c");
+
+        await this.StartFile(mainPath);
+
+        await this.WriteLine("int main()");
+        await this.WriteLine("{");
+        await this.Indent();
+        await this.WriteLine("return 0;");
+        await this.Dedent();
+        await this.WriteLine("}");
+        
+        await this.EndFile();
+
+        foreach (FileNode child in tree.Children)
+        {
+            await this.Visit(child);
         }
     }
 
-    */
+    /// <inheritdoc />
+    protected override async Task VisitFile([NotNull] FileNode file)
+    {
 
+        string hPath = await this.ConvertSourcePathToIntermediatePath(file.FilePath, "h");
+
+        await this.StartFile(hPath);
+
+        foreach (StatementNode statement in file.Statements)
+        {
+            await this.Visit(statement);
+        }
+
+        this.hasHeader = await this.EndFile();
+
+        string cPath = await this.ConvertSourcePathToIntermediatePath(file.FilePath, "c");
+        await this.StartFile(cPath);
+
+        foreach (StatementNode statement in file.Statements)
+        {
+            await this.Visit(statement);
+        }
+
+        await this.EndFile();
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitAssignment([NotNull] AssignmentNode assignment)
+    {
+        if (assignment.Identifier is not null)
+        {
+            await this.Visit(assignment.Identifier);
+        }
+
+        await this.Write(" = ");
+
+        if (assignment.Right is not null)
+        {
+            await this.Visit(assignment.Right);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitClass([NotNull] ClassNode classNode)
+    {
+        if (this.IsWritingHeader)
+        {
+            await this.WriteLine("typedef struct");
+            await this.WriteLine("{");
+
+            await this.Indent();
+
+            foreach (StatementNode node in classNode.Members)
+            {
+                await this.Visit(node);
+            }
+
+            await this.Dedent();
+
+            await this.Write("} ");
+
+            if (classNode.TypeName is not null)
+            {
+                await this.Visit(classNode.TypeName);
+            }
+        }
+        else
+        {
+            foreach (StatementNode node in classNode.Members)
+            {
+                await this.Visit(node);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitMemberDeclaration([NotNull] MemberDeclarationNode member)
+    {
+        if (this.IsWritingHeader)
+        {
+            if (member.Type is not null)
+            {
+                await this.Visit(member.Type);
+                await this.Write(" ");
+            }
+
+            if (member.Identifier is not null)
+            {
+                await this.Visit(member.Identifier);
+            }
+
+            await this.Write(";");
+            await this.EndLine();
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method)
+    {
+        if (this.IsWritingHeader)
+        {
+            if (method.ReturnType is not null)
+            {
+                await this.Visit(method.ReturnType);
+            }
+            else
+            {
+                await this.Write("void");
+            }
+
+            await this.Write(" (*");
+
+            if (method.Name is not null)
+            {
+                await this.Visit(method.Name);
+            }
+
+            await this.Write(")");
+
+            if (method.ParameterList is not null)
+            {
+                await this.Visit(method.ParameterList);
+            }
+
+            await this.Write(";");
+            await this.EndLine();
+        }
+        else
+        {
+            if (method.ReturnType is not null)
+            {
+                await this.Visit(method.ReturnType);
+            }
+            else
+            {
+                await this.Write("void");
+            }
+
+            await this.Write(" ");
+
+            if (method.Name is not null)
+            {
+                await this.Visit(method.Name);
+            }
+
+            if (method.ParameterList is not null)
+            {
+                await this.Visit(method.ParameterList);
+            }
+            else
+            {
+                await this.Write("()");
+            }
+
+            await this.EndLine();
+
+            if (method.Body is not null)
+            {
+                await this.Visit(method.Body);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitType([NotNull] TypeNode type)
+    {
+        string resolvedName = type.ResolvedType is null ? type.Name : type.ResolvedType.FullName.Replace('.', '_');
+
+        await this.Write(resolvedName);
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitIdentifier([NotNull] IdentifierNode identifier) => await this.Write(identifier.Name);
+
+    /// <inheritdoc />
+    protected override async Task VisitParameterList([NotNull] ParameterListNode parameterList)
+    {
+        await this.Write("(");
+
+        bool isFirst = true;
+
+        foreach (ParameterNode parameter in parameterList.Parameters)
+        {
+            if (!isFirst)
+            {
+                await this.Write(", ");
+            }
+            else
+            {
+                isFirst = false;
+            }
+
+            await this.Visit(parameter);
+        }
+
+        await this.Write(")");
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameter([NotNull] ParameterNode parameter)
+    {
+        if (parameter.Type is not null)
+        {
+            await this.Visit(parameter.Type);
+        }
+
+        await this.Write(" ");
+
+        if (parameter.Name is not null)
+        {
+            await this.Visit(parameter.Name);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitBlock([NotNull] BlockNode block)
+    {
+        await this.WriteLine("{");
+        await this.Indent();
+
+        foreach (StatementNode statement in block.Statements)
+        {
+            await this.Visit(statement);
+        }
+
+        await this.Dedent();
+        await this.WriteLine("}");
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitBinary([NotNull] BinaryExpressionNode binary)
+    {
+        await this.Write("(");
+        if (binary.Left is not null)
+        {
+            await this.Visit(binary.Left);
+        }
+
+        string operatorString = binary.Operator switch
+        {
+            OperatorType.Add => "+",
+            OperatorType.Subtract => "-",
+            OperatorType.Multiply => "*",
+            OperatorType.Divide => "/",
+            _ => string.Empty
+        };
+
+        await this.Write($" {operatorString} ");
+
+        if (binary.Right is not null)
+        {
+            await this.Visit(binary.Right);
+        }
+
+        await this.Write(")");
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitConstant([NotNull] ConstantNode constant) => await this.Write(constant.Value);
+
+    /// <inheritdoc />
+    protected override async Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer)
+    {
+        if (this.IsWritingHeader)
+        {
+            await this.Write("void");
+
+            await this.Write(" (*");
+
+            if (destroyer.Name is not null)
+            {
+                await this.Write("__destroyer_");
+                await this.Visit(destroyer.Name);
+            }
+
+            await this.Write(")");
+
+            if (destroyer.ParameterList is not null)
+            {
+                await this.Visit(destroyer.ParameterList);
+            }
+
+            await this.Write(";");
+            await this.EndLine();
+        }
+        else
+        {
+            await this.Write("void");
+
+            await this.Write(" ");
+
+            if (destroyer.Name is not null)
+            {
+                await this.Write("__destroyer_");
+                await this.Visit(destroyer.Name);
+            }
+
+            if (destroyer.ParameterList is not null)
+            {
+                await this.Visit(destroyer.ParameterList);
+            }
+            else
+            {
+                await this.Write("()");
+            }
+
+            await this.EndLine();
+
+            if (destroyer.Body is not null)
+            {
+                await this.Visit(destroyer.Body);
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitDestroy([NotNull] DestroyNode destroy)
+    {
+        if (destroy.Object is not null)
+        {
+            await this.Visit(destroy.Object);
+        }
+
+        await this.Write(".");
+
+        if (destroy.Destroyer is not null)
+        {
+            await this.Visit(destroy.Destroyer);
+        }
+
+        await this.Write(";");
+
+        await this.EndLine();
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitDoWhile([NotNull] DoWhileNode doWhile)
+    {
+        await this.WriteLine("do");
+        await this.WriteLine("{");
+
+        await this.Indent();
+
+        if (doWhile.Body is not null)
+        {
+            await this.Visit(doWhile.Body);
+        }
+
+        await this.Dedent();
+
+        await this.Write("} while (");
+
+        if (doWhile.Condition is not null)
+        {
+            await this.Visit(doWhile.Condition);
+        }
+
+        await this.Write(");");
+
+        await this.EndLine();
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitExpressionStatement([NotNull] ExpressionStatementNode expression)
+    {
+        if (expression.Expression is not null)
+        {
+            await this.Visit(expression.Expression);
+        }
+
+        await this.Write(";");
+
+        await this.EndLine();
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitIf([NotNull] IfNode ifNode)
+    {
+        if (ifNode.Condition is not null)
+        {
+            await this.Write("if (");
+
+            await this.Visit(ifNode.Condition);
+
+            await this.Write(")");
+        }
+
+        await this.EndLine();
+        await this.WriteLine("{");
+
+        await this.Indent();
+
+        if (ifNode.Body is not null)
+        {
+            await this.Visit(ifNode.Body);
+        }
+
+        await this.Dedent();
+
+        await this.WriteLine("}");
+
+        if (ifNode.Else is not null)
+        {
+            await this.Write("else ");
+            await this.Visit(ifNode.Else);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitMethodCall([NotNull] MethodCallNode method)
+    {
+        if (method.Method is not null)
+        {
+            await this.Visit(method.Method);
+        }
+
+        await this.Write("(");
+
+        bool isFirst = true;
+
+        foreach (ExpressionNode argument in method.Arguments)
+        {
+            if (!isFirst)
+            {
+                await this.Write(", ");
+            }
+            else
+            {
+                isFirst = false;
+            }
+
+            await this.Visit(argument);
+        }
+
+        await this.Write(")");
+    }
+
+    /// <inheritdoc />
+    protected override Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    protected override Task VisitNamespace([NotNull] NamespaceNode namespaceNode) => Task.CompletedTask;
+
+    /// <inheritdoc />
+    protected override async Task VisitUnary([NotNull] UnaryExpressionNode unary)
+    {
+        string operatorString = unary.Operator switch
+        {
+            OperatorType.Negative => "-",
+            _ => string.Empty
+        };
+
+        if (unary.IsPrefix)
+        {
+            await this.Write(operatorString);
+        }
+
+        if (unary.Operand is not null)
+        {
+            await this.Visit(unary.Operand);
+        }
+
+        if (!unary.IsPrefix)
+        {
+            await this.Write(operatorString);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitUsing([NotNull] UsingNode usingNode)
+    {
+        foreach (string namespaceString in usingNode.ResolvedNamespaces)
+        {
+            foreach (string path in await this.Reference.GetNamespaceFilePaths(namespaceString))
+            {
+                await this.WriteLine($"#include \"{Path.ChangeExtension(path, "h")}\"");
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitVariableDeclaration([NotNull] VariableDeclarationNode variable)
+    {
+        if (variable.Type is not null)
+        {
+            await this.Visit(variable.Type);
+        }    
+
+        if (variable.Assignment is not null)
+        {
+            await this.Write(" = ");
+            await this.Visit(variable.Assignment);
+        }
+
+        await this.Write(";");
+        await this.EndLine();
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitWhile([NotNull] WhileNode whileNode)
+    {
+        await this.Write("while (");
+
+        if (whileNode.Condition is not null)
+        {
+            await this.Visit(whileNode.Condition);
+        }
+
+        await this.Write(")");
+        await this.EndLine();
+
+        await this.WriteLine("{");
+
+        await this.Indent();
+
+        if (whileNode.Body is not null)
+        {
+            await this.Visit(whileNode.Body);
+        }
+
+        await this.Dedent();
+
+        await this.WriteLine("}");
+    }
 }
