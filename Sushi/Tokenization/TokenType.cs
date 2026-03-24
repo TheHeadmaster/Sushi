@@ -42,5 +42,6 @@ public enum TokenType
     Public,
     Private,
     StringLiteral,
+    Creator,
 }
 

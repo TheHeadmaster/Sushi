@@ -195,8 +195,6 @@ public sealed class Parser
 
         ExpressionNode? left = await prefix.ParsePrefix(this, token);
 
-        this.Pop();
-
         if (left is null)
         {
             return null;

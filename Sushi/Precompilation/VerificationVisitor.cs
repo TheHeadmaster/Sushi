@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Nodes;
 
@@ -28,5 +28,23 @@ public sealed class VerificationVisitor : ASTVisitor
     {
         await this.Visit(tree);
         tree.Messages.AddRange(this.messages);
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitTree([NotNull] AbstractSyntaxTree tree)
+    {
+        foreach (FileNode child in tree.Children)
+        {
+            await this.Visit(child);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitFile([NotNull] FileNode file)
+    {
+        foreach (StatementNode statement in file.Statements)
+        {
+            await this.Visit(statement);
+        }
     }
 }

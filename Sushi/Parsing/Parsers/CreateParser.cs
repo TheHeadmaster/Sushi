@@ -1,26 +1,69 @@
+using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics.Errors;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
+using Sushi.Tokenization;
+
 namespace Sushi.Parsing.Parsers;
 
-/*
-public class CreateParser : IStatementParser
+/// <summary>
+/// Handles parsing create expressions.
+/// </summary>
+public class CreateParser : IParser
 {
-    public async Task<StatementNode> Parse([NotNull] Parser parser, [NotNull] Token token)
+    /// <inheritdoc />
+    public ParserType Type { get; } = ParserType.Prefix;
+
+    /// <inheritdoc />
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Create];
+
+    /// <inheritdoc />
+    public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop(TokenType.Create);
+        Token? createToken = await parser.ExpectAndPop(TokenType.Create);
 
-        Token? currentToken = await parser.PeekAndExpectNotEOF();
+        if (createToken is null)
+        {
+            return null;
+        }
 
-        IdentifierNode obj = new(currentToken);
+        Token? nextToken = await parser.ExpectAndPop(TokenType.Identifier);
 
-        await parser.ExpectAndPop(TokenType.Identifier);
+        TypeNode? type = nextToken is null ? null : new(nextToken);
 
-        currentToken = parser.Peek();
+        List<ExpressionNode> arguments = [];
 
-        ExpressionNode? expression = currentToken is not null
-            && currentToken.Type is TokenType.Identifier
-            ? await parser.ParseExpression(BindingPower.Primary)
-            : null;
+        await parser.ExpectAndPop(TokenType.OpeningParenthesis);
 
-        return new CreateNode(token, obj, expression);
+        if (parser.Peek()?.Type is not TokenType.ClosingParenthesis)
+        {
+            do
+            {
+                ExpressionNode? arg = await parser.ParseExpression(BindingPower.Primary);
+                
+                if (arg is null)
+                {
+                    break;
+                }
+
+                arguments.Add(arg);
+            }
+            while (parser.Peek()?.Type is TokenType.Comma);
+
+            if (parser.Peek()?.Type is not TokenType.ClosingParenthesis)
+            {
+                throw new NotImplementedException();
+            }
+
+            parser.Pop();
+        }
+        else
+        {
+            parser.Pop();
+        }
+
+        return new CreateNode(token, type, arguments);
     }
+
+    public BindingPower Power(TokenType type) => BindingPower.Create;
 }
-*/

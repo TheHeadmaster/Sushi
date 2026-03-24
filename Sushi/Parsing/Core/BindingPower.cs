@@ -15,5 +15,6 @@ public enum BindingPower : int
     Prefix = 6,
     Postfix = 7,
     Navigation = 8,
-    Call = 9
+    Call = 9,
+    Create = 10
 }

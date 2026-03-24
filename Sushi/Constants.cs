@@ -23,6 +23,7 @@ public static class Constants
         { "do", TokenType.Do },
         { "while", TokenType.While },
         { "create", TokenType.Create },
+        { "creator", TokenType.Creator },
         { "destroy", TokenType.Destroy },
         { "destroyer", TokenType.Destroyer },
         { "void", TokenType.Void },

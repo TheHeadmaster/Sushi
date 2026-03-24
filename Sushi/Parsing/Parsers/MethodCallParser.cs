@@ -20,13 +20,21 @@ public class MethodCallParser : IParser
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
     {
-        List<ExpressionNode?> arguments = [];
+        List<ExpressionNode> arguments = [];
+
+        await parser.ExpectAndPop(TokenType.OpeningParenthesis);
 
         if (parser.Peek()?.Type is not TokenType.ClosingParenthesis)
         {
             do
             {
-                arguments.Add(await parser.ParseExpression(BindingPower.Primary));
+                ExpressionNode? arg = await parser.ParseExpression(BindingPower.Primary);
+
+                if (arg is null)
+                {
+                    break;
+                }
+                arguments.Add(arg);
             }
             while (parser.Peek()?.Type is TokenType.Comma);
 

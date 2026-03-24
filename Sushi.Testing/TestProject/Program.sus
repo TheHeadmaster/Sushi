@@ -9,6 +9,7 @@ static class Program
 	SomeClass GetMember(SomeClass inClass)
     {
         s = "You know it";
+        create SomeClass();
     }
 
     destroyer Default(SomeClass destroyedClass)

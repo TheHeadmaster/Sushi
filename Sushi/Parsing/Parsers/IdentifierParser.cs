@@ -17,7 +17,11 @@ public class IdentifierParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
 
     /// <inheritdoc />
-    public Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<ExpressionNode?>(new IdentifierNode(token));
+    public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
+    {
+        await parser.ExpectAndPop(TokenType.Identifier);
+        return new IdentifierNode(token);
+    }
 
     /// <inheritdoc />
     public BindingPower Power(TokenType type) => BindingPower.Primary;

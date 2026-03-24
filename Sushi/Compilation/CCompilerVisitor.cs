@@ -653,4 +653,17 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
         await this.WriteLine("}");
     }
+
+    /// <inheritdoc />
+    protected override async Task VisitCreate([NotNull] CreateNode create)
+    {
+        await this.Write("malloc(sizeof(struct ");
+        
+        if (create.Type is not null)
+        {
+            await this.Visit(create.Type);
+        }
+
+        await this.Write("))");
+    }
 }

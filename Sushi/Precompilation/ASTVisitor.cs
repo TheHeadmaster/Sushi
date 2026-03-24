@@ -27,6 +27,7 @@ public abstract class ASTVisitor
             BlockNode block => this.VisitBlock(block),
             ClassNode classNode => this.VisitClass(classNode),
             ConstantNode constant => this.VisitConstant(constant),
+            CreateNode create => this.VisitCreate(create),
             DestroyNode destroy => this.VisitDestroy(destroy),
             DestroyerDeclarationNode destroyer => this.VisitDestroyerDeclaration(destroyer),
             DoWhileNode doWhile => this.VisitDoWhile(doWhile),
@@ -324,4 +325,15 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitVariableDeclaration([NotNull] VariableDeclarationNode variable) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="CreateNode"/>.
+    /// </summary>
+    /// <param name="create">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitCreate([NotNull] CreateNode create) => Task.CompletedTask;
 }
