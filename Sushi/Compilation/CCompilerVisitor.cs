@@ -39,13 +39,16 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
         if (this.IsWritingHeader)
         {
+            sb.AppendLine("");
+            sb.AppendLine("// Include Guard");
             string headerGuard = $"__H_{this.currentHeaderGuardID:0000}";
             this.currentHeaderGuardID++;
             sb.AppendLine($"#ifndef {headerGuard}");
             sb.AppendLine($"#define {headerGuard}");
-            sb.AppendLine("");
         }
 
+        sb.AppendLine("");
+        sb.AppendLine("// Implicit includes");
         foreach (string include in implicitIncludes)
         {
             sb.AppendLine($"#include <{include}.h>");
@@ -53,6 +56,8 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
         if (!this.IsWritingHeader && this.hasHeader)
         {
+            sb.AppendLine("");
+            sb.AppendLine("// Include its own header file");
             sb.AppendLine($"#include \"{Path.ChangeExtension(this.RelativeFilePath, "h")}\"");
         }
 
@@ -67,6 +72,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
         if (this.IsWritingHeader)
         {
             sb.AppendLine("");
+            sb.AppendLine("// End include guard");
             sb.AppendLine("#endif");
         }
 
@@ -90,6 +96,8 @@ public sealed class CCompilerVisitor : CompilerVisitor
         string mainPath = await this.ConvertSourcePathToIntermediatePath(Path.Combine(AppMeta.Options.ProjectPath, mainFileName), "c");
 
         await this.StartFile(mainPath);
+
+        await this.WriteLine("// This is a bootstrap entry point that calls the author's real entry point");
 
         await this.WriteLine("int main()");
         await this.WriteLine("{");
@@ -577,6 +585,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
     /// <inheritdoc />
     protected override async Task VisitUsing([NotNull] UsingNode usingNode)
     {
+        await this.WriteLine("// Expanded using statements");
         foreach (string namespaceString in usingNode.ResolvedNamespaces)
         {
             foreach (string path in await this.Reference.GetNamespaceFilePaths(namespaceString))
@@ -584,6 +593,8 @@ public sealed class CCompilerVisitor : CompilerVisitor
                 await this.WriteLine($"#include \"{Path.ChangeExtension(path, "h")}\"");
             }
         }
+
+        await this.WriteLine("");
     }
 
     /// <inheritdoc />
