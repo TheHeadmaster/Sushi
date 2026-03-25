@@ -28,17 +28,13 @@ public class CreatorDeclarationParser : IParser
 
         await parser.ExpectAndPop(TokenType.Creator);
 
-        currentToken = await parser.ExpectAndPop(TokenType.Identifier);
-
-        IdentifierNode identifierNode = new(currentToken);
-
         currentToken = await parser.PeekAndExpectNotEOF();
 
         ParameterListNode? parameterList = (ParameterListNode?)await parser.ParseStatement(currentToken, ParserRole.ParameterList);
 
         BlockNode? block = (BlockNode?)await Parser.GetParser<BlockParser>().ParseStatement(parser, parser.Peek()!);
 
-        return new CreatorDeclarationNode(token, identifierNode, parameterList, block);
+        return new CreatorDeclarationNode(token, parameterList, block);
     }
 
     /// <inheritdoc />

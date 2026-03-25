@@ -9,22 +9,14 @@ namespace Sushi.Parsing.Nodes;
 /// <param name="token">
 /// The token that is the start of the declaration.
 /// </param>
-/// <param name="name">
-/// The name of the creator.
-/// </param>
 /// <param name="parameterList">
 /// The list of parameters.
 /// </param>
 /// <param name="body">
 /// The body of the creator.
 /// </param>
-public sealed class CreatorDeclarationNode([NotNull] Token token, IdentifierNode? name, ParameterListNode? parameterList, BlockNode? body) : StatementNode
+public sealed class CreatorDeclarationNode([NotNull] Token token, ParameterListNode? parameterList, BlockNode? body) : StatementNode
 {
-    /// <summary>
-    /// The name of the creator.
-    /// </summary>
-    public IdentifierNode? Name { get; set; } = name;
-
     /// <summary>
     /// The list of parameters.
     /// </summary>

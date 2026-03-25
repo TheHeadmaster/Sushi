@@ -12,6 +12,11 @@ static class Program
         create SomeClass();
     }
 
+    creator()
+    {
+        
+    }
+
     destroyer Default(SomeClass destroyedClass)
     {
     }

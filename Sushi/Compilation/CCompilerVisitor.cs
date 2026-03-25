@@ -666,4 +666,51 @@ public sealed class CCompilerVisitor : CompilerVisitor
 
         await this.Write("))");
     }
+
+    /// <inheritdoc />
+    protected override async Task VisitCreatorDeclaration([NotNull] CreatorDeclarationNode creator)
+    {
+        if (this.IsWritingHeader)
+        {
+            await this.Write("void");
+
+            await this.Write(" (*");
+
+            await this.Write($"__{this.currentClassName}_creator");
+
+            await this.Write(")");
+
+            if (creator.ParameterList is not null)
+            {
+                await this.Visit(creator.ParameterList);
+            }
+
+            await this.Write(";");
+            await this.EndLine();
+        }
+        else
+        {
+            await this.Write("void");
+
+            await this.Write(" ");
+
+            await this.Write($"__{this.currentClassName}_creator");
+
+            if (creator.ParameterList is not null)
+            {
+                await this.Visit(creator.ParameterList);
+            }
+            else
+            {
+                await this.Write("()");
+            }
+
+            await this.EndLine();
+
+            if (creator.Body is not null)
+            {
+                await this.Visit(creator.Body);
+            }
+        }
+    }
 }
