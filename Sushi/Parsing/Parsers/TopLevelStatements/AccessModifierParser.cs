@@ -3,7 +3,7 @@ using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.TopLevelStatements;
 
 /// <summary>
 /// Handles parsing of access modifiers, such as "public", "private", or "internal".
