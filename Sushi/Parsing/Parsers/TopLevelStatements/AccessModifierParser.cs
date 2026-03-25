@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
@@ -31,18 +32,20 @@ public class AccessModifierParser : IParser
 
         StatementNode? right = await parser.ParseStatement(token, ParserRole.AccessModifier);
 
-        if (right is not IAccessModifiable accessNode)
+        if (right is IAccessModifiable accessNode)
         {
-            return null;
+            accessNode.AccessModifier = accessToken.Type switch
+            {
+                TokenType.Public => AccessModifier.Public,
+                TokenType.Internal => AccessModifier.Internal,
+                TokenType.Private => AccessModifier.Private,
+                _ => throw new NotImplementedException(),
+            };
         }
-
-        accessNode.AccessModifier = accessToken.Type switch
+        else
         {
-            TokenType.Public => AccessModifier.Public,
-            TokenType.Internal => AccessModifier.Internal,
-            TokenType.Private => AccessModifier.Private,
-            _ => throw new NotImplementedException(),
-        };
+            parser.Messages.Add(new IllegalAccessModifierError(token));
+        }
 
         return right;
     }
