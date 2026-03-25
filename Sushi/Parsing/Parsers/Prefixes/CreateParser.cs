@@ -1,10 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.Prefixes;
 
 /// <summary>
 /// Handles parsing create expressions.
@@ -65,5 +64,6 @@ public class CreateParser : IParser
         return new CreateNode(token, type, arguments);
     }
 
+    /// <inheritdoc />
     public BindingPower Power(TokenType type) => BindingPower.Create;
 }
