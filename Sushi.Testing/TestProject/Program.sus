@@ -19,5 +19,6 @@ static class Program
 
     destroyer Default(SomeClass destroyedClass)
     {
+        destroy member Default;
     }
 }

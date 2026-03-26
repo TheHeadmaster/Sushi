@@ -90,6 +90,11 @@ public static class Program
 
         AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
 
+        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
+        {
+            await message.LogMessage();
+        }
+
         List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
 
         await WriteFilesToDisk(compiledFiles);

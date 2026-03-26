@@ -145,7 +145,7 @@ public sealed class Parser
 
         VerificationVisitor verification = new();
 
-        await verification.Visit(tree);
+        await verification.Verify(tree);
 
         return tree;
     }

@@ -16,6 +16,8 @@ public class DestroyParser : IParser
     /// <inheritdoc />
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Destroy];
 
+    public List<ParserRole> Roles { get; } = [ParserRole.BlockStatement];
+
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
@@ -33,6 +35,8 @@ public class DestroyParser : IParser
             && currentToken.Type is TokenType.Identifier
             ? await parser.ParseExpression(BindingPower.Primary)
             : null;
+
+        await parser.ExpectAndPop(TokenType.Terminator);
 
         return new DestroyNode(token, obj, expression);
     }
