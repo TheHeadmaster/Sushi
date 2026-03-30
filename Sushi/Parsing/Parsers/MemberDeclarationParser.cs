@@ -15,7 +15,7 @@ public class MemberDeclarationParser : IParser
     public ParserType Type { get; } = ParserType.Statement;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier, ..Constants.PrimitiveTokens];
 
     public List<ParserRole> Roles { get; } = [ParserRole.MemberDeclaration];
 
@@ -24,7 +24,7 @@ public class MemberDeclarationParser : IParser
     {
         Token? currentToken = token;
 
-        await parser.ExpectAndPop(TokenType.Identifier);
+        await parser.ExpectAndPop([..this.AllowedStartTokens]);
 
         TypeNode typeNode = new(currentToken);
 

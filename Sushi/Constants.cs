@@ -64,7 +64,8 @@ public static class Constants
     public static ReadOnlyDictionary<string, string> SushiToCConversions { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>()
     {
         { "int32", "int32_t" },
-        { "float32", "float" }
+        { "float32", "float" },
+        { "bool", "int" }
     });
 
     /// <summary>
@@ -80,8 +81,16 @@ public static class Constants
     {
         TokenType.Int32Primitive => "int32",
         TokenType.Float32Primitive => "float32",
+        TokenType.BoolPrimitive => "bool",
         _ => string.Empty
     };
+
+    public static ReadOnlyCollection<TokenType> PrimitiveTokens { get; } = new
+    ([
+        TokenType.BoolPrimitive,
+        TokenType.Int32Primitive,
+        TokenType.Float32Primitive,
+    ]);
 
     /// <summary>
     /// Contains the primitive types that are automatically resolved without a namespace (because they don't belong to one).
@@ -92,6 +101,7 @@ public static class Constants
     public static ReadOnlyCollection<SushiType> PrimitiveResolvedTypes { get; } = new
     ([
         new() { Name = "int32", FilePath = string.Empty, Namespace = string.Empty },
-        new() { Name = "float32", FilePath = string.Empty, Namespace = string.Empty }
+        new() { Name = "float32", FilePath = string.Empty, Namespace = string.Empty },
+        new() { Name = "bool", FilePath = string.Empty, Namespace = string.Empty }
     ]);
 }

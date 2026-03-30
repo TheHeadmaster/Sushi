@@ -11,14 +11,14 @@ public sealed class ParameterParser : IParser
     public ParserType Type { get; } = ParserType.Statement;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Identifier, ..Constants.PrimitiveTokens];
 
     public List<ParserRole> Roles { get; } = [ParserRole.Parameter];
 
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        Token typeToken = await parser.ExpectAndPop(TokenType.Identifier);
+        Token typeToken = await parser.ExpectAndPop([..this.AllowedStartTokens]);
         Token identifierToken = await parser.ExpectAndPop(TokenType.Identifier);
 
         TypeNode typeNode = new(typeToken);

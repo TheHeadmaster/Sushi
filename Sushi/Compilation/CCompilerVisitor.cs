@@ -292,7 +292,7 @@ public sealed class CCompilerVisitor : CompilerVisitor
     /// <inheritdoc />
     protected override async Task VisitType([NotNull] TypeNode type)
     {
-        string resolvedName = type.ResolvedType is null ? type.Name : type.ResolvedType.FullName.Replace('.', '_');
+        string resolvedName = type.ResolvedType is null ? type.Name : !type.ResolvedType.IsReferenceType() ? Constants.SushiToCConversions[type.ResolvedType.Name] : type.ResolvedType.FullName.Replace('.', '_');
 
         await this.Write(resolvedName);
     }

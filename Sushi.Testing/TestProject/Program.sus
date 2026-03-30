@@ -4,6 +4,8 @@ namespace Test;
 
 static class Program
 {
+    int32 someInt;
+
 	SomeClass member;
 
 	SomeClass GetMember(SomeClass inClass)
