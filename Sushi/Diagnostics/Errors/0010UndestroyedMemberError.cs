@@ -6,7 +6,7 @@ using Sushi.Tokenization;
 namespace Sushi.Diagnostics.Errors;
 
 /// <summary>
-/// Error that is emitted when a destroyer doesn't call a destroyer for one of the members of the owning class.
+/// Error that is emitted when a destroyer doesn't call a destroyer for one of the reference type members of the owning class.
 /// </summary>
 /// <param name="startToken">
 /// The token where the error starts.
@@ -20,7 +20,7 @@ public sealed class UndestroyedMemberError([NotNull] Token startToken, List<Memb
     public override CompilerMessageType Type => CompilerMessageType.Error;
 
     /// <inheritdoc />
-    public override Task<string> GetDescription() => Task.FromResult($"Undestroyed members \"{string.Join(',', members.Select(x => x.Identifier?.Name ?? string.Empty))}\" in destroyer \"{startToken.Value}\" ");
+    public override Task<string> GetDescription() => Task.FromResult($"Undestroyed reference type members \"{string.Join(',', members.Select(x => x.Identifier?.Name ?? string.Empty))}\" in destroyer \"{startToken.Value}\" ");
 
     /// <inheritdoc />
     public override Task<int> GetMessageSpan() => Task.FromResult(startToken.Value.Length);
