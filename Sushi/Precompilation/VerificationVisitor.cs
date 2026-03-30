@@ -98,7 +98,7 @@ public sealed class VerificationVisitor : ASTVisitor
     /// <inheritdoc/>
     protected override async Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer)
     {
-        List<MemberDeclarationNode> members = [.. this.currentClass!.Members.OfType<MemberDeclarationNode>()];
+        List<MemberDeclarationNode> members = [.. this.currentClass!.Members.OfType<MemberDeclarationNode>().Where(member => member.Type?.IsReferenceType() ?? false)];
 
         if (destroyer.Body is not null)
         {

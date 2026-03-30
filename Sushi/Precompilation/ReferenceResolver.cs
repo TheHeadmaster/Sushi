@@ -135,7 +135,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns the <see cref="SushiType"/> or null if it was not resolved.
     /// </returns>
-    public async Task<SushiType?> ResolveType(string name) => this.types.FirstOrDefault(x => x.Name == name && this.includedNamespaces.Contains(x.Namespace));
+    public async Task<SushiType?> ResolveType(string name) => this.types.FirstOrDefault(x => x.Name == name && (string.IsNullOrWhiteSpace(x.Namespace) || this.includedNamespaces.Contains(x.Namespace)));
 
     /// <summary>
     /// Resolves the type based on the current scope of the resolver.
@@ -189,8 +189,10 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitTree(AbstractSyntaxTree tree)
+    protected override async Task VisitTree([NotNull] AbstractSyntaxTree tree)
     {
+        this.types.AddRange(Constants.PrimitiveResolvedTypes);
+
         foreach (FileNode child in tree.Children)
         {
             await this.Visit(child);
@@ -198,7 +200,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitFile(FileNode file)
+    protected override async Task VisitFile([NotNull] FileNode file)
     {
         this.includedNamespaces.Clear();
         this.currentFilePath = file.FilePath;
@@ -210,7 +212,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitUsing(UsingNode usingNode)
+    protected override async Task VisitUsing([NotNull] UsingNode usingNode)
     {
         List<string> namespaceChain = await usingNode.BuildNamespace();
 
@@ -244,7 +246,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitNamespaceDeclaration(NamespaceDeclarationNode namespaceDeclaration)
+    protected override async Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration)
     {
         List<string> namespaceChain = await namespaceDeclaration.BuildNamespace();
 
@@ -252,7 +254,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitClass(ClassNode classNode)
+    protected override async Task VisitClass([NotNull] ClassNode classNode)
     {
         foreach (StatementNode statement in classNode.Members)
         {
@@ -261,10 +263,10 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitMemberDeclaration(MemberDeclarationNode member) => member.Type.ResolvedType = await this.ResolveType(member.Type);
+    protected override async Task VisitMemberDeclaration([NotNull] MemberDeclarationNode member) => member.Type?.ResolvedType = await this.ResolveType(member.Type);
 
     /// <inheritdoc />
-    protected override async Task VisitMethodDeclaration(MethodDeclarationNode method)
+    protected override async Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method)
     {
         method.ReturnType?.ResolvedType = await this.ResolveType(method.ReturnType);
 
@@ -275,7 +277,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitParameterList(ParameterListNode parameterList)
+    protected override async Task VisitParameterList([NotNull] ParameterListNode parameterList)
     {
         foreach (ParameterNode parameter in parameterList.Parameters)
         {
@@ -284,10 +286,10 @@ public sealed partial class ReferenceResolver : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitParameter(ParameterNode parameter) => parameter.Type?.ResolvedType = await this.ResolveType(parameter.Type);
+    protected override async Task VisitParameter([NotNull] ParameterNode parameter) => parameter.Type?.ResolvedType = await this.ResolveType(parameter.Type);
 
     /// <inheritdoc />
-    protected override async Task VisitDestroyerDeclaration(DestroyerDeclarationNode destroyer)
+    protected override async Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer)
     {
         if (destroyer.ParameterList is not null)
         {

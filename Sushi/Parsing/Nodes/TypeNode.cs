@@ -23,6 +23,22 @@ public sealed class TypeNode([NotNull] Token token) : StatementNode
     /// </summary>
     public SushiType? ResolvedType { get; set; }
 
+    /// <summary>
+    /// Returns whether the type is a reference type or a copy type.
+    /// </summary>
+    /// <returns>
+    /// True if the type is a reference type. False otherwise.
+    /// </returns>
+    public bool IsReferenceType()
+    {
+        if (this.ResolvedType is null)
+        {
+            return false;
+        }
+
+        return this.ResolvedType.IsReferenceType();
+    }
+
     /// <inheritdoc />
     public override Token? GetStartToken() => token;
 }

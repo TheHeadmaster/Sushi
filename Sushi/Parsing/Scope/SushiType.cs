@@ -38,4 +38,12 @@ public sealed class SushiType
     /// type implements this
     /// </returns>
     public bool IsValidAssignment(SushiType type) => ReferenceEquals(this, type);
+
+    /// <summary>
+    /// Returns whether the type is a reference type or a copy type.
+    /// </summary>
+    /// <returns>
+    /// True if the type is a reference type. False otherwise.
+    /// </returns>
+    public bool IsReferenceType() => !string.IsNullOrWhiteSpace(this.Namespace);
 }

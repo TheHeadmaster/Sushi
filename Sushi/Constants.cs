@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 
 namespace Sushi;
@@ -81,4 +82,16 @@ public static class Constants
         TokenType.Float32Primitive => "float32",
         _ => string.Empty
     };
+
+    /// <summary>
+    /// Contains the primitive types that are automatically resolved without a namespace (because they don't belong to one).
+    /// </summary>
+    /// <returns>
+    /// The list of primitive resolved types.
+    /// </returns>
+    public static ReadOnlyCollection<SushiType> PrimitiveResolvedTypes { get; } = new
+    ([
+        new() { Name = "int32", FilePath = string.Empty, Namespace = string.Empty },
+        new() { Name = "float32", FilePath = string.Empty, Namespace = string.Empty }
+    ]);
 }
