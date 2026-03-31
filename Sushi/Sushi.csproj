@@ -26,4 +26,12 @@
 	  <Folder Include="Parsing\Parsers\Infixes\" />
 	  <Folder Include="Parsing\Parsers\Postfixes\" />
 	</ItemGroup>
+	<ItemGroup>
+	  <None Update="CoreC\Core.c">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	  <None Update="CoreC\Core.h">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
 </Project>

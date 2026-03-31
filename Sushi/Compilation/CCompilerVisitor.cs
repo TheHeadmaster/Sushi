@@ -16,7 +16,8 @@ public sealed class CCompilerVisitor : CompilerVisitor
     /// </summary>
     private static readonly List<string> implicitIncludes =
     [
-        "stdint"
+        "stdint",
+        "core"
     ];
 
     /// <summary>

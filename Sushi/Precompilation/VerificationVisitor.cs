@@ -27,6 +27,8 @@ public sealed class VerificationVisitor : ASTVisitor
     /// </summary>
     private CreatorDeclarationNode? currentCreator;
 
+    private LinearTypeEnforcer linearTypeEnforcer = new();
+
     /// <summary>
     /// Verifies an <see cref="AbstractSyntaxTree"/> for errors and warnings.
     /// </summary>
@@ -98,25 +100,11 @@ public sealed class VerificationVisitor : ASTVisitor
     /// <inheritdoc/>
     protected override async Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer)
     {
-        List<MemberDeclarationNode> members = [.. this.currentClass!.Members.OfType<MemberDeclarationNode>().Where(member => member.Type?.IsReferenceType() ?? false)];
+        await this.linearTypeEnforcer.VerifyDestroyer(this.currentClass!, this.messages, destroyer);
 
-        if (destroyer.Body is not null)
+        foreach (StatementNode statement in destroyer.Body?.Statements ?? [])
         {
-            foreach (StatementNode statement in destroyer.Body.Statements)
-            {
-                if (statement is DestroyNode destroy && destroy.Object is not null)
-                {
-                    MemberDeclarationNode member = members.First(x => x.Identifier!.Name == destroy.Object.Name);
-                    members.Remove(member);
-                }
-
-                await this.Visit(statement);
-            }
-
-            if (members.Count > 0)
-            {
-                this.messages.Add(new UndestroyedMemberError(destroyer.GetStartToken(), members));
-            }
+            await this.Visit(statement);
         }
     }
 }
