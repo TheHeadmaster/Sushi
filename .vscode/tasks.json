@@ -16,7 +16,7 @@
         {
             "label": "generateYaml",
             "type": "shell",
-            "command": "npx js-yaml SushiSupport/syntaxes/sushi.tmLanguage.yml > SushiSupport/syntaxes/sushi.tmLanguage.json",
+            "command": "npx js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json",
             "group": {
                 "kind":"build",
                 "isDefault": true
@@ -61,9 +61,9 @@
         {
             "label": "CopyFolder",
             "type": "shell",
-            "command": "cp -r \"${workspaceRoot}/Sushi/bin/debug/net10.0\" \"${workspaceRoot}SushiSupport/client/out/LSP\"",
+            "command": "cp -r \"${workspaceRoot}/Sushi/bin/debug/net10.0\" \"${workspaceRoot}/client/out/LSP\"",
             "windows": {
-                "command": "xcopy \"${workspaceRoot}\\Sushi\\bin\\debug\\net10.0\" \"${workspaceRoot}SushiSupport\\client\\out\\LSP\" /E /I /Y"
+                "command": "xcopy \"${workspaceRoot}\\Sushi\\bin\\debug\\net10.0\" \"${workspaceRoot}\\client\\out\\LSP\" /E /I /Y"
             }
         }
     ]

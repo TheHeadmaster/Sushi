@@ -41,6 +41,7 @@ public sealed class CompilerOptions
 
         foreach (string arg in args ?? [])
         {
+            Log.Verbose(arg);
             if (key is not null)
             {
                 arguments[key] = arg;

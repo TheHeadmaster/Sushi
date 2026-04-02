@@ -10,10 +10,10 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}/SushiSupport"
+				"--extensionDevelopmentPath=${workspaceFolder}"
 			],
 			"outFiles": [
-				"${workspaceRoot}/SushiSupport/client/out/**/*.js"
+				"${workspaceRoot}/client/out/**/*.js"
 			],
 			"autoAttachChildProcesses": true,
 			"preLaunchTask": "RunAllPreLaunch"

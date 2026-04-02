@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Server;
@@ -126,6 +127,7 @@ public static class Program
                     Capabilities = new ServerCapabilities { HoverProvider = true }
                 })
             )
+            .AddHandler()
         );
 
         await server.WaitForExit;
