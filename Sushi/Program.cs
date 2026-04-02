@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
+using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Compilation;
@@ -31,7 +34,14 @@ public static class Program
         {
             await Initialize(args);
 
-            await Diag.MonitorAsync("Compilation", Run);
+            if (AppMeta.Options.LanguageServerMode)
+            {
+                await Diag.MonitorAsync("LanguageServer", RunLanguageServer);
+            }
+            else
+            {
+                await Diag.MonitorAsync("Compilation", Run);
+            }
         }
         catch (Exception exception)
         {
@@ -103,6 +113,44 @@ public static class Program
         {
             await ExeCompiler.Compile("Project");
         }
+    }
+
+    public static async Task RunLanguageServer()
+    {
+        LanguageServer server = await LanguageServer.From(options => options
+            .WithInput(Console.OpenStandardInput())
+            .WithOutput(Console.OpenStandardOutput())
+            .OnInitialize((server, request, token) =>
+                Task.FromResult(new InitializeResult
+                {
+                    Capabilities = new ServerCapabilities { HoverProvider = true }
+                })
+            )
+        );
+
+        await server.WaitForExit;
+
+        /*
+        Lexer lexer = new();
+        Parser parser = new();
+        List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
+
+        AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
+
+        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
+        {
+            await message.LogMessage();
+        }
+
+        List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
+
+        await WriteFilesToDisk(compiledFiles);
+
+        if (!AppMeta.Options.IntermediateOnly)
+        {
+            await ExeCompiler.Compile("Project");
+        }
+        */
     }
 
     /// <summary>

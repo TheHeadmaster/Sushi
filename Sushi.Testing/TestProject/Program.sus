@@ -2,16 +2,15 @@ using SomeStuff.Yes;
 
 namespace Test;
 
-static class Program
+public static class Program
 {
-    int32 someInt;
+    public int32 someInt;
 
-	SomeClass member;
+	static SomeClass member;
 
-	SomeClass GetMember(SomeClass inClass)
+	public SomeClass GetMember(SomeClass inClass, SomeClass outClass)
     {
-        s = "You know it";
-        create SomeClass();
+
     }
 
     creator()

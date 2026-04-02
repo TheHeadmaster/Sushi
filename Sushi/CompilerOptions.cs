@@ -22,6 +22,7 @@ public sealed class CompilerOptions
     /// Instructs the compiler to only compile into the intermediate language and not into an executable.
     /// </summary>
     public bool IntermediateOnly { get; set; }
+    public bool LanguageServerMode { get; private set; }
 
     /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.
@@ -74,6 +75,11 @@ public sealed class CompilerOptions
             options.IntermediateOnly = true;
         }
 
+        if (flags.Contains("lsp"))
+        {
+            options.LanguageServerMode = true;
+        }
+
         await options.Validate();
 
         return options;
@@ -87,6 +93,11 @@ public sealed class CompilerOptions
     /// </returns>
     private Task Validate()
     {
+        if (this.LanguageServerMode)
+        {
+            return Task.CompletedTask;
+        }
+
         if (string.IsNullOrWhiteSpace(this.ProjectPath))
         {
             Log.Error("A project path was not specified. You must specify a path to compile.");

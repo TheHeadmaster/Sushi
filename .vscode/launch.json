@@ -10,9 +10,13 @@
 			"type": "extensionHost",
 			"request": "launch",
 			"args": [
-				"--extensionDevelopmentPath=${workspaceFolder}"
+				"--extensionDevelopmentPath=${workspaceFolder}/SushiSupport"
 			],
-			"preLaunchTask": "generateYaml"
+			"outFiles": [
+				"${workspaceRoot}/SushiSupport/client/out/**/*.js"
+			],
+			"autoAttachChildProcesses": true,
+			"preLaunchTask": "RunAllPreLaunch"
 		}
 	]
 }

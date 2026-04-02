@@ -421,3 +421,6 @@ Sushi.Testing/TestProject/bin
 Sushi.Testing/TestProject/obj
 Sushi.Testing/TestProject/intermediate
 SushiSupport/syntaxes/sushi.tmLanguage.json
+SushiSupport/out
+SushiSupport/node_modules
+SushiSupport/client/server

@@ -1,0 +1,61 @@
+{
+  "name": "sushi",
+  "displayName": "Sushi",
+  "description": "Sushi",
+  "version": "0.1.3",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/theheadmaster/sushi"
+  },
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./SushiSupport/client/out/extension",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sushi",
+        "aliases": [
+          "Sushi",
+          "sushi"
+        ],
+        "extensions": [
+          ".sus"
+        ],
+        "configuration": "./SushiSupport/language-configuration.json",
+        "icon": {
+          "light": "./SushiSupport/icons/Sushi.png",
+          "dark": "./SushiSupport/icons/Sushi.png"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "sushi",
+        "scopeName": "source.sus",
+        "path": "./SushiSupport/syntaxes/sushi.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -b",
+    "watch": "tsc -b -w",
+    "lint": "eslint",
+    "postinstall": "cd client && npm install && cd .."
+  },
+  "devDependencies": {
+    "js-yaml": "^4.1.1",
+    "@eslint/js": "^9.13.0",
+		"@stylistic/eslint-plugin": "^2.9.0",
+		"@types/mocha": "^10.0.6",
+		"@types/node": "^22",
+		"eslint": "^9.13.0",
+		"mocha": "^10.3.0",
+		"typescript": "^5.9.2",
+		"typescript-eslint": "^8.39.0"
+  }
+}

@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
+using Sushi.Tokenization;
 
 namespace Sushi.Precompilation;
 
@@ -10,55 +11,60 @@ namespace Sushi.Precompilation;
 /// </summary>
 public sealed class LinearTypeEnforcer
 {
-    /// <summary>
-    /// Opens a new scope.
-    /// </summary>
-    /// <returns></returns>
-    public async Task OpenScope()
-    {
-
-    }
+    private Dictionary<string, (int count, Token startToken)> types = [];
 
     /// <summary>
     /// Adds a type to the current scope.
     /// </summary>
-    /// <returns></returns>
-    public async Task AddTypeToScope()
-    {
-
-    }
-
-    /// <summary>
-    /// Marks a type as destroyed.
-    /// </summary>
+    /// <param name="name">
+    /// The name of the variable.
+    /// </param>
+    /// <param name="startToken">
+    /// The start token.
+    /// </param>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task MarkTypeDestroyed()
-    {
-
-    }
+    public async Task AddTypeToScope(string name, Token startToken) => this.types[name] = (0, startToken);
 
     /// <summary>
-    /// Marks a type as returned.
+    /// Marks a type as used.
     /// </summary>
+    /// <param name="name">
+    /// The name of the variable.
+    /// </param>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task MarkTypeReturned()
-    {
-
-    }
+    public async Task MarkTypeUsed(string name) => this.types[name] = (this.types[name].count + 1, this.types[name].startToken);
 
     /// <summary>
     /// Closes the scope and verifies that no types went out of scope without being destroyed or changing owners.
     /// </summary>
+    /// <param name="messages">
+    /// The compiler messages list.
+    /// </param>
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task CloseScopeAndVerifyTypes()
+    public async Task CloseScopeAndVerifyTypes([NotNull] List<CompilerMessage> messages)
     {
+        foreach ((string type, (int count, Token startToken)) in this.types)
+        {
+            if (count == 1)
+            {
+                continue;
+            }
+            else if (count == 0)
+            {
 
+                messages.Add(new UnusedTypeError(startToken, type));
+            }
+            else
+            {
+                messages.Add(new OverusedTypeError(startToken, type));
+            }
+        }
     }
 
     /// <summary>

@@ -79,6 +79,8 @@ public sealed class VerificationVisitor : ASTVisitor
         this.currentClass = null;
     }
 
+
+
     /// <inheritdoc />
     protected override async Task VisitAssignment([NotNull] AssignmentNode assignment)
     {
@@ -95,6 +97,37 @@ public sealed class VerificationVisitor : ASTVisitor
         }
 
         //this.currentAssignment = null;
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method)
+    {
+        await this.Visit(method.ParameterList!);
+
+        await this.Visit(method.Body!);
+
+        await this.linearTypeEnforcer.CloseScopeAndVerifyTypes(this.messages);
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameterList([NotNull] ParameterListNode parameterList)
+    {
+        foreach (ParameterNode node in parameterList.Parameters)
+        {
+            await this.Visit(node);
+        }
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitParameter([NotNull] ParameterNode parameter) => await this.linearTypeEnforcer.AddTypeToScope(parameter.Name.Name, parameter.GetStartToken());
+
+    /// <inheritdoc />
+    protected override async Task VisitBlock([NotNull] BlockNode block)
+    {
+        foreach (StatementNode statement in block.Statements)
+        {
+            await this.Visit(statement);
+        }
     }
 
     /// <inheritdoc/>
