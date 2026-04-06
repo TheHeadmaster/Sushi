@@ -58,10 +58,27 @@ public sealed partial class Lexer
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns the converted <see cref="TokenFile"/>.
     /// </returns>
-    private static async Task<TokenFile> LexFile([NotNull] string sourceFilePath)
+    public static async Task<TokenFile> LexFile([NotNull] string sourceFilePath)
     {
         string source = await File.ReadAllTextAsync(sourceFilePath);
 
+        TokenFile file = new()
+        {
+            FileName = Path.GetFileName(sourceFilePath),
+            FilePath = sourceFilePath,
+            RawSourceCode = source
+        };
+
+        while (!file.LastIndexOfFileReached())
+        {
+            await ConsumeTokenWithHighestAffinity(file);
+        }
+
+        return file;
+    }
+
+    public static async Task<TokenFile> LexStringAsFileText(string source, string sourceFilePath)
+    {
         TokenFile file = new()
         {
             FileName = Path.GetFileName(sourceFilePath),
