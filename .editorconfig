@@ -19,6 +19,7 @@ dotnet_diagnostic.IDE0058.severity = none
 dotnet_diagnostic.SYSLIB1045.severity = none
 dotnet_diagnostic.CA1033.severity = none
 dotnet_diagnostic.CS9124.severity = none
+dotnet_diagnostic.VSTHRD200.severity = none
 #### Core EditorConfig Options ####
 
 # Indentation and spacing
