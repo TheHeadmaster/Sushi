@@ -401,14 +401,16 @@ public sealed partial class Lexer
         Token? lastToken = file.Tokens.LastOrDefault();
         if (lastToken is null || lastToken.Type is not TokenType.Unknown)
         {
-            file.Messages.Add(new SyntaxError(file.GetCurrentLine() ?? string.Empty, file.GetLineNumber(), file.GetLinePosition()));
-            file.Tokens.Add(new Token
+            Token token = new()
             {
                 Type = TokenType.Unknown,
                 Value = file.GetNextChar()?.ToString() ?? string.Empty,
                 LineNumber = file.GetLineNumber(),
                 LinePosition = file.GetLinePosition()
-            });
+            };
+            file.Tokens.Add(token);
+
+            file.Messages.Add(new SyntaxError(file.GetCurrentLine() ?? string.Empty, file.GetLineNumber(), file.GetLinePosition(), token));
             file.CurrentPosition++;
 
             return Task.CompletedTask;
