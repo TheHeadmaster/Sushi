@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
@@ -8,6 +9,7 @@ using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
+using Sushi.LSP;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
@@ -118,41 +120,27 @@ public static class Program
 
     public static async Task RunLanguageServer()
     {
+        SushiLanguageService service = new();
+
         LanguageServer server = await LanguageServer.From(options => options
             .WithInput(Console.OpenStandardInput())
             .WithOutput(Console.OpenStandardOutput())
             .OnInitialize((server, request, token) =>
                 Task.FromResult(new InitializeResult
                 {
-                    Capabilities = new ServerCapabilities { HoverProvider = true }
+                    Capabilities = new ServerCapabilities {
+                        HoverProvider = true, 
+                        WorkspaceSymbolProvider = true
+                    }
                 })
             )
-            .AddHandler()
+            .WithServices(services => services.AddSingleton(service))
+            .WithHandler<CompletionHandler>()
+            .WithHandler<TextDocumentSyncHandler>()
+            .WithHandler<WorkspaceFoldersHandler>()
         );
 
         await server.WaitForExit;
-
-        /*
-        Lexer lexer = new();
-        Parser parser = new();
-        List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
-
-        AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
-
-        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
-        {
-            await message.LogMessage();
-        }
-
-        List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
-
-        await WriteFilesToDisk(compiledFiles);
-
-        if (!AppMeta.Options.IntermediateOnly)
-        {
-            await ExeCompiler.Compile("Project");
-        }
-        */
     }
 
     /// <summary>

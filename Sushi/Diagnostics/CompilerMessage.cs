@@ -1,5 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
+using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace Sushi.Diagnostics;
 
@@ -90,5 +92,23 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
                 new string(' ', this.LinePosition),
                 span > 1 ? new string('~', span) : "^");
         }
+    }
+
+    public async Task<Diagnostic> ToDiagnostic()
+    {
+        return new Diagnostic()
+        {
+            Code = this.Type is CompilerMessageType.Error ? $"SUSE{this.MessageNumber:0000}" : $"SUSWARN{this.MessageNumber}",
+            Severity = this.Type switch {
+                CompilerMessageType.Error => DiagnosticSeverity.Error,
+                CompilerMessageType.Warning => DiagnosticSeverity.Warning,
+                _ => DiagnosticSeverity.Information
+            },
+            Message = await this.GetDescription(),
+            Range = new Range(startLine: this.LineNumber - 1, startCharacter: this.LinePosition, endLine: this.LineNumber - 1, endCharacter: this.LinePosition + await this.GetMessageSpan()),
+            Source = "Sushi Compiler",
+            Tags = new Container<DiagnosticTag>(),
+            CodeDescription = new CodeDescription() { Href = new Uri("https://sushilang.readthedocs.io/en/latest/") }
+        };
     }
 }
