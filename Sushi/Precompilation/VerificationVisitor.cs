@@ -56,6 +56,7 @@ public sealed class VerificationVisitor : ASTVisitor
     /// <inheritdoc />
     protected override async Task VisitFile([NotNull] FileNode file)
     {
+        this.linearTypeEnforcer.ChangeFile(file.FilePath);
         foreach (StatementNode statement in file.Statements)
         {
             await this.Visit(statement);

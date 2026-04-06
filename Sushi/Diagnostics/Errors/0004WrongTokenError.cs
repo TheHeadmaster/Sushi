@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
@@ -12,7 +12,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="expectedType">
 /// The <see cref="TokenType"/> values that were allowed in this context.
 /// </param>
-public sealed class WrongTokenError([NotNull] Token token, [NotNull] TokenType[] expectedTypes) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition)
+public sealed class WrongTokenError([NotNull] Token token, [NotNull] TokenType[] expectedTypes, [NotNull] string filePath) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 4;

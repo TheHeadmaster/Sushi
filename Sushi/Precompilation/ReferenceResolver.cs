@@ -23,7 +23,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <summary>
     /// The file path currently in-scope.
     /// </summary>
-    private string? currentFilePath;
+    public string? CurrentFilePath { get; private set; }
 
     /// <summary>
     /// The list of types registered in the resolver.
@@ -119,7 +119,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
         }
         else
         {
-            existing = new SushiType() { Name = node.Name, Namespace = this.currentNamespace!, FilePath = this.currentFilePath ?? string.Empty };
+            existing = new SushiType() { Name = node.Name, Namespace = this.currentNamespace!, FilePath = this.CurrentFilePath ?? string.Empty };
             this.types.Add(existing);
             node.ResolvedType = existing;
             return true;
@@ -155,7 +155,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task StartFile(string filePath) => this.currentFilePath = filePath;
+    public async Task StartFile(string filePath) => this.CurrentFilePath = filePath;
 
     /// <summary>
     /// Gets the file paths for the specified namespace.
@@ -203,7 +203,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     protected override async Task VisitFile([NotNull] FileNode file)
     {
         this.includedNamespaces.Clear();
-        this.currentFilePath = file.FilePath;
+        this.CurrentFilePath = file.FilePath;
 
         foreach (StatementNode statement in file.Statements)
         {

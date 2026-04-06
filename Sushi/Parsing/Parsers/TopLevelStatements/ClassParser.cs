@@ -34,7 +34,7 @@ public sealed class ClassParser : IParser
         {
             if (!await parser.Reference.TryAddType(identifier))
             {
-                parser.Messages.Add(new TypeNameCollisionError(identifierToken!));
+                parser.Messages.Add(new TypeNameCollisionError(identifierToken!, parser.Reference.CurrentFilePath!));
             }
         }
 

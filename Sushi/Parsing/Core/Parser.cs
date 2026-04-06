@@ -24,6 +24,8 @@ public sealed class Parser
     /// </summary>
     private List<Token> tokens = null!;
 
+    private string currentFilePath = string.Empty;
+
     /// <summary>
     /// The list of messages accumulated from parsing errors and warnings.
     /// </summary>
@@ -189,7 +191,7 @@ public sealed class Parser
 
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            this.Messages.Add(new UnexpectedPrefixOperator(token));
+            this.Messages.Add(new UnexpectedPrefixOperator(token, this.Reference.CurrentFilePath!));
             return null;
         }
 
@@ -206,7 +208,7 @@ public sealed class Parser
 
             if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                this.Messages.Add(new UnexpectedInfixOperator(token));
+                this.Messages.Add(new UnexpectedInfixOperator(token, this.Reference.CurrentFilePath!));
                 return left;
             }
 
@@ -307,7 +309,7 @@ public sealed class Parser
 
         if (!types.Contains(token.Type))
         {
-            this.Messages.Add(new WrongTokenError(token, types));
+            this.Messages.Add(new WrongTokenError(token, types, this.Reference.CurrentFilePath!));
         }
 
         this.Pop();
@@ -331,7 +333,7 @@ public sealed class Parser
             // We can assume every file has at least one token, and therefore
             // if Peek(0) returns null then Previous() must return a non-null value.
             Token previous = this.Previous()!;
-            this.Messages.Add(new UnexpectedEndOfFile(previous));
+            this.Messages.Add(new UnexpectedEndOfFile(previous, this.Reference.CurrentFilePath!));
         }
 
         return Task.FromResult(token);

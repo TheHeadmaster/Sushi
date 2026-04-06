@@ -10,7 +10,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="startToken">
 /// The token where the error starts.
 /// </param>
-public sealed class UndestroyedMemberError([NotNull] Token startToken, List<MemberDeclarationNode> members) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition)
+public sealed class UndestroyedMemberError([NotNull] Token startToken, List<MemberDeclarationNode> members, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 10;

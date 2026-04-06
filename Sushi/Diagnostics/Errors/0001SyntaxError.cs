@@ -15,7 +15,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="linePosition">
 /// The position in the line that the syntax error was reported on.
 /// </param>
-public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition, [NotNull] Token token) : CompilerMessage(currentLine, lineNumber, linePosition)
+public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition, [NotNull] Token token, [NotNull] string filePath) : CompilerMessage(currentLine, lineNumber, linePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 1;

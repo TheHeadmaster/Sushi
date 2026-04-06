@@ -17,7 +17,10 @@ namespace Sushi.Diagnostics;
 /// <param name="linePosition">
 /// The position in the line that the message was reported on.
 /// </param>
-public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition)
+/// <param name="filePath">
+/// The path to the file that is the source of the message.
+/// </param>
+public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition, [NotNull] string filePath)
 {
     /// <summary>
     /// The message number is a unique identifier that categorizes the type of message.
@@ -43,6 +46,11 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
     /// Type type of message.
     /// </summary>
     public abstract CompilerMessageType Type { get; }
+
+    /// <summary>
+    /// The path to the file that is the source of the message.
+    /// </summary>
+    public string FilePath { get; set; } = filePath;
 
     /// <summary>
     /// Gets the span of the message, which determines how long the underline (or pointer) of the message is to indicate to the user what part of the line is errant.

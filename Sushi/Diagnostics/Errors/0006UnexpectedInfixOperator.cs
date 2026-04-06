@@ -9,7 +9,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="token">
 /// The <see cref="Token"/> that was actually found.
 /// </param>
-public sealed class UnexpectedInfixOperator([NotNull] Token token) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition)
+public sealed class UnexpectedInfixOperator([NotNull] Token token, [NotNull] string filePath) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 6;

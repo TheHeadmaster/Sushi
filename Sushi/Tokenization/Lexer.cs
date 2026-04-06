@@ -41,7 +41,7 @@ public sealed partial class Lexer
 
         Log.Information("{FileCount} files were lexed with {ErrorCount} syntax errors and {WarningCount} warnings.", sourceFiles.Count, errorCount, warningCount);
 
-        if (errorCount > 0)
+        if (errorCount > 0 && !AppMeta.Options.LanguageServerMode)
         {
             Program.Exit(ExitCode.LexingSyntaxError);
         }
@@ -427,7 +427,7 @@ public sealed partial class Lexer
             };
             file.Tokens.Add(token);
 
-            file.Messages.Add(new SyntaxError(file.GetCurrentLine() ?? string.Empty, file.GetLineNumber(), file.GetLinePosition(), token));
+            file.Messages.Add(new SyntaxError(file.GetCurrentLine() ?? string.Empty, file.GetLineNumber(), file.GetLinePosition(), token, file.FilePath));
             file.CurrentPosition++;
 
             return Task.CompletedTask;

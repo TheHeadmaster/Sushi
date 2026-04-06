@@ -84,4 +84,13 @@ public sealed class SushiLanguageService
 
         return file.Messages;
     }
+
+    public async Task Initialize(string rootPath)
+    {
+        this.tokenFiles.Clear();
+        if (!string.IsNullOrWhiteSpace(rootPath))
+        {
+            this.tokenFiles.AddRange(await this.lexer.LexFiles(rootPath));
+        }
+    }
 }

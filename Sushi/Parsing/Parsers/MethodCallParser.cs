@@ -49,7 +49,7 @@ public class MethodCallParser : IParser
         {
             if (left is not ICallableNode callable || !callable.ResolvesToIdentifier())
             {
-                parser.Messages.Add(new NonInvocableError(left.GetStartToken(), token));
+                parser.Messages.Add(new NonInvocableError(left.GetStartToken(), token, parser.Reference.CurrentFilePath!));
             }
 
             parser.Pop();

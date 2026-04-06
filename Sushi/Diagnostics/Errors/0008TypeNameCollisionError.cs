@@ -9,7 +9,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="startToken">
 /// The token where the error starts.
 /// </param>
-public sealed class TypeNameCollisionError([NotNull] Token startToken) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition)
+public sealed class TypeNameCollisionError([NotNull] Token startToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 8;

@@ -12,7 +12,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="name">
 /// The variable name.
 /// </param>
-public sealed class OverusedTypeError([NotNull] Token startToken, string name) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition)
+public sealed class OverusedTypeError([NotNull] Token startToken, string name, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 12;

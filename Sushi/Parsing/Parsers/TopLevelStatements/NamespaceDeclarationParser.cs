@@ -29,7 +29,7 @@ public sealed class NamespaceDeclarationParser : IParser
 
         if (expression is not IdentifierNode and not NamespaceNode)
         {
-            parser.Messages.Add(new InvalidNamespaceError(token, parser.Previous()!));
+            parser.Messages.Add(new InvalidNamespaceError(token, parser.Previous()!, parser.Reference.CurrentFilePath!));
         }
 
         NamespaceDeclarationNode namespaceStatement = new(token, expression);

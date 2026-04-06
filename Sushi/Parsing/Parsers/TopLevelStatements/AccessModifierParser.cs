@@ -44,7 +44,7 @@ public class AccessModifierParser : IParser
         }
         else
         {
-            parser.Messages.Add(new IllegalAccessModifierError(token));
+            parser.Messages.Add(new IllegalAccessModifierError(token, parser.Reference.CurrentFilePath!));
         }
 
         return right;

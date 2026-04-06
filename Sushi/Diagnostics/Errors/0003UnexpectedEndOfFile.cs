@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
@@ -10,7 +10,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="startToken">
 /// The token where the error starts.
 /// </param>
-public sealed class UnexpectedEndOfFile([NotNull] Token startToken) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition + startToken.Value.Length)
+public sealed class UnexpectedEndOfFile([NotNull] Token startToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition + startToken.Value.Length, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 3;

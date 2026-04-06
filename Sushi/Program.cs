@@ -122,18 +122,28 @@ public static class Program
     {
         SushiLanguageService service = new();
 
+
         LanguageServer server = await LanguageServer.From(options => options
             .WithInput(Console.OpenStandardInput())
             .WithOutput(Console.OpenStandardOutput())
-            .OnInitialize((server, request, token) =>
-                Task.FromResult(new InitializeResult
+            .OnInitialize((server, request, token) => Task.Run(async () =>
+            {
+                await service.Initialize(request.RootPath);
+
+                return new InitializeResult
                 {
-                    Capabilities = new ServerCapabilities {
-                        HoverProvider = true, 
+                    ServerInfo = new ServerInfo
+                    {
+                        Name = "Sushi",
+                        Version = AppMeta.GetVersion().ToString()
+                    },
+                    Capabilities = new ServerCapabilities
+                    {
+                        HoverProvider = true,
                         WorkspaceSymbolProvider = true
                     }
-                })
-            )
+                };
+            }))
             .WithServices(services => services.AddSingleton(service))
             .WithHandler<CompletionHandler>()
             .WithHandler<TextDocumentSyncHandler>()

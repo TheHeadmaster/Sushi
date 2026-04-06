@@ -13,7 +13,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="endToken">
 /// The token where the error ends.
 /// </param>
-public sealed class NonInvocableError([NotNull] Token startToken, [NotNull] Token endToken) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition)
+public sealed class NonInvocableError([NotNull] Token startToken, [NotNull] Token endToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override int MessageNumber => 2;

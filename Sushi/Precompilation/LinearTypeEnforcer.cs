@@ -58,14 +58,18 @@ public sealed class LinearTypeEnforcer
             else if (count == 0)
             {
 
-                messages.Add(new UnusedTypeError(startToken, type));
+                messages.Add(new UnusedTypeError(startToken, type, this.filePath));
             }
             else
             {
-                messages.Add(new OverusedTypeError(startToken, type));
+                messages.Add(new OverusedTypeError(startToken, type, this.filePath));
             }
         }
     }
+
+    private string filePath = string.Empty;
+
+    public async Task ChangeFile(string filePath) => this.filePath = filePath;
 
     /// <summary>
     /// Verifies that a destroyer is valid and doesn't break any rules of the linear type system.
@@ -99,7 +103,7 @@ public sealed class LinearTypeEnforcer
 
             if (members.Count > 0)
             {
-                messages.Add(new UndestroyedMemberError(destroyer.GetStartToken(), members));
+                messages.Add(new UndestroyedMemberError(destroyer.GetStartToken(), members, this.filePath));
             }
         }
     }
