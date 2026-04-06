@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
 
@@ -14,7 +15,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="linePosition">
 /// The position in the line that the syntax error was reported on.
 /// </param>
-public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition) : CompilerMessage(currentLine, lineNumber, linePosition)
+public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition, [NotNull] Token token) : CompilerMessage(currentLine, lineNumber, linePosition)
 {
     /// <inheritdoc />
     public override int MessageNumber => 1;
@@ -23,8 +24,8 @@ public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int line
     public override CompilerMessageType Type => CompilerMessageType.Error;
 
     /// <inheritdoc />
-    public override Task<string> GetDescription() => Task.FromResult("Invalid syntax");
+    public override Task<string> GetDescription() => Task.FromResult($"Invalid syntax — token \"{token.Value}\" is not valid in this context");
 
     /// <inheritdoc />
-    public override Task<int> GetMessageSpan() => Task.FromResult(1);
+    public override Task<int> GetMessageSpan() => Task.FromResult(token.Value.Length);
 }
