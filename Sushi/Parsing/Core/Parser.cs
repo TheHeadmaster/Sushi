@@ -24,8 +24,6 @@ public sealed class Parser
     /// </summary>
     private List<Token> tokens = null!;
 
-    private string currentFilePath = string.Empty;
-
     /// <summary>
     /// The list of messages accumulated from parsing errors and warnings.
     /// </summary>

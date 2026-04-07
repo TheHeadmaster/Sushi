@@ -1,20 +1,27 @@
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Serilog;
 using Sushi.Diagnostics;
 using Sushi.Tokenization;
+using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
 namespace Sushi.LSP;
 
 public sealed class SushiLanguageService
 {
-    private Lexer lexer = new();
+    private readonly Lexer lexer = new();
 
-    private List<WorkspaceFolder> folders = [];
+    private readonly List<WorkspaceFolder> folders = [];
 
-    List<TokenFile> tokenFiles = [];
+    private readonly List<TokenFile> tokenFiles = [];
 
-    public async Task UpdateProjectFolders([NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders)
+    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult<List<CompilerMessage>>([.. this.tokenFiles.SelectMany(x => x.Messages)]);
+
+    public async Task UpdateWorkspaceFolders(ILanguageServerFacade facade, [NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders)
     {
         this.tokenFiles.Clear();
 
@@ -28,10 +35,9 @@ public sealed class SushiLanguageService
             this.folders.Remove(removedFolder);
         }
 
-        foreach (WorkspaceFolder folder in this.folders)
-        {
-            this.tokenFiles.AddRange(await this.lexer.LexFiles(folder.Uri.Path));
-        }
+        await this.UpdateTokenFiles();
+
+        await this.PublishDiagnosticsForAllDocuments(facade, null);
 
         /*
         Parser parser = new();
@@ -55,42 +61,106 @@ public sealed class SushiLanguageService
         */
     }
 
-    public async Task<List<CompilerMessage>> UpdateSource([NotNull] string sourceFilePath)
+    public async Task UpdateSource([NotNull] string sourceFilePath)
     {
         TokenFile file = await Lexer.LexFile(sourceFilePath);
 
-        int existingIndex = this.tokenFiles.FindIndex(x => x.FilePath == sourceFilePath);
+        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
 
         if (existingIndex != -1)
         {
 
             this.tokenFiles[existingIndex] = file;
         }
-
-        return file.Messages;
     }
 
-    public async Task<List<CompilerMessage>> UpdateSourceText([NotNull] string text, string sourceFilePath)
+    public async Task UpdateSourceText([NotNull] string text, string sourceFilePath)
     {
         TokenFile file = await Lexer.LexStringAsFileText(text, sourceFilePath);
 
-        int existingIndex = this.tokenFiles.FindIndex(x => x.FilePath == sourceFilePath);
+        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
 
         if (existingIndex != -1)
         {
-
             this.tokenFiles[existingIndex] = file;
         }
-
-        return file.Messages;
     }
 
-    public async Task Initialize(string rootPath)
+    public async Task Initialize(List<WorkspaceFolder> workspaceFolders)
+    {
+        await this.UpdateWorkspaceFolders(workspaceFolders);
+        await this.UpdateTokenFiles();
+    }
+
+    private async Task UpdateWorkspaceFolders(List<WorkspaceFolder> workspaceFolders)
+    {
+        this.folders.Clear();
+        this.folders.AddRange(workspaceFolders);
+    }
+
+    private async Task UpdateTokenFiles()
     {
         this.tokenFiles.Clear();
-        if (!string.IsNullOrWhiteSpace(rootPath))
+
+        foreach (WorkspaceFolder folder in this.folders)
         {
-            this.tokenFiles.AddRange(await this.lexer.LexFiles(rootPath));
+            this.tokenFiles.AddRange(await this.lexer.LexFiles(folder.Uri.GetFileSystemPath()));
         }
+    }
+
+    public async Task UpdateDocument([NotNull] ILanguageServerFacade facade, [NotNull] DocumentUri textDocumentUri, int? version, string? text)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath);
+        }
+        else
+        {
+            await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        }
+
+        await this.PublishDiagnosticsForAllDocuments(facade, version);
+    }
+
+    private async Task PublishDiagnosticsForAllDocuments([NotNull] ILanguageServerFacade facade, int? version)
+    {
+        List<CompilerMessage> messages = await this.GetMessages();
+
+        List<DocumentUri> uris = [.. this.tokenFiles.Select(x => DocumentUri.FromFileSystemPath(x.FilePath))];
+
+        foreach (IGrouping<string, CompilerMessage> group in messages.GroupBy(x => x.FilePath))
+        {
+            int existingIndex = uris.FindIndex(x => Uri.Compare(x.ToUri(), new Uri(group.Key), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+
+            if (existingIndex != -1)
+            {
+                uris.RemoveAt(existingIndex);
+            }
+
+            DocumentUri document = DocumentUri.FromFileSystemPath(group.Key);
+            await this.PublishDiagnosticsForDocument(facade, version, [.. group], document);
+        }
+
+        foreach (DocumentUri uri in uris)
+        {
+            await this.PublishDiagnosticsForDocument(facade, version, [], uri);
+        }
+    }
+
+    private async Task PublishDiagnosticsForDocument([NotNull] ILanguageServerFacade facade, int? version, List<CompilerMessage> messages, DocumentUri document)
+    {
+        Builder diagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
+
+        foreach (CompilerMessage message in messages)
+        {
+            diagnostics.Add(await message.ToDiagnostic());
+        }
+
+        facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams()
+        {
+            Diagnostics = new Container<Diagnostic>(diagnostics.ToArray()),
+            Uri = document,
+            Version = version
+        });
     }
 }

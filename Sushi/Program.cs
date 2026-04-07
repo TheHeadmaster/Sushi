@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
@@ -65,6 +66,11 @@ public static class Program
     /// </returns>
     public static async Task Initialize(string[] args)
     {
+        while (!Debugger.IsAttached && !AppMeta.IsDebug)
+        {
+            await Task.Delay(1000);
+        }
+
         Console.OutputEncoding = Encoding.UTF8;
 
         if (!Directory.Exists(Path.Combine(Directory.GetCurrentDirectory(), "Logs")))
@@ -128,7 +134,7 @@ public static class Program
             .WithOutput(Console.OpenStandardOutput())
             .OnInitialize((server, request, token) => Task.Run(async () =>
             {
-                await service.Initialize(request.RootPath);
+                await service.Initialize([.. request.WorkspaceFolders ?? []]);
 
                 return new InitializeResult
                 {
