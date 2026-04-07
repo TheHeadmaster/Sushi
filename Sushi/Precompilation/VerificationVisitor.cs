@@ -120,7 +120,7 @@ public sealed class VerificationVisitor : ASTVisitor
     }
 
     /// <inheritdoc />
-    protected override async Task VisitParameter([NotNull] ParameterNode parameter) => await this.linearTypeEnforcer.AddTypeToScope(parameter.Name.Name, parameter.GetStartToken());
+    protected override async Task VisitParameter([NotNull] ParameterNode parameter) => await this.linearTypeEnforcer.AddTypeToScope(parameter.Name!.Name, parameter.Name.GetStartToken());
 
     /// <inheritdoc />
     protected override async Task VisitBlock([NotNull] BlockNode block)
