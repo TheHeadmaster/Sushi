@@ -6,6 +6,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Serilog;
 using Sushi.Diagnostics;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
@@ -15,11 +17,15 @@ public sealed class SushiLanguageService
 {
     private readonly Lexer lexer = new();
 
+    private readonly Parser parser = new();
+
     private readonly List<WorkspaceFolder> folders = [];
 
     private readonly List<TokenFile> tokenFiles = [];
 
-    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult<List<CompilerMessage>>([.. this.tokenFiles.SelectMany(x => x.Messages)]);
+    private AbstractSyntaxTree tree = null!;
+
+    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tree.Messages);
 
     public async Task UpdateWorkspaceFolders(ILanguageServerFacade facade, [NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders)
     {
@@ -36,29 +42,8 @@ public sealed class SushiLanguageService
         }
 
         await this.UpdateTokenFiles();
-
+        await this.UpdateSyntaxTree();
         await this.PublishDiagnosticsForAllDocuments(facade, null);
-
-        /*
-        Parser parser = new();
-        List<TokenFile> tokenFiles = await lexer.LexFiles(AppMeta.Options.ProjectPath);
-
-        AbstractSyntaxTree tree = await parser.ParseSource(tokenFiles);
-
-        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
-        {
-            await message.LogMessage();
-        }
-
-        List<CompiledFile> compiledFiles = await compiler.Compile(tree, parser.Reference);
-
-        await WriteFilesToDisk(compiledFiles);
-
-        if (!AppMeta.Options.IntermediateOnly)
-        {
-            await ExeCompiler.Compile("Project");
-        }
-        */
     }
 
     public async Task UpdateSource([NotNull] string sourceFilePath)
@@ -90,6 +75,7 @@ public sealed class SushiLanguageService
     {
         await this.UpdateWorkspaceFolders(workspaceFolders);
         await this.UpdateTokenFiles();
+        await this.UpdateSyntaxTree();
     }
 
     private async Task UpdateWorkspaceFolders(List<WorkspaceFolder> workspaceFolders)
@@ -108,6 +94,12 @@ public sealed class SushiLanguageService
         }
     }
 
+    private async Task UpdateSyntaxTree()
+    {
+        Parser parser = new();
+        this.tree = await parser.ParseSource(this.tokenFiles);
+    }
+
     public async Task UpdateDocument([NotNull] ILanguageServerFacade facade, [NotNull] DocumentUri textDocumentUri, int? version, string? text)
     {
         if (!string.IsNullOrWhiteSpace(text))
@@ -118,6 +110,8 @@ public sealed class SushiLanguageService
         {
             await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
         }
+
+        await this.UpdateSyntaxTree();
 
         await this.PublishDiagnosticsForAllDocuments(facade, version);
     }
