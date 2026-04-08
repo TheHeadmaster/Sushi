@@ -27,7 +27,7 @@ public sealed class VerificationVisitor : ASTVisitor
     /// </summary>
     private CreatorDeclarationNode? currentCreator;
 
-    private LinearTypeEnforcer linearTypeEnforcer = new();
+    private readonly LinearTypeEnforcer linearTypeEnforcer = new();
 
     /// <summary>
     /// Verifies an <see cref="AbstractSyntaxTree"/> for errors and warnings.
@@ -56,7 +56,7 @@ public sealed class VerificationVisitor : ASTVisitor
     /// <inheritdoc />
     protected override async Task VisitFile([NotNull] FileNode file)
     {
-        this.linearTypeEnforcer.ChangeFile(file.FilePath);
+        await this.linearTypeEnforcer.ChangeFile(file.FilePath);
         foreach (StatementNode statement in file.Statements)
         {
             await this.Visit(statement);
@@ -79,8 +79,6 @@ public sealed class VerificationVisitor : ASTVisitor
 
         this.currentClass = null;
     }
-
-
 
     /// <inheritdoc />
     protected override async Task VisitAssignment([NotNull] AssignmentNode assignment)
@@ -131,14 +129,38 @@ public sealed class VerificationVisitor : ASTVisitor
         }
     }
 
-    /// <inheritdoc/>
+    /// <inheritdoc />
     protected override async Task VisitDestroyerDeclaration([NotNull] DestroyerDeclarationNode destroyer)
     {
+        if (destroyer.ParameterList is not null)
+        {
+            await this.Visit(destroyer.ParameterList);
+        }
+
+        await this.linearTypeEnforcer.AddClassMembersToScope(this.currentClass!);
+
+        if (destroyer.Body is not null)
+        {
+            await this.Visit(destroyer.Body);
+        }
+
         await this.linearTypeEnforcer.VerifyDestroyer(this.currentClass!, this.messages, destroyer);
 
-        foreach (StatementNode statement in destroyer.Body?.Statements ?? [])
+        await this.linearTypeEnforcer.CloseScopeAndVerifyTypes(this.messages);
+    }
+
+    /// <inheritdoc />
+    protected override async Task VisitDestroy([NotNull] DestroyNode destroy)
+    {
+        if (destroy.Destroyer is not null)
         {
-            await this.Visit(statement);
+            await this.Visit(destroy.Destroyer);
+        }
+
+        if (destroy.Object is not null)
+        {
+            await this.linearTypeEnforcer.MarkTypeUsed(destroy.Object.Name);
+            await this.Visit(destroy.Object);
         }
     }
 }

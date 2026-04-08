@@ -65,11 +65,23 @@ public sealed class LinearTypeEnforcer
                 messages.Add(new OverusedTypeError(startToken, type, this.filePath));
             }
         }
+        this.types.Clear();
     }
 
     private string filePath = string.Empty;
 
     public async Task ChangeFile(string filePath) => this.filePath = filePath;
+
+    public async Task AddClassMembersToScope([NotNull] ClassNode classNode)
+    {
+        foreach (StatementNode member in classNode.Members.OfType<MemberDeclarationNode>().Where(member => member.Type?.IsReferenceType() ?? false))
+        {
+            if (member is MemberDeclarationNode memberDeclaration && memberDeclaration.Identifier is not null)
+            {
+                await this.AddTypeToScope(memberDeclaration.Identifier.Name, memberDeclaration.Identifier.GetStartToken());
+            }
+        }
+    }
 
     /// <summary>
     /// Verifies that a destroyer is valid and doesn't break any rules of the linear type system.
@@ -96,8 +108,12 @@ public sealed class LinearTypeEnforcer
             {
                 if (statement is DestroyNode destroy && destroy.Object is not null)
                 {
-                    MemberDeclarationNode member = members.First(x => x.Identifier!.Name == destroy.Object.Name);
-                    members.Remove(member);
+                    MemberDeclarationNode? member = members.FirstOrDefault(x => x.Identifier!.Name == destroy.Object.Name);
+
+                    if (member is not null)
+                    {
+                        members.Remove(member);
+                    }
                 }
             }
 

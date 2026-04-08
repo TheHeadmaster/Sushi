@@ -66,7 +66,7 @@ public static class Program
     /// </returns>
     public static async Task Initialize(string[] args)
     {
-        while (!Debugger.IsAttached && !AppMeta.IsDebug)
+        while (!Debugger.IsAttached && AppMeta.IsDebug)
         {
             await Task.Delay(1000);
         }

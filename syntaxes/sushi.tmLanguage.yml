@@ -7,6 +7,17 @@ patterns:
   - include: "#directives"
   - include: "#declarations"
 repository:
+  block:
+    begin: \{
+    beginCaptures:
+      "0":
+        name: punctuation.curlybrace.open.sus
+    end: \}
+    endCaptures:
+      "0":
+        name: punctuation.curlybrace.close.sus
+    patterns:
+      - include: "#statement"
   class-declaration:
     begin: (?=\bclass\b)
     end: (?<=\})
@@ -66,10 +77,20 @@ repository:
     - include: "#storage-modifier"
     - include: "#namespace-declaration"
     - include: "#type-declarations"
+  destroy-declaration:
+    begin: (destroy)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
+    beginCaptures:
+      1: { name: "keyword.other.destroy.sus" }
+      2: { name: "entity.name.variable.property.sus" }
+      3: { name: "entity.name.function.sus" }
+    end: (?=;)
+    patterns:
+    - include: "#comment"
+    - include: "#punctuation-semicolon"
   destroyer-declaration:
     begin: (destroyer)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
     beginCaptures:
-      1: { name: "keyword.other.destroyer.sus"}
+      1: { name: "keyword.other.destroyer.sus" }
       2: { name: "entity.name.function.sus" }
     end: (?<=\})
     patterns:
@@ -135,6 +156,13 @@ repository:
   punctuation-comma:
     name: punctuation.separator.comma.sus
     match: ','
+  punctuation-semicolon:
+    name: punctuation.semicolon.sus
+    match: ';'
+  statement:
+    patterns:
+    - include: "#comment"
+    - include: "#destroy-declaration"
   storage-modifier:
     name: storage.modifier.sus
     match: (?<!\.)\b(public|private|static)\b
@@ -174,14 +202,3 @@ repository:
         - name: entity.name.type.namespace.sus
           match: \@?[a-zA-Z][a-zA-Z0-9]*
         - include: "#punctuation-accessor"
-  # block:
-  #   begin: \{
-  #   beginCaptures:
-  #     "0":
-  #       name: punctuation.curlybrace.open.sus
-  #   end: \}
-  #   endCaptures:
-  #     "0":
-  #       name: punctuation.curlybrace.close.sus
-  #   patterns:
-  #     - include: "#statement"
