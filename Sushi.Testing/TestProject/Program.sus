@@ -4,13 +4,14 @@ namespace Test;
 
 public static class Program
 {
-    public int32 someInt;
+    int32 someInt;
 
-	static SomeClass member;
+	SomeClass member;
 
-	public SomeClass GetMember(SomeClass inClass, SomeClass outClass)
+    SomeClass GetMember(SomeClass inClass, SomeClass outClass)
     {
-
+        destroy inClass Default;
+        destroy outClass Default;
     }
 
     creator()
@@ -21,5 +22,6 @@ public static class Program
     destroyer Default(SomeClass destroyedClass)
     {
         destroy member Default;
+        destroy destroyedClass Default;
     }
 }

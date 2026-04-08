@@ -1,0 +1,197 @@
+
+namespace Core.Collections;
+
+public class List //implements IList<T>, IList, IReadOnlyList<T>
+{
+    //private const uint32 DefaultCapacity = 4;
+
+    public T items;
+/*
+    internal T[] items;
+    internal uint32 size;
+    internal int32 version;
+
+    private static readonly T[] empty = new T[0];
+
+    public creator()
+    {
+        this.items = &emptyArray;
+    }
+
+    public creator(uint32 capacity)
+    returns ArgumentOutOfRangeError
+    {
+        if (capacity < 0)
+        {
+            throw new ArgumentOutOfRangeError();
+        }
+
+        if (capacity == 0)
+        {
+            this.items = &emptyArray;
+        }
+        else
+        {
+            this.items = new T[capacity];
+        }
+    }
+
+    public creator(IEnumerable<T> collection)
+    {
+        if (collection is ICollection<T> c)
+        {
+            int32 count = c.Count;
+            if (count == 0)
+            {
+                this.items = emptyArray;
+            }
+            else
+            {
+                this.items = new T[count];
+                c.CopyTo(this.items, 0);
+                this.size = count;
+            }
+        }
+        else
+        {
+            this.items = emptyArray;
+            IEnumerator<T> en = collection.GetEnumerator();
+
+            while (en.MoveNext())
+            {
+                Add(en.Current);
+            }
+
+            destroy en;
+        }
+    }
+
+    public uint32 Capacity
+    {
+        get => this.items.Length;
+        set returns ArgumentOutOfRangeError
+        {
+            if (value < this.size)
+            {
+                throw new ArgumentOutOfRangeError
+            }
+
+            if (value != this.items.Length)
+            {
+                if (value > 0)
+                {
+                    T[] newItems = new T[value];
+                    if (this.size > 0)
+                    {
+                        Array.Copy(this.items, newItems, this.size);
+                    }
+                    this.items = newItems;
+                }
+                else
+                {
+                    this.items = this.emptyArray;
+                }
+            }
+        }
+    }
+
+    public uint32 Count => this.size;
+
+    public bool IList.IsFixedSize() => false;
+
+    public bool ICollection<T>.IsReadOnly() => false;
+
+    public bool IList.IsReadOnly() => false;
+
+    public bool ICollection.IsSynchronized() => false;
+
+    public object ICollection.SyncRoot() => this;
+
+    public T this[uint32 index]
+    returns ArgumentOutOfRangeException
+    {
+        get
+        {
+            if (index >= this.size)
+            {
+                throw new ArgumentOutOfRangeException();
+            }
+
+            return this.items[index];
+        }
+        set
+        {
+            if (index >= this.size)
+            {
+                throw new ArgumentOutOfRangeException();
+            }
+            this.items[index] = value;
+            this.version++;
+        }
+    }
+
+    private static bool IsCompatibleObject(object value)
+    {
+        return (value is T);
+    }
+
+    public object? IList.this[uint32 index]
+    {
+        get => this[index];
+        set returns ArgumentException
+        {
+            T | exceptions castValue = (T)value;
+
+            if (castValue is InvalidCastException ice)
+            {
+                throw new ArgumentException();
+            }
+
+            this[index] = value;
+        }
+    }
+
+    public void Add(T item)
+    {
+        this.version++;
+        T[] array = this.items;
+        int size = this.size;
+        if (size < array.Length)
+        {
+            this.size = size + 1;
+            array[size] = item;
+        }
+        else
+        {
+            AddWithResize(item);
+        }
+    }
+
+    private void AddWithResize(T item)
+    {
+        int size = this.size;
+        this.Grow(size + 1);
+        this.size = size + 1;
+        this.items[size] = item;
+    }
+
+    public int IList.Add(object item)
+    {
+        try
+        {
+            Add((T)item!);
+        }
+        catch (InvalidCastException)
+        {
+            ThrowHelper.ThrowWrongValueTypeArgumentException(item, typeof(T));
+        }
+
+        return this.Count - 1;
+    }
+
+    internal void Grow(int capacity)
+    {
+        this.Capacity = this.GetNewCapacity(capacity);
+    }
+    */
+}

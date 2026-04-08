@@ -157,4 +157,6 @@ public sealed class SushiLanguageService
             Version = version
         });
     }
+
+    public async Task PushSemanticTokens([NotNull] SemanticTokensBuilder builder, [NotNull] DocumentUri document, [NotNull] SemanticTokensLegend legend) => await new SemanticTokenVisitor(builder, document, legend).Visit(this.tree);
 }

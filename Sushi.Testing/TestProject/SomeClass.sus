@@ -1,6 +1,6 @@
 namespace SomeStuff.Yes;
 
-class SomeClass
+public class SomeClass
 {
 	destroyer Default()
 	{

@@ -146,7 +146,7 @@ public static class Program
                     Capabilities = new ServerCapabilities
                     {
                         HoverProvider = true,
-                        WorkspaceSymbolProvider = true
+                        WorkspaceSymbolProvider = true,
                     }
                 };
             }))
@@ -154,6 +154,7 @@ public static class Program
             .WithHandler<CompletionHandler>()
             .WithHandler<TextDocumentSyncHandler>()
             .WithHandler<WorkspaceFoldersHandler>()
+            .WithHandler<SemanticTokenHandler>()
         );
 
         await server.WaitForExit;
