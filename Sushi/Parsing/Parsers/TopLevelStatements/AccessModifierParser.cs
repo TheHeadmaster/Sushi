@@ -18,6 +18,9 @@ public class AccessModifierParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Public, TokenType.Internal];
 
     /// <inheritdoc />
+    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
+
+    /// <inheritdoc />
     public BindingPower Power(TokenType type) => BindingPower.Primary;
 
     /// <inheritdoc />
@@ -30,7 +33,14 @@ public class AccessModifierParser : IParser
             return null;
         }
 
-        StatementNode? right = await parser.ParseStatement(token, ParserRole.AccessModifier);
+        Token? nextToken = await parser.PeekAndExpectNotEOF();
+
+        if (nextToken is null)
+        {
+            return null;
+        }
+
+        StatementNode? right = await parser.ParseStatement(nextToken, ParserRole.AccessModifier);
 
         if (right is IAccessModifiable accessNode)
         {

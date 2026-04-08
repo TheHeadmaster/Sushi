@@ -41,11 +41,6 @@ public sealed class Parser
     private static readonly List<IParser> parsers = ReflectionEx.GetLeafSubclasses<IParser>();
 
     /// <summary>
-    /// Parsers that are allowed to be a root (top-level) statement, which means they don't have to be a sub-statement in a block.
-    /// </summary>
-    private static readonly List<IParser> allowedRootStatementParsers = [];
-
-    /// <summary>
     /// Returns whether the parser index is at the end of the file.
     /// </summary>
     /// <param name="lookahead">
@@ -122,12 +117,6 @@ public sealed class Parser
     /// </returns>
     public async Task<AbstractSyntaxTree> ParseSource([NotNull] List<TokenFile> tokenFiles)
     {
-        if (!allowedRootStatementParsers.Any())
-        {
-            allowedRootStatementParsers.Add(GetParser<UsingParser>());
-            allowedRootStatementParsers.Add(GetParser<ClassParser>());
-        }
-
         AbstractSyntaxTree tree = new();
         this.Messages = [];
 

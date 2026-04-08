@@ -19,7 +19,7 @@ public sealed class ClassParser : IParser
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Class];
 
     /// <inheritdoc />
-    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement, ParserRole.StaticModifier];
+    public List<ParserRole> Roles { get; } = [ParserRole.StaticModifier, ParserRole.AccessModifier];
 
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)

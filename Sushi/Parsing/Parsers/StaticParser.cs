@@ -16,7 +16,7 @@ public class StaticParser : IParser
     /// <inheritdoc />
     public List<TokenType> AllowedStartTokens { get; } = [TokenType.Static];
 
-    public List<ParserRole> Roles { get; } = [ParserRole.TopLevelStatement];
+    public List<ParserRole> Roles { get; } = [ParserRole.AccessModifier];
 
     /// <inheritdoc />
     public BindingPower Power(TokenType type) => BindingPower.Primary;

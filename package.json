@@ -40,6 +40,12 @@
       }
     ]
   },
+  "configurationDefaults": {
+    "[sushi]": {
+      "editor.semanticHighlighting.enabled": true,
+      "editor.tabSize": 4
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -b",
