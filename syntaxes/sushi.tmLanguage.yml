@@ -28,7 +28,10 @@ repository:
         2 : { name: entity.name.type.class.sus }
       end: (?=\{)
       patterns:
-      - include: '#comment'
+      - include: "#comment"
+      - include: "#type-parameter-list"
+      - include: "#base-types"
+      - include: "#generic-constraints"
     - begin: \{
       beginCaptures:
         '0': { name: punctuation.curlybrace.open.sus }
@@ -46,6 +49,7 @@ repository:
     - include: "#creator-declaration"
     - include: "#destroyer-declaration"
     - include: "#method-declaration"
+    - include: "#variable-initializer"
   comment:
     patterns:
       - name: comment.line.double-slash.sus
@@ -100,6 +104,13 @@ repository:
   directives:
     patterns:
     - include: "#using-directive"
+  expression:
+    patterns:
+    - include: "#comment"
+    - include: "#literal"
+  literal:
+    patterns:
+    - include: "#numeric-literal"
   method-declaration:
     begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
     beginCaptures:
@@ -129,6 +140,10 @@ repository:
         patterns:
         - include: '#type'
       2: { name: entity.name.variable.parameter.sus }
+  numeric-literal:
+    match: (\d+)
+    captures:
+      1: { name: constant.numeric.decimal.sus }
   parenthesized-parameter-list:
     begin: (\()
     beginCaptures:
@@ -141,7 +156,7 @@ repository:
     - include: '#parameter'
     - include: '#punctuation-comma'
   property-declaration:
-    begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)(?!=>|==)(?=;)
+    begin: (\@?[a-zA-Z][a-zA-Z0-9]*(?:\s*\[(?:\s*,\s*)*\])*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?!=>|==)(?=;|=)
     beginCaptures:
       1:
         patterns:
@@ -150,6 +165,7 @@ repository:
     end: (?=;)
     patterns:
     - include: "#comment"
+    - include: "#variable-initializer"
   punctuation-accessor:
     name: punctuation.accessor.sus
     match: \.
@@ -165,14 +181,25 @@ repository:
     - include: "#destroy-declaration"
   storage-modifier:
     name: storage.modifier.sus
-    match: (?<!\.)\b(public|private|static)\b
+    match: (?<!\.)\b(public|private|static|internal|const|readonly)\b
   type:
     patterns:
     - include: "#comment"
     - include: "#type-builtin"
     - include: "#type-name"
+    - include: "#type-array-suffix"
+  type-array-suffix:
+    begin: \[
+    beginCaptures:
+      0: { name: punctuation.squarebacket.open.sus }
+    end: \]
+    endCaptures:
+      0: { name: punctuation.squarebracket.close.sus }
+    patterns:
+    - include: "#comment"
+    - include: "#punctuation-comma"
   type-builtin:
-    match: \b(bool|int32|float32)\b
+    match: \b(bool|int32|float32|uint32)\b
     captures:
       1: { name: keyword.type.builtin.sus }
   type-declarations:
@@ -191,6 +218,18 @@ repository:
         2: { name: entity.name.type.sus }
     - name: entity.name.type.sus
       match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+  type-parameter-list:
+    begin: \<
+    beginCaptures:
+      0: { name: punctuation.definition.typeparameters.begin.sus }
+    end: \>
+    endCaptures:
+      0: { name: punctuation.definition.typeparameters.end.sus }
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\b
+      name: entity.name.type.type-parameter.sus
+    - include: "#comment"
+    - include: "#punctuation-comma"
   using-directive:
     patterns:
       - begin: \b(using)\b\s*+
@@ -202,3 +241,10 @@ repository:
         - name: entity.name.type.namespace.sus
           match: \@?[a-zA-Z][a-zA-Z0-9]*
         - include: "#punctuation-accessor"
+  variable-initializer:
+    begin: (?<!=|!)(=)(?!=|>)
+    beginCaptures:
+      1: { name: keyword.operator.assignment.sus }
+    end: (?=[,\)\];}])
+    patterns:
+    - include: "#expression" 
