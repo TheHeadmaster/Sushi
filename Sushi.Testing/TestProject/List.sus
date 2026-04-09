@@ -1,13 +1,18 @@
-
 namespace Core.Collections;
 
-public class List //implements IList<T>, IList, IReadOnlyList<T>
+public class List<T> implements IList<T>, IList, IReadOnlyList<T>
+{
+    private const A::A.Int32
+}
+
+/*
+public class List<T> implements IList<T>, IList, IReadOnlyList<T>
 {
     //private const uint32 DefaultCapacity = 4;
 
-    public T items;
-/*
     internal T[] items;
+/*
+
     internal uint32 size;
     internal int32 version;
 

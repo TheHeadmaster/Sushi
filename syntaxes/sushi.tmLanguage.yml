@@ -4,52 +4,47 @@ fileTypes:
   - sus
 patterns:
   - include: "#comment"
-  - include: "#directives"
-  - include: "#declarations"
+  - include: "#using-statement"
+  - include: "#namespace-declaration"
+  - include: "#modifier"
+  - include: "#class-declaration"
+  - include: "#punctuation-semicolon"
 repository:
-  block:
-    begin: \{
+  base-types:
+    begin: \s*(extends|implements)\s+
     beginCaptures:
-      "0":
-        name: punctuation.curlybrace.open.sus
-    end: \}
-    endCaptures:
-      "0":
-        name: punctuation.curlybrace.close.sus
+      1: { name: keyword.other.inheritance.sus }
+    end: (?=\{|;|extends|implements)
     patterns:
-      - include: "#statement"
+    - include: "#comment"
+    - include: "#preprocessor"
+    - include: "#type"
+    - include: "#punctuation-comma"
   class-declaration:
     begin: (?=\bclass\b)
-    end: (?<=\})
+    end: (?<=\})|(?=;)
     patterns:
-    - begin: \b(class)\b\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*
+    - include: "#comment"
+    - include: "#preprocessor"
+    - begin: \s*(class)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
       beginCaptures:
         1 : { name: storage.type.class.sus }
         2 : { name: entity.name.type.class.sus }
-      end: (?=\{)
+      end: (?=\{)|(?=;)
       patterns:
-      - include: "#comment"
-      - include: "#type-parameter-list"
-      - include: "#base-types"
-      - include: "#generic-constraints"
+        - include: "#comment"
+        - include: "#type-parameter-list"
+        - include: "#parenthesized-parameter-list"
+        - include: "#base-types"
+        - include: "#generic-constraints"
     - begin: \{
       beginCaptures:
-        '0': { name: punctuation.curlybrace.open.sus }
+        0: { name: punctuation.curlybrace.open.sus }
       end: \}
       endCaptures:
-        '0': { name: punctuation.curlybrace.close.sus }
+        0: { name: punctuation.curlybrace.close.sus }
       patterns:
-      - include: "#class-members"
-    - include: "#comment"
-  class-members:
-    patterns:
-    - include: "#comment"
-    - include: "#storage-modifier"
-    - include: "#property-declaration"
-    - include: "#creator-declaration"
-    - include: "#destroyer-declaration"
-    - include: "#method-declaration"
-    - include: "#variable-initializer"
+      - include: "#members"
   comment:
     patterns:
       - name: comment.line.double-slash.sus
@@ -66,158 +61,109 @@ repository:
         captures:
           "0":
             name: punctuation.definition.comment.sus
-  creator-declaration:
-    begin: (creator)\s*(?=\()
-    beginCaptures:
-      1: { name: "keyword.other.creator.sus"}
-    end: (?<=\})
-    patterns:
-    - include: "#comment"
-    - include: "#parenthesized-parameter-list"
-    - include: "#block"
-  declarations:
-    patterns:
-    - include: "#comment"
-    - include: "#storage-modifier"
-    - include: "#namespace-declaration"
-    - include: "#type-declarations"
-  destroy-declaration:
-    begin: (destroy)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
-    beginCaptures:
-      1: { name: "keyword.other.destroy.sus" }
-      2: { name: "entity.name.variable.property.sus" }
-      3: { name: "entity.name.function.sus" }
-    end: (?=;)
-    patterns:
-    - include: "#comment"
-    - include: "#punctuation-semicolon"
-  destroyer-declaration:
-    begin: (destroyer)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
-    beginCaptures:
-      1: { name: "keyword.other.destroyer.sus" }
-      2: { name: "entity.name.function.sus" }
-    end: (?<=\})
-    patterns:
-    - include: "#comment"
-    - include: "#parenthesized-parameter-list"
-    - include: "#block"
-  directives:
-    patterns:
-    - include: "#using-directive"
-  expression:
-    patterns:
-    - include: "#comment"
-    - include: "#literal"
-  literal:
-    patterns:
-    - include: "#numeric-literal"
-  method-declaration:
-    begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
+  field-declaration:
+    begin: (?<type_name>(?:(?:(?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?(?<name_and_type_args>\g<identifier>\s*(?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?)(?:\s*\.\s*\g<name_and_type_args>)*|(?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\)))(?:\s*\[(?:\s*,\s*)*\]\s*)*))\s+(\g<identifier>)\s*(?!=>|==)(?=,|;|=|$)
     beginCaptures:
       1:
         patterns:
         - include: "#type"
-      2: { name: "entity.name.function.sus" }
-    end: (?<=\})
+      2: { name: entity.name.variable.field.sus }
+    end: (?=;)
     patterns:
     - include: "#comment"
-    - include: "#parenthesized-parameter-list"
-    - include: "#block"
+    - include: "#punctuation-comma"
+    - include: "#variable-initializer"
+    - include: "#members"
+  identifier:
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+      captures:
+        1: { name: entity.name.identifier.sus }
+  members:
+    patterns:
+    - include: "#comment"
+    - include: "#preprocessor"
+    - include: "#modifier"
+    - include: "#field-declaration"
+  modifier:
+    begin: \s*(public|private|const|static|protected|internal|readonly)\s+
+    beginCaptures:
+      1: { name: storage.modifier.sus }
+    end: (?=;)|(?=\{)
+    patterns:
+    - include: "#comment"
+    - include: "#modifier"
+    - include: "#class-declaration"
   namespace-declaration:
-    begin: \b(namespace)\s+
+    begin: \s*(namespace)\s+
     beginCaptures:
       1: { name: storage.type.namespace.sus }
-    end: (?=;)
-    patterns:
-    - include: "#comment"
-    - name: entity.name.type.namespace.sus
-      match: \@?[a-zA-Z][a-zA-Z0-9]*
-    - include: "#punctuation-accessor"
-  parameter:
-    match: ([a-zA-Z][a-zA-Z0-9]*)\s+([a-z][a-zA-Z0-9]*)
-    captures:
-      1:
-        patterns:
-        - include: '#type'
-      2: { name: entity.name.variable.parameter.sus }
-  numeric-literal:
-    match: (\d+)
-    captures:
-      1: { name: constant.numeric.decimal.sus }
-  parenthesized-parameter-list:
-    begin: (\()
-    beginCaptures:
-      '0': { name: punctuation.parenthesis.open.sus }
-    end: (\))
+    end: (;)
     endCaptures:
-      '0': { name: punctuation.parenthesis.close.sus }
-    patterns:
-    - include: '#comment'
-    - include: '#parameter'
-    - include: '#punctuation-comma'
-  property-declaration:
-    begin: (\@?[a-zA-Z][a-zA-Z0-9]*(?:\s*\[(?:\s*,\s*)*\])*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?!=>|==)(?=;|=)
-    beginCaptures:
-      1:
-        patterns:
-        - include: "#type"
-      2: { name: "entity.name.variable.property.sus" }
-    end: (?=;)
+      1: { name: punctuation.semicolon.sus }
     patterns:
     - include: "#comment"
-    - include: "#variable-initializer"
-  punctuation-accessor:
-    name: punctuation.accessor.sus
-    match: \.
+    - include: "#namespace-identifier"
+  namespace-identifier:
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+      captures:
+        1: { name: entity.name.namespace.sus }
   punctuation-comma:
     name: punctuation.separator.comma.sus
     match: ','
   punctuation-semicolon:
-    name: punctuation.semicolon.sus
+    name: punctuation.separator.semicolon.sus
     match: ';'
-  statement:
-    patterns:
-    - include: "#comment"
-    - include: "#destroy-declaration"
-  storage-modifier:
-    name: storage.modifier.sus
-    match: (?<!\.)\b(public|private|static|internal|const|readonly)\b
   type:
     patterns:
     - include: "#comment"
     - include: "#type-builtin"
-    - include: "#type-name"
+    - include: "#type-identifier"
+    - include: "#type-arguments"
     - include: "#type-array-suffix"
+  type-arguments:
+    begin: \<
+    beginCaptures:
+      0: { name: punctuation.definition.typeparameters.begin.sus }
+    end: \>
+    endCaptures:
+      0: { name: punctuation.definition.typeparameters.end.sus }
+    patterns:
+    - include: "#type"
+    - include: "#punctuation-comma"
   type-array-suffix:
     begin: \[
     beginCaptures:
-      0: { name: punctuation.squarebacket.open.sus }
+      0: { name: punctuation.squarebracket.open.sus }
     end: \]
     endCaptures:
       0: { name: punctuation.squarebracket.close.sus }
     patterns:
     - include: "#comment"
+    - include: "#preprocessor"
     - include: "#punctuation-comma"
   type-builtin:
-    match: \b(bool|int32|float32|uint32)\b
+    match: \b(bool|u?int32|float32)\b
     captures:
-      1: { name: keyword.type.builtin.sus }
-  type-declarations:
+      1: { name: keyword.type.builtin.cs }
+  type-identifier:
     patterns:
-    - include: "#comment"
-    - include: "#class-declaration" 
-  type-name:
-    patterns:
-    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\s*(\.)
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
       captures:
         1: { name: entity.name.type.sus }
-        2: { name: punctuation.accessor.sus }
-    - match: (\.)\s*(\@?[a-zA-Z][a-zA-Z0-9]*)
-      captures:
-        1: { name: punctuation.accessor.sus }
-        2: { name: entity.name.type.sus }
-    - name: entity.name.type.sus
-      match: (\@?[a-zA-Z][a-zA-Z0-9]*)
   type-parameter-list:
     begin: \<
     beginCaptures:
@@ -226,25 +172,188 @@ repository:
     endCaptures:
       0: { name: punctuation.definition.typeparameters.end.sus }
     patterns:
-    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\b
-      name: entity.name.type.type-parameter.sus
-    - include: "#comment"
-    - include: "#punctuation-comma"
-  using-directive:
-    patterns:
-      - begin: \b(using)\b\s*+
-        beginCaptures:
-          1: { name: keyword.other.directive.using.sus }
-        end: (?=;)
-        patterns:
-        - include: "#comment"
-        - name: entity.name.type.namespace.sus
-          match: \@?[a-zA-Z][a-zA-Z0-9]*
-        - include: "#punctuation-accessor"
-  variable-initializer:
-    begin: (?<!=|!)(=)(?!=|>)
+      - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\b
+        name: entity.name.type.type-parameter.sus
+      - include: "#comment"
+      - include: "#punctuation-comma"
+  using-statement:
+    begin: \s*(using)\s+
     beginCaptures:
-      1: { name: keyword.operator.assignment.sus }
-    end: (?=[,\)\];}])
+      1: { name: keyword.other.directive.using.sus }
+    end: (;)
+    endCaptures:
+      1: { name: punctuation.semicolon.sus }
     patterns:
-    - include: "#expression" 
+    - include: "#comment"
+    - include: "#identifier"
+# repository:
+#   block:
+#     begin: \{
+#     beginCaptures:
+#       "0":
+#         name: punctuation.curlybrace.open.sus
+#     end: \}
+#     endCaptures:
+#       "0":
+#         name: punctuation.curlybrace.close.sus
+#     patterns:
+#       - include: "#statement"
+
+#   class-members:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#storage-modifier"
+#     - include: "#property-declaration"
+#     - include: "#creator-declaration"
+#     - include: "#destroyer-declaration"
+#     - include: "#method-declaration"
+#     - include: "#variable-initializer"
+
+#   creator-declaration:
+#     begin: (creator)\s*(?=\()
+#     beginCaptures:
+#       1: { name: "keyword.other.creator.sus"}
+#     end: (?<=\})
+#     patterns:
+#     - include: "#comment"
+#     - include: "#parenthesized-parameter-list"
+#     - include: "#block"
+#   declarations:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#storage-modifier"
+#     - include: "#namespace-declaration"
+#     - include: "#type-declarations"
+#   destroy-declaration:
+#     begin: (destroy)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
+#     beginCaptures:
+#       1: { name: "keyword.other.destroy.sus" }
+#       2: { name: "entity.name.variable.property.sus" }
+#       3: { name: "entity.name.function.sus" }
+#     end: (?=;)
+#     patterns:
+#     - include: "#comment"
+#     - include: "#punctuation-semicolon"
+#   destroyer-declaration:
+#     begin: (destroyer)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
+#     beginCaptures:
+#       1: { name: "keyword.other.destroyer.sus" }
+#       2: { name: "entity.name.function.sus" }
+#     end: (?<=\})
+#     patterns:
+#     - include: "#comment"
+#     - include: "#parenthesized-parameter-list"
+#     - include: "#block"
+#   expression:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#literal"
+#   literal:
+#     patterns:
+#     - include: "#numeric-literal"
+#   method-declaration:
+#     begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?=\()
+#     beginCaptures:
+#       1:
+#         patterns:
+#         - include: "#type"
+#       2: { name: "entity.name.function.sus" }
+#     end: (?<=\})
+#     patterns:
+#     - include: "#comment"
+#     - include: "#parenthesized-parameter-list"
+#     - include: "#block"
+#   parameter:
+#     match: ([a-zA-Z][a-zA-Z0-9]*)\s+([a-z][a-zA-Z0-9]*)
+#     captures:
+#       1:
+#         patterns:
+#         - include: '#type'
+#       2: { name: entity.name.variable.parameter.sus }
+#   numeric-literal:
+#     match: (\d+)
+#     captures:
+#       1: { name: constant.numeric.decimal.sus }
+#   parenthesized-parameter-list:
+#     begin: (\()
+#     beginCaptures:
+#       '0': { name: punctuation.parenthesis.open.sus }
+#     end: (\))
+#     endCaptures:
+#       '0': { name: punctuation.parenthesis.close.sus }
+#     patterns:
+#     - include: '#comment'
+#     - include: '#parameter'
+#     - include: '#punctuation-comma'
+#   property-declaration:
+#     begin: (\@?[a-zA-Z][a-zA-Z0-9]*(?:\s*\[(?:\s*,\s*)*\])*)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?!=>|==)(?=;|=)
+#     beginCaptures:
+#       1:
+#         patterns:
+#         - include: "#type"
+#       2: { name: "entity.name.variable.property.sus" }
+#     end: (?=;)
+#     patterns:
+#     - include: "#comment"
+#     - include: "#variable-initializer"
+
+
+#   statement:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#destroy-declaration"
+#   type:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#type-builtin"
+#     - include: "#type-name"
+#     - include: "#type-array-suffix"
+#   type-array-suffix:
+#     begin: \[
+#     beginCaptures:
+#       0: { name: punctuation.squarebacket.open.sus }
+#     end: \]
+#     endCaptures:
+#       0: { name: punctuation.squarebracket.close.sus }
+#     patterns:
+#     - include: "#comment"
+#     - include: "#punctuation-comma"
+#   type-builtin:
+#     match: \b(bool|int32|float32|uint32)\b
+#     captures:
+#       1: { name: keyword.type.builtin.sus }
+#   type-declarations:
+#     patterns:
+#     - include: "#comment"
+#     - include: "#class-declaration" 
+#   type-name:
+#     patterns:
+#     - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\s*(\.)
+#       captures:
+#         1: { name: entity.name.type.sus }
+#         2: { name: punctuation.accessor.sus }
+#     - match: (\.)\s*(\@?[a-zA-Z][a-zA-Z0-9]*)
+#       captures:
+#         1: { name: punctuation.accessor.sus }
+#         2: { name: entity.name.type.sus }
+#     - name: entity.name.type.sus
+#       match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+#   type-parameter-list:
+#     begin: \<
+#     beginCaptures:
+#       0: { name: punctuation.definition.typeparameters.begin.sus }
+#     end: \>
+#     endCaptures:
+#       0: { name: punctuation.definition.typeparameters.end.sus }
+#     patterns:
+#     - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\b
+#       name: entity.name.type.type-parameter.sus
+#     - include: "#comment"
+#     - include: "#punctuation-comma"
+#   variable-initializer:
+#     begin: (?<!=|!)(=)(?!=|>)
+#     beginCaptures:
+#       1: { name: keyword.operator.assignment.sus }
+#     end: (?=[,\)\];}])
+#     patterns:
+#     - include: "#expression" 
