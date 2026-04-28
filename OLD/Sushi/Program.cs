@@ -49,8 +49,8 @@ public static class Program
         }
         catch (Exception exception)
         {
-            Log.Error(exception, "Unhandled Exception");
-            Environment.Exit((int)ExitCode.UnhandledException);
+
+
         }
 #pragma warning restore CA1031 // Do not catch general exception types
     }
@@ -176,24 +176,4 @@ public static class Program
             await File.WriteAllTextAsync(compiledFile.FilePath, compiledFile.Content, Encoding.UTF8);
         }
     }
-
-    /// <summary>
-    /// Event that fires when the application is exiting.
-    /// </summary>
-    /// <param name="sender">
-    /// The event sender.
-    /// </param>
-    /// <param name="args">
-    /// The event arguments.
-    /// </param>
-    private static void OnExit(object? sender, EventArgs args) => Log.CloseAndFlush();
-
-    /// <summary>
-    /// Exits the program gracefully.
-    /// </summary>
-    /// <param name="exitCode">
-    /// The exit code to use.
-    /// </param>
-    [DoesNotReturn]
-    public static void Exit(ExitCode exitCode) => Environment.Exit((int)exitCode);
 }
