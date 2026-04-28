@@ -1,22 +1,14 @@
 namespace Core.Collections;
 
-public class List<T> implements IList<T>, IList, IReadOnlyList<T>
+public class List<T> < IList<T>, IList, IReadOnlyList<T>
 {
-    private const A::A.Int32
-}
+    private const uint32 DefaultCapacity = 4;
 
-/*
-public class List<T> implements IList<T>, IList, IReadOnlyList<T>
-{
-    //private const uint32 DefaultCapacity = 4;
+    private T[] items;
+    private uint32 size;
+    private uint32 version;
 
-    internal T[] items;
-/*
-
-    internal uint32 size;
-    internal int32 version;
-
-    private static readonly T[] empty = new T[0];
+    private static readonly T[] emptyArray = create T[0];
 
     public creator()
     {
@@ -24,21 +16,20 @@ public class List<T> implements IList<T>, IList, IReadOnlyList<T>
     }
 
     public creator(uint32 capacity)
-    returns ArgumentOutOfRangeError
+    returns ArgumentOutOfRangeException
     {
-        if (capacity < 0)
+        if (capacity < 0) then
         {
-            throw new ArgumentOutOfRangeError();
+            throw ArgumentOutOfRangeException(nameof(capacity));
         }
 
-        if (capacity == 0)
+        if (capacity == 0) then
         {
             this.items = &emptyArray;
+            return;
         }
-        else
-        {
-            this.items = new T[capacity];
-        }
+
+        this.items = create T[capacity];
     }
 
     public creator(IEnumerable<T> collection)
@@ -70,6 +61,13 @@ public class List<T> implements IList<T>, IList, IReadOnlyList<T>
             destroy en;
         }
     }
+}
+
+/*
+public class List<T> implements IList<T>, IList, IReadOnlyList<T>
+{
+
+
 
     public uint32 Capacity
     {
