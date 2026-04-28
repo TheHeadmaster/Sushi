@@ -22,17 +22,4 @@
 		<PackageReference Include="Serilog.Sinks.Debug" Version="3.0.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 	</ItemGroup>
-	<ItemGroup>
-	  <Folder Include="Diagnostics\Warnings\" />
-	  <Folder Include="Parsing\Parsers\Infixes\" />
-	  <Folder Include="Parsing\Parsers\Postfixes\" />
-	</ItemGroup>
-	<ItemGroup>
-	  <None Update="CoreC\Core.c">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
-	  <None Update="CoreC\Core.h">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </None>
-	</ItemGroup>
 </Project>
