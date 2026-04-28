@@ -128,22 +128,7 @@ repository:
         0: { name: punctuation.curlybrace.close.sus }
       patterns:
       - include: "#members"
-  comment:
-    patterns:
-      - name: comment.line.double-slash.sus
-        begin: (^\s+)?(//).*$
-        while: ^(\s*)(//).*$
-        captures:
-          "1":
-            name: punctuation.whitespace.comment.leading.sus
-          "2":
-            name: punctuation.definition.comment.sus
-      - name: comment.block.sus
-        begin: /\*
-        end: \*/
-        captures:
-          "0":
-            name: punctuation.definition.comment.sus
+
   creator-declaration:
     begin: (creator)\s*(?=\()
     beginCaptures:
