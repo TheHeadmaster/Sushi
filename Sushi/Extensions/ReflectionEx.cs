@@ -1,6 +1,4 @@
-﻿using System.Reflection;
-
-namespace Sushi.Extensions;
+﻿namespace System.Reflection;
 
 /// <summary>
 /// Contains extensions for reflection.

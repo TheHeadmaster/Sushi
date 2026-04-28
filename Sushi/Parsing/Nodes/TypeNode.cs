@@ -1,34 +1,44 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Compilation;
+using Sushi.Parsing.Scope;
+using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
 /// Represents a type that is defined somewhere else in the code.
 /// </summary>
-/// <param name="startToken">
-/// The token used to mark the start of the node.
+/// <param name="token">
+/// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class TypeNode(Token startToken) : SyntaxNode(startToken)
+public sealed class TypeNode([NotNull] Token token) : StatementNode
 {
     /// <summary>
     /// The name of the type.
     /// </summary>
-    public string? Name { get; set; }
+    public string Name { get; set; } = token.Type is TokenType.Identifier ? token.Value : Constants.TryGetPrimitiveType(token);
 
-    /// <inheritdoc />
-    public override Task<bool> VisitKeyword([NotNull] ParsingContext context)
+    /// <summary>
+    /// The resolved type of the node.
+    /// </summary>
+    public SushiType? ResolvedType { get; set; }
+
+    /// <summary>
+    /// Returns whether the type is a reference type or a copy type.
+    /// </summary>
+    /// <returns>
+    /// True if the type is a reference type. False otherwise.
+    /// </returns>
+    public bool IsReferenceType()
     {
-        Token token = context.Peek()!;
-        if (Constants.PrimitiveTypes.ContainsKey(token.Value))
+        if (this.ResolvedType is null)
         {
-            this.Name = Constants.PrimitiveTypes[token.Value];
-
-            context.Pop();
-
-            return Task.FromResult(true);
+            return false;
         }
 
-        return Task.FromResult(false);
+        return this.ResolvedType.IsReferenceType();
     }
+
+    /// <inheritdoc />
+    public override Token? GetStartToken() => token;
 }

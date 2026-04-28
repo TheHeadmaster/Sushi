@@ -1,0 +1,659 @@
+name: Sushi
+scopeName: source.sus
+fileTypes:
+  - sus
+patterns:
+  - include: "#comment"
+  - include: "#using-statement"
+  - include: "#namespace-declaration"
+  - include: "#modifier"
+  - include: "#class-declaration"
+  - include: "#punctuation-semicolon"
+repository:
+  argument:
+    patterns:
+    - include: "#expression"
+  argument-list:
+    begin: \(
+    beginCaptures:
+      0: { name: punctuation.parenthesis.open.sus }
+    end: \)
+    endCaptures:
+      0: { name: punctuation.parenthesis.close.sus }
+    patterns:
+    - include: "#named-argument"
+    - include: "#argument"
+    - include: "#punctuation-comma"
+  array-creation-expression:
+    begin: |-
+      (?x)
+      \b(create)\b\s*
+      (?<type_name>
+        (?:
+          (?:
+            (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?
+            (?<name_and_type_args>
+              \g<identifier>\s*
+              (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+            )
+            (?:\s*\.\s*\g<name_and_type_args>)* | 
+            (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+          )
+          (?:\s*
+            \[
+              (?:\s*,\s*)*
+            \]
+            \s*
+          )*
+        )
+      )?\s*
+      (?=\[)
+    beginCaptures:
+      1: { name: keyword.operator.expression.create.sus }
+      2:
+        patterns:
+        - include: "#type"
+    end: (?<=\])
+    patterns:
+    - include: "#bracketed-argument-list"
+  assignment-expression:
+    begin: (?:\*|/|%|\+|-|\&|\^|<<|>>>?|\|)?=(?!=|>)
+    beginCaptures:
+      0:
+        patterns:
+        - include: "#assignment-operators"
+    end: (?=[,\)\];}])
+    patterns:
+    - include: "#expression"
+  assignment-operators:
+    patterns:
+    - name: keyword.operator.assignment.compound.sus
+      match: \*=|/=|%=|\+=|-=
+    - name: keyword.operator.assignment.compound.bitwise.sus
+      match: \&=|\^=|<<=|>>>?=|\|=
+    - name: keyword.operator.assignment.sus
+      match: \=
+  base-types:
+    begin: \s*(\<)\s+
+    beginCaptures:
+      1: { name: punctuation.inheritance.sus }
+    end: (?=\{|;)
+    patterns:
+    - include: "#comment"
+    - include: "#preprocessor"
+    - include: "#type"
+    - include: "#punctuation-comma"
+  block:
+    begin: \{
+    beginCaptures:
+      0: { name: punctuation.curlybrace.open.sus }
+    end: \}
+    endCaptures:
+      0: { name: punctuation.curlybrace.close.sus }
+    patterns:
+    - include: "#statement"
+  bracketed-argument-list:
+    begin: \[
+    beginCaptures:
+      0: { name: punctuation.squarebracket.open.sus }
+    end: \]
+    endCaptures:
+      0: { name: punctuation.squarebracket.close.sus }
+    patterns:
+    - include: '#named-argument'
+    - include: '#argument'
+    - include: '#punctuation-comma'
+  class-declaration:
+    begin: (?=\bclass\b)
+    end: (?<=\})|(?=;)
+    patterns:
+    - include: "#comment"
+    - include: "#preprocessor"
+    - begin: \s*(class)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
+      beginCaptures:
+        1 : { name: storage.type.class.sus }
+        2 : { name: entity.name.type.class.sus }
+      end: (?=\{)|(?=;)
+      patterns:
+        - include: "#comment"
+        - include: "#type-parameter-list"
+        - include: "#parenthesized-parameter-list"
+        - include: "#base-types"
+        - include: "#generic-constraints"
+    - begin: \{
+      beginCaptures:
+        0: { name: punctuation.curlybrace.open.sus }
+      end: \}
+      endCaptures:
+        0: { name: punctuation.curlybrace.close.sus }
+      patterns:
+      - include: "#members"
+  comment:
+    patterns:
+      - name: comment.line.double-slash.sus
+        begin: (^\s+)?(//).*$
+        while: ^(\s*)(//).*$
+        captures:
+          "1":
+            name: punctuation.whitespace.comment.leading.sus
+          "2":
+            name: punctuation.definition.comment.sus
+      - name: comment.block.sus
+        begin: /\*
+        end: \*/
+        captures:
+          "0":
+            name: punctuation.definition.comment.sus
+  creator-declaration:
+    begin: (creator)\s*(?=\()
+    beginCaptures:
+      1: { name: "keyword.other.creator.sus"}
+    end: (?<=\})|(?=;)
+    patterns:
+    - begin: (:)
+      beginCaptures:
+        1: { name: punctuation.separator.colon.sus }
+      end: (?=\{|=>)
+    - include: "#comment"
+    - include: "#creator-exceptions"
+    - include: "#parenthesized-parameter-list"
+    - include: "#block"
+  creator-exceptions:
+    match: |-
+      (?x)
+      (returns)\s+
+      (
+        (?<fully_qualified_name>
+          (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)? 
+          (?<name_and_type_args> 
+            \g<identifier>\s*
+            (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+          )
+          (?:\s*\.\s*\g<name_and_type_args>)* | 
+          (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+        )
+        (\s*,\s*\g<fully_qualified_name>)*
+      )
+    captures:
+      1: { name: "keyword.other.returns.sus"}
+      2:
+        patterns:
+        - include: "#type"
+        - include: "#punctuation-comma"
+  else-part:
+    begin: (?<!\.)\b(else)\b
+    beginCaptures:
+      "1": { name: keyword.control.conditional.else.sus }
+    end: (?<=})|(?=;)
+    patterns:
+    - match: \b(then)\b
+      name: keyword.control.conditional.else.sus
+    - include: "#statement"
+  expression:
+    patterns:
+      - include: "#comment"
+      - include: "#expression-operator-expression"
+      - include: "#literal"
+      - include: "#type-builtin"
+      - include: "#expression-operators"
+      - include: "#object-creation-expression"
+      - include: "#array-creation-expression"
+      - include: "#assignment-expression"
+      - include: "#language-variable"
+      - include: "#member-access-expression"
+      - include: "#identifier"
+  expression-operator-expression:
+    begin: \b(nameof)\s*(\()
+    beginCaptures:
+      1: { name: keyword.operator.expression.sus }
+      2: { name: punctuation.parenthesis.open.sus }
+    end: \)
+    endCaptures:
+      0: { name: punctuation.parenthesis.close.sus }
+    patterns:
+    - include: "#expression"
+  expression-operators:
+    patterns:
+    - name: keyword.operator.bitwise.shift.sus
+      match: <<|>>>?
+    - name: keyword.operator.comparison.sus
+      match: ==|!=
+    - name: keyword.operator.relational.sus
+      match: <=|>=|<|>
+    - name: keyword.operator.logical.sus
+      match: \!|&&|\|\|
+    - name: keyword.operator.bitwise.sus
+      match: \&|~|\^|\|
+    - name: keyword.operator.decrement.sus
+      match: --
+    - name: keyword.operator.increment.sus
+      match: \+\+
+    - name: keyword.operator.arithmetic.sus
+      match: \+|-(?!>)|\*|/|%
+    - name: keyword.operator.range.sus
+      match: \.\.
+  field-declaration:
+    begin: |-
+      (?x)
+      (?<type_name>
+        (?:
+          (?:
+            (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)? 
+            (?<name_and_type_args> 
+              \g<identifier>\s*
+              (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+            )
+            (?:\s*\.\s*\g<name_and_type_args>)* | 
+            (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+          )
+          (?:\s* # array suffix?
+            \[
+              (?:\s*,\s*)*
+            \]
+            \s*
+          )*
+        )
+      )\s+
+      (\g<identifier>)\s*
+      (?!=>|==)(?=,|;|=|$)
+    beginCaptures:
+      1:
+        patterns:
+        - include: "#type"
+      6:
+        { name: entity.name.variable.field.sus }
+    end: (?=;)
+    patterns:
+    - match: \@?[a-zA-Z][a-zA-Z0-9]*
+      name: entity.name.variable.field.sus
+    - include: "#comment"
+    - include: "#punctuation-comma"
+    - include: "#variable-initializer"
+    - include: "#members"
+  identifier:
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+      captures:
+        1: { name: entity.name.identifier.sus }
+  if-statement:
+    begin: (?<!\.)\b(if)\b\s*(?=\()
+    beginCaptures:
+      1: { name: keyword.control.conditional.if.sus }
+    end: (?<=})|(?=;)
+    patterns:
+    - match: \b(then)\b
+      captures:
+        0: { name: keyword.control.conditional.then.sus }
+    - begin: \(
+      beginCaptures:
+        0: { name: punctuation.parenthesis.open.sus }
+      end: \)
+      endCaptures:
+        0: { name: punctuation.parenthesis.close.sus }
+      patterns:
+      - include: "#expression"
+    - include: "#statement"
+  is-expression:
+    begin: (?<!\.)\b(is)\b
+    beginCaptures:
+      1: { name: keyword.operator.expression.pattern.is.sus }
+    end: (?=[)}\],;:?=&|^]|!=)
+    patterns:
+    - include: "#pattern"
+  language-variable:
+    patterns:
+    - name: variable.language.sus
+      match: \b(base|this)\b
+    - name: variable.other.sus
+      match: \b(value)\b
+  local-variable-declaration:
+    begin: |-
+      (?x)
+      (?:
+        (?<type_name>
+          (?:
+            (?:
+              (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?
+              (?<name_and_type_args>
+                \g<identifier>\s*
+                (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+              )
+              (?:\s*\.\s*\g<name_and_type_args>)* | 
+              (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+            )
+            (?:\s* # array suffix?
+              \[
+                (?:\s*,\s*)* # commata for multi-dimensional arrays
+              \]
+              \s*
+            )*
+          )
+        )
+      )\s+
+      (\g<identifier>)\s*
+      (?!=>)
+      (?=,|;|=|\))
+    beginCaptures:
+      1: { name: storage.modifier.ref.sus }
+      2:
+        patterns:
+        - include: "#type"
+      7: { name: entity.name.variable.local.sus }
+    end: (?=[;)}])
+    patterns:
+    - name: entity.name.variable.local.sus
+      match: \@?[a-zA-Z][a-zA-Z0-9]*
+    - include: "#punctuation-comma"
+    - include: "#comment"
+    - include: "#variable-initializer"
+  literal:
+    patterns:
+      - include: "#numeric-literal"
+  member-access-expression:
+    patterns:
+    - match: (?:(\.)\s*)(\@?[a-zA-Z][a-zA-Z0-9]*)\s*(?![a-zA-Z0-9]|\(|\[|<)
+      captures:
+        1: { name: punctuation.accessor.sus }
+        2: { name: variable.other.object.property.sus }
+    - match: |-
+        (?x)
+        (\.)?\s*
+        (\@?[a-zA-Z][a-zA-Z0-9]*)
+        (?<type_params>\s*<([^<>]|\g<type_params>)+>\s*)
+        (?=
+          (\s*\?)?
+          \s*\.\s*\@?[a-zA-Z][a-zA-Z0-9]*
+        )
+      captures:
+        1: { name: punctuation.accessor.sus }
+        2: { name: variable.other.object.sus }
+        3:
+          patterns:
+          - include: "#type-arguments"
+    - match: |-
+        (?x)
+        (\@?[a-zA-Z][a-zA-Z0-9]*)
+        (?=
+          \s*(?:(?:\?\s*)?\.)
+          \s*\@?[a-zA-Z][a-zA-Z0-9]*
+        )
+      captures:
+        1: { name: variable.other.object.sus }
+  members:
+    patterns:
+    - include: "#comment"
+    - include: "#preprocessor"
+    - include: "#modifier"
+    - include: "#field-declaration"
+    - include: "#variable-initializer"
+    - include: "#creator-declaration"
+    - include: "#destroyer-declaration"
+  modifier:
+    match: \s*(public|private|const|static|protected|internal|readonly)\s+
+    name: storage.modifier.sus
+  named-argument:
+    begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s*(:)
+    beginCaptures:
+      '1': { name: entity.name.variable.parameter.sus }
+      '2': { name: punctuation.separator.colon.sus }
+    end: (?=(,|\)|\]))
+    patterns:
+    - include: '#argument'
+  namespace-declaration:
+    begin: \s*(namespace)\s+
+    beginCaptures:
+      1: { name: storage.type.namespace.sus }
+    end: (;)
+    endCaptures:
+      1: { name: punctuation.semicolon.sus }
+    patterns:
+    - include: "#comment"
+    - include: "#namespace-identifier"
+  namespace-identifier:
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+      captures:
+        1: { name: entity.name.namespace.sus }
+  numeric-literal:
+    match: (\d+)
+    captures:
+      1: { name: constant.numeric.decimal.sus }
+  object-creation-expression:
+    patterns:
+    - include: "#object-creation-expression-with-parameters"
+    - include: "#object-creation-expression-with-no-parameters"
+  object-creation-expression-with-parameters:
+    begin: |-
+      (?x)
+      (create)(?:\s+
+      (?<type_name>
+        (?:
+          (?:
+            (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?
+            (?<name_and_type_args>
+              \g<identifier>\s*
+              (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+            )
+            (?:\s*\.\s*\g<name_and_type_args>)* |
+            (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+          )
+          (?:\s* # array suffix?
+            \[
+              (?:\s*,\s*)*
+            \]
+            \s*
+          )*
+        )
+      ))?\s*
+      (?=\()
+    beginCaptures:
+      1: { name: keyword.operator.expression.create.sus }
+      2:
+        patterns:
+        - include: "#type"
+    end: (?<=\))
+    patterns:
+    - include: "#argument-list"
+  object-creation-expression-with-no-parameters:
+    match: |-
+      (?x)
+      (create)\s+
+      (?<type_name>
+        (?:
+          (?:
+            (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?
+            (?<name_and_type_args>
+              \g<identifier>\s*
+              (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+            )
+            (?:\s*\.\s*\g<name_and_type_args>)* |
+            (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+          )
+          (?:\s*
+            \[
+              (?:\s*,\s*)*
+            \]
+            \s*
+          )*
+        )
+      )\s*
+      (?=\{|//|/\*|$)
+    captures:
+      1: { name: keyword.operator.expression.create.sus }
+      2:
+        patterns:
+        - include: "#type"
+  parameter:
+    match: |-
+      (?x)
+      (?:(?:\b(params|out|this)\b)\s+)?
+      (?<type_name>
+        (?:
+          (?:
+            (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)?
+            (?<name_and_type_args>
+              \g<identifier>\s*
+              (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+            )
+            (?:\s*\.\s*\g<name_and_type_args>)* | 
+            (?<tuple>\s*\((?:[^()]|\g<tuple>)+\))
+          )
+          (?:\s* # array suffix?
+            \[
+              (?:\s*,\s*)* # commata for multi-dimensional arrays
+            \]
+            \s*
+          )*
+        )
+      )\s+
+      (\g<identifier>)
+    captures:
+      1: { name: storage.modifier.sus }
+      2:
+        patterns:
+        - include: '#type'
+      7: { name: entity.name.variable.parameter.sus }
+  parenthesized-parameter-list:
+    begin: (\()
+    beginCaptures:
+      0: { name: punctuation.parenthesis.open.sus }
+    end: (\))
+    endCaptures:
+      0: { name: punctuation.parenthesis.close.sus }
+    patterns:
+    - include: "#comment"
+    - include: "#parameter"
+    - include: "#punctuation-comma"
+    - include: "#variable-initializer"
+  punctuation-accessor:
+    name: punctuation.accessor.sus
+    match: \.
+  punctuation-comma:
+    name: punctuation.separator.comma.sus
+    match: ','
+  punctuation-semicolon:
+    name: punctuation.separator.semicolon.sus
+    match: ';'
+  return-statement:
+    begin: (?<!\.)\b(return)\b
+    beginCaptures:
+      1: { name: keyword.control.flow.return.sus }
+    end: (?=[;}])
+    patterns:
+    - include: "#expression"
+  statement:
+    patterns:
+    - include: "#comment"
+    - include: "#if-statement"
+    - include: "#else-part"
+    - include: "#return-statement"
+    - include: "#throw-statement"
+    - include: "#block"
+    - include: "#expression"
+    - include: "#punctuation-semicolon"
+  throw-statement:
+    begin: |-
+      (?x)
+      (?<!\.)(throw)\s+
+      (
+        (?<fully_qualified_name>
+          (?:(?<identifier>\@?[a-zA-Z][a-zA-Z0-9]*)\s*\:\:\s*)? 
+          (?<name_and_type_args> 
+            \g<identifier>\s*
+            (?<type_args>\s*<(?:[^<>]|\g<type_args>)+>\s*)?
+          )
+          (?:\s*\.\s*\g<name_and_type_args>)* | 
+          (?<tuple>\s*\((?:[^\(\)]|\g<tuple>)+\))
+        )
+      )
+    beginCaptures:
+      1: { name: keyword.control.flow.throw.sus }
+      2:
+        patterns:
+        - include: "#type"
+    end: (?=[;}])
+    patterns:
+    - include: "#argument-list"
+    - include: "#punctuation-semicolon"
+  type:
+    patterns:
+    - include: "#comment"
+    - include: "#type-builtin"
+    - include: "#type-identifier"
+    - include: "#type-arguments"
+    - include: "#type-array-suffix"
+  type-arguments:
+    begin: \<
+    beginCaptures:
+      0: { name: punctuation.definition.typeparameters.begin.sus }
+    end: \>
+    endCaptures:
+      0: { name: punctuation.definition.typeparameters.end.sus }
+    patterns:
+    - include: "#type"
+    - include: "#punctuation-comma"
+  type-array-suffix:
+    begin: \[
+    beginCaptures:
+      0: { name: punctuation.squarebracket.open.sus }
+    end: \]
+    endCaptures:
+      0: { name: punctuation.squarebracket.close.sus }
+    patterns:
+    - include: "#comment"
+    - include: "#preprocessor"
+    - include: "#punctuation-comma"
+  type-builtin:
+    match: \b(bool|u?int32|float32)\b
+    captures:
+      1: { name: keyword.type.builtin.sus }
+  type-identifier:
+    patterns:
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\s*(\:\:)
+      captures:
+        1: { name: entity.name.type.alias.sus }
+        2: { name: punctuation.separator.coloncolon.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+      captures:
+        1: { name: entity.name.namespace.sus }
+        2: { name: punctuation.accessor.sus }
+    - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+      captures:
+        1: { name: entity.name.type.sus }
+  type-parameter-list:
+    begin: \<
+    beginCaptures:
+      0: { name: punctuation.definition.typeparameters.begin.sus }
+    end: \>
+    endCaptures:
+      0: { name: punctuation.definition.typeparameters.end.sus }
+    patterns:
+      - match: (\@?[a-zA-Z][a-zA-Z0-9]*)\b
+        name: entity.name.type.type-parameter.sus
+      - include: "#comment"
+      - include: "#punctuation-comma"
+  using-statement:
+    begin: \s*(using)\s+
+    beginCaptures:
+      1: { name: keyword.other.directive.using.sus }
+    end: (;)
+    endCaptures:
+      1: { name: punctuation.semicolon.sus }
+    patterns:
+    - include: "#comment"
+    - include: "#identifier"
+  variable-initializer:
+    begin: (?<!=|!)(=)(?!=|>)
+    beginCaptures:
+      1: { name: keyword.operator.assignment.sus }
+    end: (?=[,\)\];}])
+    patterns:
+    - include: "#expression"

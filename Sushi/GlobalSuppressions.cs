@@ -5,5 +5,5 @@
 
 using System.Diagnostics.CodeAnalysis;
 
-[assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.Program.Main(System.String[])~System.Threading.Tasks.Task")]
-[assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.ExeHelper.RunExecutableAndOutputToConsole(System.String,System.String)~System.Threading.Tasks.Task")]
+[assembly: SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.Tokenization.Lexer.LexFiles(System.String)~System.Threading.Tasks.Task{System.Collections.Generic.List{Sushi.Tokenization.TokenFile}}")]
+[assembly: SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "<Pending>", Scope = "member", Target = "~M:Sushi.Compilation.ExeHelper.RunExecutableAndOutputToConsole(System.String,System.String)~System.Threading.Tasks.Task")]

@@ -420,4 +420,7 @@ FodyWeavers.xsd
 Sushi.Testing/TestProject/bin
 Sushi.Testing/TestProject/obj
 Sushi.Testing/TestProject/intermediate
-SushiSupport/syntaxes/sushi.tmLanguage.json
+syntaxes/sushi.tmLanguage.json
+out
+node_modules
+client/server

@@ -1,0 +1,8 @@
+namespace SomeStuff.Yes;
+
+public class SomeClass
+{
+	destroyer Default()
+	{
+	}
+}

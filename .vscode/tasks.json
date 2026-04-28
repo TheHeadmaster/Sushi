@@ -1,0 +1,70 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "RunAllPreLaunch",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "CopyFolder",
+                "generateYaml",
+                {
+				    "type": "npm",
+				    "script": "watch"
+			    }
+            ]
+        },
+        {
+            "label": "generateYaml",
+            "type": "shell",
+            "command": "npx js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json",
+            "group": {
+                "kind":"build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": false,
+                "clear": false
+            }
+        },
+        {
+			"type": "npm",
+			"script": "compile",
+			"group": "build",
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "never"
+			},
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"type": "npm",
+			"script": "watch",
+			"isBackground": true,
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"presentation": {
+				"panel": "dedicated",
+				"reveal": "never"
+			},
+			"problemMatcher": [
+				"$tsc-watch"
+			]
+		},
+        {
+            "label": "CopyFolder",
+            "type": "shell",
+            "command": "cp -r \"${workspaceRoot}/Sushi/bin/debug/net10.0\" \"${workspaceRoot}/client/out/LSP\"",
+            "windows": {
+                "command": "xcopy \"${workspaceRoot}\\Sushi\\bin\\debug\\net10.0\" \"${workspaceRoot}\\client\\out\\LSP\" /E /I /Y"
+            }
+        }
+    ]
+}

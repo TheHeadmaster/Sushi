@@ -1,17 +1,27 @@
-// Inline Comment
+using SomeStuff.Yes;
 
-int32 Main()
+namespace Test;
+
+public static class Program
 {
-    int32 count = 5;
-    float32 xPosition = 10.5;
-    bool isRunning = true;
-}
+    int32 someInt;
 
-bool IsDevelopment(bool isDebug, bool isForceReleaseMode)
-{
-    int32 something;
-}
+	SomeClass member;
 
-/* 
-Block Comment
-*/
+    SomeClass GetMember(SomeClass inClass, SomeClass outClass)
+    {
+        destroy inClass Default;
+        destroy outClass Default;
+    }
+
+    creator()
+    {
+        
+    }
+
+    destroyer Default(SomeClass destroyedClass)
+    {
+        destroy member Default;
+        destroy destroyedClass Default;
+    }
+}

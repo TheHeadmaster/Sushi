@@ -1,35 +1,24 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Lexing.Tokenization;
+using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
 
 /// <summary>
-/// Represents an identifier that is defined somewhere else in the code.
+/// Represents an identifier, which is a named reference to another variable, member, or method.
 /// </summary>
-/// <param name="startToken">
-/// The token used to mark the start of the node.
+/// <param name="token">
+/// The <see cref="Token"/> that represents the identifier.
 /// </param>
-public sealed class IdentifierNode(Token startToken) : SyntaxNode(startToken)
+public sealed class IdentifierNode([NotNull] Token token) : ExpressionNode, ICallableNode
 {
     /// <summary>
     /// The name of the identifier.
     /// </summary>
-    public string? Name { get; set; }
+    public string Name { get; set; } = token.Value;
 
     /// <inheritdoc />
-    public override Task<bool> VisitIdentifier([NotNull] ParsingContext context)
-    {
-        Token token = context.Peek()!;
+    public override Token GetStartToken() => token;
 
-        this.Name = token.Value;
-
-        this.LineNumber = token.LineNumber;
-        this.LinePosition = token.LinePosition;
-        this.CurrentLine = token.CurrentLine;
-        this.Length = token.Value.Length;
-
-        context.Pop();
-
-        return Task.FromResult(true);
-    }
+    /// <inheritdoc />
+    public bool ResolvesToIdentifier() => true;
 }

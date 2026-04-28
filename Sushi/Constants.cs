@@ -1,41 +1,107 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
+using Sushi.Parsing.Scope;
+using Sushi.Tokenization;
 
 namespace Sushi;
 
 /// <summary>
-/// Holds constants used accross the entire application.
+/// Holds constants used across the entire application.
 /// </summary>
 public static class Constants
 {
     /// <summary>
     /// Contains keywords reserved by the language, and therefore cannot be used as identifiers.
     /// </summary>
-    public static ReadOnlyCollection<string> ReservedKeywords { get; } =
-    [
-        "bool",
-        "true",
-        "false",
-        "int32",
-        "float32"
-    ];
-
-    public static ReadOnlyDictionary<string, string> PrimitiveTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
-        { "bool", "Boolean" },
-        { "int32", "Int32" },
-        { "float32", "Float32" },
+    public static ReadOnlyDictionary<string, TokenType> ReservedKeywords { get; } = new ReadOnlyDictionary<string, TokenType>(new Dictionary<string, TokenType>()
+    {
+        { "bool", TokenType.BoolPrimitive },
+        { "true", TokenType.TrueLiteral },
+        { "false", TokenType.FalseLiteral },
+        { "if", TokenType.If },
+        { "then", TokenType.Then },
+        { "else", TokenType.Else },
+        { "do", TokenType.Do },
+        { "while", TokenType.While },
+        { "create", TokenType.Create },
+        { "creator", TokenType.Creator },
+        { "destroy", TokenType.Destroy },
+        { "destroyer", TokenType.Destroyer },
+        { "void", TokenType.Void },
+        { "using", TokenType.Using },
+        { "namespace", TokenType.Namespace },
+        { "class", TokenType.Class },
+        { "public", TokenType.Public },
+        { "internal", TokenType.Internal },
+        { "private", TokenType.Private },
+        { "static", TokenType.Static },
+        { "int32", TokenType.Int32Primitive },
+        { "float32", TokenType.Float32Primitive }
     });
 
-    public static ReadOnlyDictionary<string, string> SushiToCTypes { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string> {
-
-        { "__MAIN_SHADOWED_INT_SPECIAL", "int" },
-        { "Boolean", "bool" },
-        { "Int32", "int32_t" },
-        { "Float32", "float" },
+    /// <summary>
+    /// A symbol table for converting symbols to their respective token types.
+    /// </summary>
+    public static ReadOnlyDictionary<string, TokenType> Symbols { get; } = new ReadOnlyDictionary<string, TokenType>(new Dictionary<string, TokenType>()
+    {
+        { ";", TokenType.Terminator },
+        { "(", TokenType.OpeningParenthesis },
+        { ")", TokenType.ClosingParenthesis },
+        { "{", TokenType.OpeningSquiggly },
+        { "}", TokenType.ClosingSquiggly },
+        { ",", TokenType.Comma },
+        { "=", TokenType.Assignment },
+        { "+", TokenType.Plus },
+        { "-", TokenType.Minus },
+        { "*", TokenType.Asterisk },
+        { "/", TokenType.Slash },
+        { ".", TokenType.Dot }
     });
 
-    public static ReadOnlyCollection<string> BooleanLiterals { get; } =
-    [
-        "true",
-        "false"
-    ];
+    /// <summary>
+    /// Contains conversions for sushi primitive types to C primitive types.
+    /// </summary>
+    public static ReadOnlyDictionary<string, string> SushiToCConversions { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>()
+    {
+        { "int32", "int32_t" },
+        { "float32", "float" },
+        { "bool", "int" }
+    });
+
+    /// <summary>
+    /// Tries to get the primitive type for the specified token.
+    /// </summary>
+    /// <param name="token">
+    /// The token to try to get the type for. 
+    /// </param>
+    /// <returns>
+    /// A string containing the type or an empty string if it was not found.
+    /// </returns>
+    public static string TryGetPrimitiveType([NotNull] Token token) => token.Type switch
+    {
+        TokenType.Int32Primitive => "int32",
+        TokenType.Float32Primitive => "float32",
+        TokenType.BoolPrimitive => "bool",
+        _ => string.Empty
+    };
+
+    public static ReadOnlyCollection<TokenType> PrimitiveTokens { get; } = new
+    ([
+        TokenType.BoolPrimitive,
+        TokenType.Int32Primitive,
+        TokenType.Float32Primitive,
+    ]);
+
+    /// <summary>
+    /// Contains the primitive types that are automatically resolved without a namespace (because they don't belong to one).
+    /// </summary>
+    /// <returns>
+    /// The list of primitive resolved types.
+    /// </returns>
+    public static ReadOnlyCollection<SushiType> PrimitiveResolvedTypes { get; } = new
+    ([
+        new() { Name = "int32", FilePath = string.Empty, Namespace = string.Empty },
+        new() { Name = "float32", FilePath = string.Empty, Namespace = string.Empty },
+        new() { Name = "bool", FilePath = string.Empty, Namespace = string.Empty }
+    ]);
 }
