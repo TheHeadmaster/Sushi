@@ -1,6 +1,5 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Serilog;
-using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics;
 
@@ -24,9 +23,9 @@ public static class Diag
     public static async Task MonitorAsync([NotNull] string label, [NotNull] Func<Task> monitorTask)
     {
         DateTime startTime = DateTime.Now;
-        
+
         Log.Information("Starting {Label}...", label);
-        
+
         await monitorTask.Invoke();
 
         Log.Information("{Label} completed in {Time}.", label, startTime.TimeSinceAsString());
@@ -47,11 +46,11 @@ public static class Diag
     public static async Task<TResult> MonitorAsync<TResult>([NotNull] string label, [NotNull] Func<Task<TResult>> monitorTask)
     {
         DateTime startTime = DateTime.Now;
-        
+
         Log.Information("Starting {Label}...", label);
-        
+
         TResult result = await monitorTask.Invoke();
-        
+
         Log.Information("{Label} completed in {Time}.", label, startTime.TimeSinceAsString());
 
         return result;
