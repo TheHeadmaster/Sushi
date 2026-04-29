@@ -8,5 +8,15 @@ public enum TokenType
     /// <summary>
     /// This is a token that represents a syntax error.
     /// </summary>
-    Unknown
+    Unknown,
+
+    /// <summary>
+    /// This is a token that represents a span of whitespace.
+    /// </summary>
+    Whitespace,
+
+    /// <summary>
+    /// This is a token that represents a newline.
+    /// </summary>
+    Newline
 }

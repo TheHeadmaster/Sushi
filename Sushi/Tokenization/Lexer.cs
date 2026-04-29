@@ -74,6 +74,8 @@ public static partial class Lexer
             await ConsumeTokenWithHighestAffinity(file);
         }
 
+        file.Tokens.RemoveAll(x => x.Type is TokenType.Newline or TokenType.Whitespace);
+
         return file;
     }
 
@@ -102,6 +104,8 @@ public static partial class Lexer
         {
             await ConsumeTokenWithHighestAffinity(file);
         }
+
+        file.Tokens.RemoveAll(x => x.Type is TokenType.Newline or TokenType.Whitespace);
 
         return file;
     }
@@ -133,15 +137,15 @@ public static partial class Lexer
         }
         else if (IsWhitespace(remainingInput, out string? whitespace))
         {
-            ignoreToken = true;
             handled = true;
             tokenValue = whitespace;
+            type = TokenType.Whitespace;
         }
         else if (IsNewline(remainingInput, out string? newline))
         {
-            ignoreToken = true;
             handled = true;
             tokenValue = newline;
+            type = TokenType.Newline;
         }
 
         if (!handled)
