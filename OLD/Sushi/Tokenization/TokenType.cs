@@ -5,7 +5,6 @@ namespace Sushi.Tokenization;
 /// </summary>
 public enum TokenType
 {
-    Unknown,
     Assignment,
     OpeningParenthesis,
     ClosingParenthesis,
