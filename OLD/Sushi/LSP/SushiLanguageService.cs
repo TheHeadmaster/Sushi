@@ -9,40 +9,13 @@ using Sushi.Diagnostics;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
-using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
 namespace Sushi.LSP;
 
 public sealed class SushiLanguageService
 {
-    private readonly Lexer lexer = new();
-
     private readonly Parser parser = new();
-
-    private readonly List<TokenFile> tokenFiles = [];
-
     private AbstractSyntaxTree tree = null!;
-
-    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tree.Messages);
-
-    public async Task UpdateWorkspaceFolders(ILanguageServerFacade facade, [NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders)
-    {
-        this.tokenFiles.Clear();
-
-        foreach (WorkspaceFolder addedFolder in addedFolders)
-        {
-            this.folders.Add(addedFolder);
-        }
-
-        foreach (WorkspaceFolder removedFolder in removedFolders)
-        {
-            this.folders.Remove(removedFolder);
-        }
-
-        await this.UpdateTokenFiles();
-        await this.UpdateSyntaxTree();
-        await this.PublishDiagnosticsForAllDocuments(facade, null);
-    }
 
     public async Task UpdateSource([NotNull] string sourceFilePath)
     {
@@ -68,17 +41,6 @@ public sealed class SushiLanguageService
             this.tokenFiles[existingIndex] = file;
         }
     }
-
-    private async Task UpdateTokenFiles()
-    {
-        this.tokenFiles.Clear();
-
-        foreach (WorkspaceFolder folder in this.folders)
-        {
-            this.tokenFiles.AddRange(await this.lexer.LexFiles(folder.Uri.GetFileSystemPath()));
-        }
-    }
-
     private async Task UpdateSyntaxTree()
     {
         Parser parser = new();
@@ -101,47 +63,7 @@ public sealed class SushiLanguageService
         await this.PublishDiagnosticsForAllDocuments(facade, version);
     }
 
-    private async Task PublishDiagnosticsForAllDocuments([NotNull] ILanguageServerFacade facade, int? version)
-    {
-        List<CompilerMessage> messages = await this.GetMessages();
 
-        List<DocumentUri> uris = [.. this.tokenFiles.Select(x => DocumentUri.FromFileSystemPath(x.FilePath))];
-
-        foreach (IGrouping<string, CompilerMessage> group in messages.GroupBy(x => x.FilePath))
-        {
-            int existingIndex = uris.FindIndex(x => Uri.Compare(x.ToUri(), new Uri(group.Key), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
-
-            if (existingIndex != -1)
-            {
-                uris.RemoveAt(existingIndex);
-            }
-
-            DocumentUri document = DocumentUri.FromFileSystemPath(group.Key);
-            await this.PublishDiagnosticsForDocument(facade, version, [.. group], document);
-        }
-
-        foreach (DocumentUri uri in uris)
-        {
-            await this.PublishDiagnosticsForDocument(facade, version, [], uri);
-        }
-    }
-
-    private async Task PublishDiagnosticsForDocument([NotNull] ILanguageServerFacade facade, int? version, List<CompilerMessage> messages, DocumentUri document)
-    {
-        Builder diagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
-
-        foreach (CompilerMessage message in messages)
-        {
-            diagnostics.Add(await message.ToDiagnostic());
-        }
-
-        facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams()
-        {
-            Diagnostics = new Container<Diagnostic>(diagnostics.ToArray()),
-            Uri = document,
-            Version = version
-        });
-    }
 
     public async Task PushSemanticTokens([NotNull] SemanticTokensBuilder builder, [NotNull] DocumentUri document, [NotNull] SemanticTokensLegend legend) => await new SemanticTokenVisitor(builder, document, legend).Visit(this.tree);
 }

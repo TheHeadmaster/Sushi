@@ -74,14 +74,11 @@ public static class Program
                     Capabilities = new ServerCapabilities
                     {
                         HoverProvider = true,
-                        WorkspaceSymbolProvider = true,
                     }
                 };
             }))
-            .WithServices(services => services.AddSingleton(service))
             .WithHandler<CompletionHandler>()
             .WithHandler<TextDocumentSyncHandler>()
-            .WithHandler<WorkspaceFoldersHandler>()
             .WithHandler<SemanticTokenHandler>()
         );
 

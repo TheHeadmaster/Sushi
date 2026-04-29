@@ -1,6 +1,12 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using Sushi.Diagnostics;
+using Sushi.Tokenization;
+using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
 namespace Sushi;
 
@@ -13,6 +19,11 @@ public sealed class SushiLanguageService
     /// The workspace folders from the client. Contains the sushi project files when running in LSP mode.
     /// </summary>
     private readonly List<WorkspaceFolder> folders = [];
+
+    /// <summary>
+    /// The list of <see cref="TokenFile"/> objects that represent the lexed version of the source code.
+    /// </summary>
+    private readonly List<TokenFile> tokenFiles = [];
 
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace. Only used in LSP mode.
@@ -34,7 +45,7 @@ public sealed class SushiLanguageService
     /// </returns>
     public async Task CompileJob()
     {
-
+        List<TokenFile> tokenFiles = await Lexer.LexFiles(AppMeta.Options.ProjectPath);
     }
 
     /// <summary>
@@ -55,8 +66,10 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public Task UpdateWorkspaceFolders([NotNull] ILanguageServerFacade facade, [NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders, CancellationToken cancellationToken)
+    public async Task UpdateWorkspaceFolders([NotNull] ILanguageServerFacade facade, [NotNull] List<WorkspaceFolder> addedFolders, [NotNull] List<WorkspaceFolder> removedFolders, CancellationToken cancellationToken)
     {
+        this.tokenFiles.Clear();
+
         cancellationToken.ThrowIfCancellationRequested();
 
         foreach (WorkspaceFolder addedFolder in addedFolders)
@@ -70,8 +83,12 @@ public sealed class SushiLanguageService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
+        
+        await this.UpdateTokenFiles();
 
-        return Task.CompletedTask;
+        //await this.UpdateSyntaxTree();
+
+        await this.PublishDiagnosticsForAllDocuments(facade, null);
     }
 
     /// <summary>
@@ -87,4 +104,101 @@ public sealed class SushiLanguageService
 
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Updates the token files with the new source from disk.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private async Task UpdateTokenFiles()
+    {
+        this.tokenFiles.Clear();
+
+        foreach (WorkspaceFolder folder in this.folders)
+        {
+            this.tokenFiles.AddRange(await Lexer.LexFiles(folder.Uri.GetFileSystemPath()));
+        }
+    }
+
+    /// <summary>
+    /// Publishes diagnostic messages for all documents in the workspace.
+    /// </summary>
+    /// <param name="facade">
+    /// The language server facade used to make the publish call.
+    /// </param>
+    /// <param name="version">
+    /// Version numbers are used for concurrency.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private async Task PublishDiagnosticsForAllDocuments([NotNull] ILanguageServerFacade facade, int? version)
+    {
+        List<CompilerMessage> messages = await this.GetMessages();
+
+        List<DocumentUri> uris = [.. this.tokenFiles.Select(x => DocumentUri.FromFileSystemPath(x.FilePath))];
+
+        foreach (IGrouping<string, CompilerMessage> group in messages.GroupBy(x => x.FilePath))
+        {
+            int existingIndex = uris.FindIndex(x => Uri.Compare(x.ToUri(), new Uri(group.Key), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+
+            if (existingIndex != -1)
+            {
+                uris.RemoveAt(existingIndex);
+            }
+
+            DocumentUri document = DocumentUri.FromFileSystemPath(group.Key);
+            await PublishDiagnosticsForDocument(facade, version, [.. group], document);
+        }
+
+        foreach (DocumentUri uri in uris)
+        {
+            await PublishDiagnosticsForDocument(facade, version, [], uri);
+        }
+    }
+
+    /// <summary>
+    /// Publishes diagnostics for a single document.
+    /// </summary>
+    /// <param name="facade">
+    /// The facade to make the publish call.
+    /// </param>
+    /// <param name="version">
+    /// The version of the document update for concurrency.
+    /// </param>
+    /// <param name="messages">
+    /// The messages to publish.
+    /// </param>
+    /// <param name="document">
+    /// The document to publish the messages for.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task PublishDiagnosticsForDocument([NotNull] ILanguageServerFacade facade, int? version, List<CompilerMessage> messages, DocumentUri document)
+    {
+        Builder diagnostics = ImmutableArray<Diagnostic>.Empty.ToBuilder();
+
+        foreach (CompilerMessage message in messages)
+        {
+            diagnostics.Add(await message.ToDiagnostic());
+        }
+
+        facade.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams()
+        {
+            Diagnostics = new Container<Diagnostic>(diagnostics.ToArray()),
+            Uri = document,
+            Version = version
+        });
+    }
+
+    /// <summary>
+    /// Gets the <see cref="CompilerMessage"/> objects emitted by the compiler during the most recent update.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompilerMessage"/>.
+    /// </returns>
+    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tokenFiles.SelectMany(x => x.Messages).ToList()); //Task.FromResult(this.tree.Messages);
+
 }

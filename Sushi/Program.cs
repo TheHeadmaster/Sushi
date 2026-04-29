@@ -127,7 +127,7 @@ public static class Program
                     },
                     Capabilities = new ServerCapabilities()
                     {
-
+                        WorkspaceSymbolProvider = true,
                     }
                 };
             }))
