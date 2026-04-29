@@ -86,7 +86,7 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
                 this.LineNumber,
                 this.LinePosition,
                 this.CurrentLine,
-                new string(' ', this.LinePosition - 1),
+                new string(' ', this.LinePosition),
                 span > 1 ? new string('~', span) : "^");
         }
         else
@@ -97,7 +97,7 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
                 this.LineNumber,
                 this.LinePosition,
                 this.CurrentLine,
-                new string(' ', this.LinePosition - 1),
+                new string(' ', this.LinePosition),
                 span > 1 ? new string('~', span) : "^");
         }
     }
