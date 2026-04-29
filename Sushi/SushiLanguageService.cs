@@ -34,7 +34,11 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task InitializeWorkspace([NotNull] List<WorkspaceFolder> workspaceFolders) => await this.ReplaceWorkspaceFolders(workspaceFolders);
+    public async Task InitializeWorkspace([NotNull] List<WorkspaceFolder> workspaceFolders)
+    {
+        await this.ReplaceWorkspaceFolders(workspaceFolders);
+        await this.UpdateTokenFiles();
+    }
 
     /// <summary>
     /// Runs a compile job using the current settings. This runs the whole lexing, parsing, and compilation stack (unless IntermediateOnly was passed in).
