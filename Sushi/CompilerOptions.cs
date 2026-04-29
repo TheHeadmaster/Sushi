@@ -1,4 +1,4 @@
-using Serilog;
+﻿using Serilog;
 using Sushi.Diagnostics;
 
 namespace Sushi;
@@ -22,7 +22,11 @@ public sealed class CompilerOptions
     /// Instructs the compiler to only compile into the intermediate language and not into an executable.
     /// </summary>
     public bool IntermediateOnly { get; set; }
-    public bool LanguageServerMode { get; private set; }
+
+    /// <summary>
+    /// Instructs the compiler to stay open and spin up a Language Server, parsing on the fly.
+    /// </summary>
+    public bool LanguageServerMode { get; set; }
 
     /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.

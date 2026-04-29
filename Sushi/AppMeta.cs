@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.RegularExpressions;
 using Serilog.Sinks.SystemConsole.Themes;
 
@@ -60,13 +60,6 @@ public static partial class AppMeta
 #endif
 
     /// <summary>
-    /// Matches a semantic version with or without a suffix.
-    /// </summary>
-    /// <returns></returns>
-    [GeneratedRegex("([^+]+)(?:\\+[0-9a-zA-Z]+)?")]
-    private static partial Regex VersionRegex();
-
-    /// <summary>
     /// The console theme used for logging to the console and changes the colors associated with various tokens of text.
     /// </summary>
     public static AnsiConsoleTheme ConsoleTheme { get; } = new(
@@ -89,4 +82,11 @@ public static partial class AppMeta
         [ConsoleThemeStyle.LevelError] = "\x1b[38;5;0160m",
         [ConsoleThemeStyle.LevelFatal] = "\x1b[38;5;0124m"
     });
+
+    /// <summary>
+    /// Matches a semantic version with or without a suffix.
+    /// </summary>
+    /// <returns></returns>
+    [GeneratedRegex("([^+]+)(?:\\+[0-9a-zA-Z]+)?")]
+    private static partial Regex VersionRegex();
 }
