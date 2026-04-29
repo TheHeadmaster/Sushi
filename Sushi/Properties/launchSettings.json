@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Sushi": {
+      "commandName": "Project",
+      "commandLineArgs": "--project \"$(SolutionDir)TestProject\""
+    },
+    "Sushi Intermediate Only": {
+      "commandName": "Project",
+      "commandLineArgs": "--project \"$(SolutionDir)TestProject\" -intermediate"
+    }
+  }
+}
