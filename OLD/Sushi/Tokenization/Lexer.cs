@@ -13,22 +13,7 @@ public sealed partial class Lexer
 {
 
 
-    public static async Task<TokenFile> LexStringAsFileText(string source, string sourceFilePath)
-    {
-        TokenFile file = new()
-        {
-            FileName = Path.GetFileName(sourceFilePath),
-            FilePath = sourceFilePath,
-            RawSourceCode = source
-        };
 
-        while (!file.LastIndexOfFileReached())
-        {
-            await ConsumeTokenWithHighestAffinity(file);
-        }
-
-        return file;
-    }
 
 
     private static async Task ConsumeTokenWithHighestAffinity([NotNull] TokenFile file)
