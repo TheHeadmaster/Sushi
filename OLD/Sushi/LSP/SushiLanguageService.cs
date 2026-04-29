@@ -19,8 +19,6 @@ public sealed class SushiLanguageService
 
     private readonly Parser parser = new();
 
-    private readonly List<WorkspaceFolder> folders = [];
-
     private readonly List<TokenFile> tokenFiles = [];
 
     private AbstractSyntaxTree tree = null!;
@@ -69,19 +67,6 @@ public sealed class SushiLanguageService
         {
             this.tokenFiles[existingIndex] = file;
         }
-    }
-
-    public async Task Initialize(List<WorkspaceFolder> workspaceFolders)
-    {
-        await this.UpdateWorkspaceFolders(workspaceFolders);
-        await this.UpdateTokenFiles();
-        await this.UpdateSyntaxTree();
-    }
-
-    private async Task UpdateWorkspaceFolders(List<WorkspaceFolder> workspaceFolders)
-    {
-        this.folders.Clear();
-        this.folders.AddRange(workspaceFolders);
     }
 
     private async Task UpdateTokenFiles()

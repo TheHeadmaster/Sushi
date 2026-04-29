@@ -8,6 +8,7 @@ using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
 using Serilog.Formatting.Compact;
 using Sushi.Diagnostics;
+using Sushi.LSP;
 
 namespace Sushi;
 
@@ -131,6 +132,7 @@ public static class Program
                 };
             }))
             .WithServices(services => services.AddSingleton(service))
+            .WithHandler<WorkspaceFoldersHandler>()
         );
 
         await server.WaitForExit;
