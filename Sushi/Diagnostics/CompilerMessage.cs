@@ -107,7 +107,8 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
         return new Diagnostic()
         {
             Code = this.Type is CompilerMessageType.Error ? $"SUSE{this.MessageNumber:0000}" : $"SUSWARN{this.MessageNumber}",
-            Severity = this.Type switch {
+            Severity = this.Type switch
+            {
                 CompilerMessageType.Error => DiagnosticSeverity.Error,
                 CompilerMessageType.Warning => DiagnosticSeverity.Warning,
                 _ => DiagnosticSeverity.Information

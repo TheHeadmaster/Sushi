@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Newtonsoft.Json.Linq;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
