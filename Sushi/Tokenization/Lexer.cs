@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
-using Newtonsoft.Json.Linq;
 using Serilog;
 using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
@@ -63,6 +62,35 @@ public static partial class Lexer
     {
         string source = await File.ReadAllTextAsync(sourceFilePath);
 
+        TokenFile file = new()
+        {
+            FileName = Path.GetFileName(sourceFilePath),
+            FilePath = sourceFilePath,
+            RawSourceCode = source
+        };
+
+        while (!file.LastIndexOfFileReached())
+        {
+            await ConsumeTokenWithHighestAffinity(file);
+        }
+
+        return file;
+    }
+
+    /// <summary>
+    /// Lexes a string as if it were the file contents of the specified file path.
+    /// </summary>
+    /// <param name="source">
+    /// The source text.
+    /// </param>
+    /// <param name="sourceFilePath">
+    /// The source file path.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/> that returns the converted <see cref="TokenFile"/>.
+    /// </returns>
+    public static async Task<TokenFile> LexStringAsFileText(string source, string sourceFilePath)
+    {
         TokenFile file = new()
         {
             FileName = Path.GetFileName(sourceFilePath),

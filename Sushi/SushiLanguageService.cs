@@ -83,7 +83,7 @@ public sealed class SushiLanguageService
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        
+
         await this.UpdateTokenFiles();
 
         //await this.UpdateSyntaxTree();
@@ -118,6 +118,53 @@ public sealed class SushiLanguageService
         foreach (WorkspaceFolder folder in this.folders)
         {
             this.tokenFiles.AddRange(await Lexer.LexFiles(folder.Uri.GetFileSystemPath()));
+        }
+    }
+
+    /// <summary>
+    /// Updates the source directly from disk.
+    /// </summary>
+    /// <param name="sourceFilePath">
+    /// The file path of the source file to load from disk.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task UpdateSource([NotNull] string sourceFilePath)
+    {
+        TokenFile file = await Lexer.LexFile(sourceFilePath);
+
+        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+
+        if (existingIndex != -1)
+        {
+
+            this.tokenFiles[existingIndex] = file;
+        }
+    }
+
+    /// <summary>
+    /// Updates the source text of a specific document without going to disk. This usually happens
+    /// when a document gets updated but isn't saved, so pulling it from disk wouldn't grab the changes.
+    /// </summary>
+    /// <param name="text">
+    /// The text of the unsaved document.
+    /// </param>
+    /// <param name="sourceFilePath">
+    /// The source file path to match it with the document uri it belongs to.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task UpdateSourceText([NotNull] string text, string sourceFilePath)
+    {
+        TokenFile file = await Lexer.LexStringAsFileText(text, sourceFilePath);
+
+        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+
+        if (existingIndex != -1)
+        {
+            this.tokenFiles[existingIndex] = file;
         }
     }
 
@@ -201,4 +248,35 @@ public sealed class SushiLanguageService
     /// </returns>
     private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tokenFiles.SelectMany(x => x.Messages).ToList()); //Task.FromResult(this.tree.Messages);
 
+    /// <summary>
+    /// Updates the specified document and publishes diagnostics for it.
+    /// </summary>
+    /// <param name="facade">The language server facade used to update the document.</param>
+    /// <param name="textDocumentUri">
+    /// The document uri.
+    /// </param>
+    /// <param name="version">
+    /// The version number of the update request used for concurrency.
+    /// </param>
+    /// <param name="text">
+    /// The text of the document so that it can be changed.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task UpdateDocument([NotNull] ILanguageServerFacade facade, [NotNull] DocumentUri textDocumentUri, int? version, string? text)
+    {
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath);
+        }
+        else
+        {
+            await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        }
+
+        //await this.UpdateSyntaxTree();
+
+        await this.PublishDiagnosticsForAllDocuments(facade, version);
+    }
 }

@@ -78,7 +78,6 @@ public static class Program
                 };
             }))
             .WithHandler<CompletionHandler>()
-            .WithHandler<TextDocumentSyncHandler>()
             .WithHandler<SemanticTokenHandler>()
         );
 

@@ -133,6 +133,7 @@ public static class Program
             }))
             .WithServices(services => services.AddSingleton(service))
             .WithHandler<WorkspaceFoldersHandler>()
+            .WithHandler<TextDocumentSyncHandler>()
         );
 
         await server.WaitForExit;
