@@ -79,8 +79,5 @@ public interface IParser
     /// An <see cref="ExpressionNode"/> or null if there was an issue.
     /// </returns>
     public Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token) => Task.FromResult<StatementNode?>(null);
-
-    /*
-    public TokenType? TerminatingToken { get; }
-    */
 }
+

@@ -133,6 +133,8 @@ public static class Program
             }))
             .WithServices(services => services.AddSingleton(service))
             .WithHandler<WorkspaceFoldersHandler>()
+            .WithHandler<DeletedFileHandler>()
+            .WithHandler<CreatedFileHandler>()
             .WithHandler<TextDocumentSyncHandler>()
         );
 

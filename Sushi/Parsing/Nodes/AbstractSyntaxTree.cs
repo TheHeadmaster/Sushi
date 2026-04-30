@@ -9,7 +9,7 @@ namespace Sushi.Parsing.Nodes;
 public sealed class AbstractSyntaxTree : SyntaxNode
 {
     /// <summary>
-    /// The child file nodes in the tree.
+    /// The child file nodes in the tree. Each one of these nodes represents a source file.
     /// </summary>
     public List<FileNode> Children { get; set; } = [];
 
@@ -17,4 +17,7 @@ public sealed class AbstractSyntaxTree : SyntaxNode
     /// Contains the messages emitted by the parser, such as errors and warnings.
     /// </summary>
     public List<CompilerMessage> Messages { get; set; } = [];
+
+    /// <inheritdoc />
+    public override Token? GetStartToken() => this.Children.FirstOrDefault()?.GetStartToken();
 }

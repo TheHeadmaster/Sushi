@@ -5,6 +5,8 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Sushi.Diagnostics;
+using Sushi.Parsing.Core;
+using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
@@ -24,6 +26,16 @@ public sealed class SushiLanguageService
     /// The list of <see cref="TokenFile"/> objects that represent the lexed version of the source code.
     /// </summary>
     private readonly List<TokenFile> tokenFiles = [];
+
+    /// <summary>
+    /// Handles parsing <see cref="TokenFile"/> objects into an <see cref="AbstractSyntaxTree"/>.
+    /// </summary>
+    private readonly Parser parser = new();
+
+    /// <summary>
+    /// The <see cref="AbstractSyntaxTree"/> generated from parsing.
+    /// </summary>
+    private AbstractSyntaxTree tree = null!;
 
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace. Only used in LSP mode.
@@ -50,6 +62,13 @@ public sealed class SushiLanguageService
     public async Task CompileJob()
     {
         List<TokenFile> tokenFiles = await Lexer.LexFiles(AppMeta.Options.ProjectPath);
+
+        AbstractSyntaxTree tree = await this.parser.ParseFiles(tokenFiles);
+
+        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
+        {
+            await message.LogMessage();
+        }
     }
 
     /// <summary>
@@ -90,7 +109,7 @@ public sealed class SushiLanguageService
 
         await this.UpdateTokenFiles();
 
-        //await this.UpdateSyntaxTree();
+        this.tree = await this.parser.ParseFiles(this.tokenFiles);
 
         await this.PublishDiagnosticsForAllDocuments(facade, null);
     }
@@ -132,19 +151,21 @@ public sealed class SushiLanguageService
     /// The file path of the source file to load from disk.
     /// </param>
     /// <returns>
-    /// An awaitable <see cref="Task"/>.
+    /// An awaitable <see cref="Task"/> that returns the new <see cref="TokenFile"/>.
     /// </returns>
-    public async Task UpdateSource([NotNull] string sourceFilePath)
+    public async Task<TokenFile> UpdateSource([NotNull] string sourceFilePath)
     {
         TokenFile file = await Lexer.LexFile(sourceFilePath);
 
-        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+        int existingIndex = this.tokenFiles.FindIndex(x => x.FilePath.IsSamePath(sourceFilePath));
 
         if (existingIndex != -1)
         {
 
             this.tokenFiles[existingIndex] = file;
         }
+
+        return file;
     }
 
     /// <summary>
@@ -158,18 +179,20 @@ public sealed class SushiLanguageService
     /// The source file path to match it with the document uri it belongs to.
     /// </param>
     /// <returns>
-    /// An awaitable <see cref="Task"/>.
+    /// An awaitable <see cref="Task"/> that returns the new <see cref="TokenFile"/>.
     /// </returns>
-    public async Task UpdateSourceText([NotNull] string text, string sourceFilePath)
+    public async Task<TokenFile> UpdateSourceText([NotNull] string text, string sourceFilePath)
     {
         TokenFile file = await Lexer.LexStringAsFileText(text, sourceFilePath);
 
-        int existingIndex = this.tokenFiles.FindIndex(x => Uri.Compare(new Uri(x.FilePath), new Uri(sourceFilePath), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+        int existingIndex = this.tokenFiles.FindIndex(x => x.FilePath.IsSamePath(sourceFilePath));
 
         if (existingIndex != -1)
         {
             this.tokenFiles[existingIndex] = file;
         }
+
+        return file;
     }
 
     /// <summary>
@@ -192,7 +215,7 @@ public sealed class SushiLanguageService
 
         foreach (IGrouping<string, CompilerMessage> group in messages.GroupBy(x => x.FilePath))
         {
-            int existingIndex = uris.FindIndex(x => Uri.Compare(x.ToUri(), new Uri(group.Key), UriComponents.Path, UriFormat.SafeUnescaped, StringComparison.OrdinalIgnoreCase) == 0);
+            int existingIndex = uris.FindIndex(x => x.ToUri().IsSamePath(group.Key));
 
             if (existingIndex != -1)
             {
@@ -250,7 +273,7 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompilerMessage"/>.
     /// </returns>
-    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tokenFiles.SelectMany(x => x.Messages).ToList()); //Task.FromResult(this.tree.Messages);
+    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tree.Messages);
 
     /// <summary>
     /// Updates the specified document and publishes diagnostics for it.
@@ -270,17 +293,66 @@ public sealed class SushiLanguageService
     /// </returns>
     public async Task UpdateDocument([NotNull] ILanguageServerFacade facade, [NotNull] DocumentUri textDocumentUri, int? version, string? text)
     {
-        if (!string.IsNullOrWhiteSpace(text))
-        {
-            await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath);
-        }
-        else
-        {
-            await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
-        }
+        TokenFile file = !string.IsNullOrWhiteSpace(text)
+            ? await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath)
+            : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
 
-        //await this.UpdateSyntaxTree();
+        await this.parser.UpdateFile(file);
 
         await this.PublishDiagnosticsForAllDocuments(facade, version);
+    }
+
+    /// <summary>
+    /// Adds the specified documents and publishes diagnostics for them.
+    /// </summary>
+    /// <param name="facade">
+    /// The language server facade used to add the documents.
+    /// </param>
+    /// <param name="filePaths">
+    /// The list of file paths.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task AddDocuments([NotNull] ILanguageServerFacade facade, [NotNull] List<Uri> filePaths)
+    {
+        foreach (Uri filePath in filePaths)
+        {
+            TokenFile file = await Lexer.LexFile(filePath.AbsolutePath);
+
+            this.tokenFiles.Add(file);
+
+            await this.parser.AddFile(file);
+        }
+
+        await this.PublishDiagnosticsForAllDocuments(facade, null);
+    }
+
+    /// <summary>
+    /// Removes the specified documents and publishes diagnostics for the remaining files.
+    /// </summary>
+    /// <param name="facade">
+    /// The language server facade used to remove the documents.
+    /// </param>
+    /// <param name="filePaths">
+    /// The list of file paths.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    public async Task RemoveDocuments([NotNull] ILanguageServerFacade facade, [NotNull] List<Uri> filePaths)
+    {
+        foreach (Uri filePath in filePaths)
+        {
+            TokenFile? existing = this.tokenFiles.FirstOrDefault(x => x.FilePath.IsSamePath(filePath));
+
+            if (existing is not null)
+            {
+                this.tokenFiles.Remove(existing);
+                await this.parser.RemoveFile(existing);
+            }
+        }
+
+        await this.PublishDiagnosticsForAllDocuments(facade, null);
     }
 }

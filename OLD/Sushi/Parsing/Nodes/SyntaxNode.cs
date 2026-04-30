@@ -30,12 +30,4 @@ public abstract class SyntaxNode
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     public virtual Task CompileHeader([NotNull] CompilerVisitor compiler) => Task.CompletedTask;
-
-    /// <summary>
-    /// Gets the starting <see cref="Token"/> for this node.
-    /// </summary>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    public abstract Token? GetStartToken();
 }

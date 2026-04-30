@@ -14,19 +14,5 @@ namespace Sushi.LSP;
 
 public sealed class SushiLanguageService
 {
-    private readonly Parser parser = new();
-    private AbstractSyntaxTree tree = null!;
-
-
-    private async Task UpdateSyntaxTree()
-    {
-        Parser parser = new();
-        this.tree = await parser.ParseSource(this.tokenFiles);
-    }
-
-
-
-
-
     public async Task PushSemanticTokens([NotNull] SemanticTokensBuilder builder, [NotNull] DocumentUri document, [NotNull] SemanticTokensLegend legend) => await new SemanticTokenVisitor(builder, document, legend).Visit(this.tree);
 }
