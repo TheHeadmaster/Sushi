@@ -44,7 +44,6 @@ public static class Constants
     /// </summary>
     public static ReadOnlyDictionary<string, TokenType> Symbols { get; } = new ReadOnlyDictionary<string, TokenType>(new Dictionary<string, TokenType>()
     {
-        { ";", TokenType.Terminator },
         { "(", TokenType.OpeningParenthesis },
         { ")", TokenType.ClosingParenthesis },
         { "{", TokenType.OpeningSquiggly },

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -6,7 +5,9 @@ namespace Sushi.Parsing.Nodes;
 /// <summary>
 /// Represents an expression as a statement.
 /// </summary>
-/// <param name="expression"></param>
+/// <param name="expression">
+/// The expression contained in the statement.
+/// </param>
 public sealed class ExpressionStatementNode(ExpressionNode? expression) : StatementNode
 {
     /// <summary>

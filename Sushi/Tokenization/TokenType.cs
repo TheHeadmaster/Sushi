@@ -18,5 +18,10 @@ public enum TokenType
     /// <summary>
     /// This is a token that represents a newline.
     /// </summary>
-    Newline
+    Newline,
+
+    /// <summary>
+    /// This is a token that represents a terminator character, i.e. ";".
+    /// </summary>
+    Terminator
 }
