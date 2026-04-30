@@ -13,11 +13,12 @@ public sealed class AbstractSyntaxTree : SyntaxNode
     /// </summary>
     public List<FileNode> Children { get; set; } = [];
 
-    /// <summary>
-    /// Contains the messages emitted by the parser, such as errors and warnings.
-    /// </summary>
-    public List<CompilerMessage> Messages { get; set; } = [];
-
     /// <inheritdoc />
     public override Token? GetStartToken() => this.Children.FirstOrDefault()?.GetStartToken();
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Children.LastOrDefault()?.GetEndToken();
+
+    /// <inheritdoc/>
+    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Children.SelectMany(y => y.GetMessages()))];
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Tokenization;
 
@@ -27,9 +28,14 @@ public sealed class Parser
     private int currentIndex;
 
     /// <summary>
-    /// The list of messages accumulated from parsing errors and warnings.
+    /// The current file.
     /// </summary>
-    public List<CompilerMessage> Messages { get; set; } = [];
+    private TokenFile currentFile = null!;
+
+    /// <summary>
+    /// The current file node.
+    /// </summary>
+    private FileNode currentFileNode = null!;
 
     /// <summary>
     /// The available parsers.
@@ -115,7 +121,6 @@ public sealed class Parser
     public async Task<AbstractSyntaxTree> ParseFiles([NotNull] List<TokenFile> tokenFiles)
     {
         AbstractSyntaxTree tree = new();
-        this.Messages = [];
 
         foreach (TokenFile file in tokenFiles)
         {
@@ -123,14 +128,6 @@ public sealed class Parser
         }
 
         this.tree = tree;
-
-        tree.Messages = this.Messages;
-
-        //await this.Reference.Visit(tree);
-
-        //VerificationVisitor verification = new();
-
-        //await verification.Verify(tree);
 
         return tree;
     }
@@ -148,8 +145,12 @@ public sealed class Parser
     {
         this.tokens = file.Tokens;
         this.currentIndex = 0;
-        //await this.Reference.StartFile(file.FilePath);
-        this.tree.Children.Add(new FileNode(file.FilePath, file.FileName, await this.ParseStatements()));
+        this.currentFile = file;
+
+        List<StatementNode> statements = [];
+        this.currentFileNode = new FileNode(file.FilePath, file.FileName, statements);
+        statements.AddRange(await this.ParseStatements());
+        this.tree.Children.Add(this.currentFileNode);
     }
 
     /// <summary>
@@ -195,7 +196,7 @@ public sealed class Parser
             // We can assume every file has at least one token, and therefore
             // if Peek(0) returns null then Previous() must return a non-null value.
             Token previous = this.Previous()!;
-            //this.Messages.Add(new UnexpectedEndOfFile(previous, this.Reference.CurrentFilePath!));
+            this.currentFileNode.Messages.Add(new UnexpectedEndOfFileError(previous, this.currentFile.FilePath));
         }
 
         return Task.FromResult(token);
@@ -220,7 +221,7 @@ public sealed class Parser
 
         if (!types.Contains(token.Type))
         {
-            //this.Messages.Add(new WrongTokenError(token, types, this.Reference.CurrentFilePath!));
+            this.currentFileNode.Messages.Add(new WrongTokenError(token, types, this.currentFile.FilePath));
         }
 
         this.Pop();
@@ -266,7 +267,7 @@ public sealed class Parser
 
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            //this.Messages.Add(new UnexpectedPrefixOperator(token, this.Reference.CurrentFilePath!));
+            this.currentFileNode.Messages.Add(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
             return null;
         }
 
@@ -283,7 +284,7 @@ public sealed class Parser
 
             if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                //this.Messages.Add(new UnexpectedInfixOperator(token, this.Reference.CurrentFilePath!));
+                this.currentFileNode.Messages.Add(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
                 return left;
             }
 

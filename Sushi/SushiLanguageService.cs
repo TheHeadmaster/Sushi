@@ -7,6 +7,7 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Precompilation;
 using Sushi.Tokenization;
 using Builder = System.Collections.Immutable.ImmutableArray<OmniSharp.Extensions.LanguageServer.Protocol.Models.Diagnostic>.Builder;
 
@@ -38,6 +39,11 @@ public sealed class SushiLanguageService
     private AbstractSyntaxTree tree = null!;
 
     /// <summary>
+    /// Handles tracking and resolution of references, such as namespaces, variable names, and the like.
+    /// </summary>
+    private ReferenceResolver reference = null!;
+
+    /// <summary>
     /// Initializes the language service with the information about the currently open workspace. Only used in LSP mode.
     /// </summary>
     /// <param name="workspaceFolders">
@@ -50,6 +56,8 @@ public sealed class SushiLanguageService
     {
         await this.ReplaceWorkspaceFolders(workspaceFolders);
         await this.UpdateTokenFiles();
+        this.tree = await this.parser.ParseFiles(this.tokenFiles);
+        await this.UpdatePostParsing();
     }
 
     /// <summary>
@@ -65,10 +73,39 @@ public sealed class SushiLanguageService
 
         AbstractSyntaxTree tree = await this.parser.ParseFiles(tokenFiles);
 
-        foreach (CompilerMessage message in tree.Messages.OrderBy(x => x.Type))
+        await this.UpdatePostParsing();
+
+        foreach (CompilerMessage message in (await this.GetMessages()).OrderBy(x => x.Type))
         {
             await message.LogMessage();
         }
+    }
+
+    /// <summary>
+    /// Call this method whenever a <see cref="TokenFile"/> or <see cref="AbstractSyntaxTree"/> is modified to update everything
+    /// down the chain that relies on it.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private async Task UpdatePostParsing()
+    {
+        this.reference = new();
+        await this.reference.Visit(this.tree);
+    }
+
+    /// <summary>
+    /// Call this method whenever a <see cref="TokenFile"/> or <see cref="AbstractSyntaxTree"/> is modified to update everything
+    /// down the chain that relies on it.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private async Task UpdatePostParsing([NotNull] ILanguageServerFacade facade)
+    {
+        await this.UpdatePostParsing();
+
+        await this.PublishDiagnosticsForAllDocuments(facade, null);
     }
 
     /// <summary>
@@ -111,7 +148,7 @@ public sealed class SushiLanguageService
 
         this.tree = await this.parser.ParseFiles(this.tokenFiles);
 
-        await this.PublishDiagnosticsForAllDocuments(facade, null);
+        await this.UpdatePostParsing(facade);
     }
 
     /// <summary>
@@ -120,12 +157,10 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    private Task ReplaceWorkspaceFolders([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders)
+    private async Task ReplaceWorkspaceFolders([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders)
     {
         this.folders.Clear();
         this.folders.AddRange(workspaceFolders);
-
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -273,7 +308,7 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompilerMessage"/>.
     /// </returns>
-    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult(this.tree.Messages);
+    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult<List<CompilerMessage>>([..this.tree.GetMessages().Concat(this.tokenFiles.SelectMany(x => x.Messages))]);
 
     /// <summary>
     /// Updates the specified document and publishes diagnostics for it.
@@ -298,6 +333,8 @@ public sealed class SushiLanguageService
             : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
 
         await this.parser.UpdateFile(file);
+
+        await this.UpdatePostParsing(facade);
 
         await this.PublishDiagnosticsForAllDocuments(facade, version);
     }
@@ -324,6 +361,8 @@ public sealed class SushiLanguageService
 
             await this.parser.AddFile(file);
         }
+
+        await this.UpdatePostParsing(facade);
 
         await this.PublishDiagnosticsForAllDocuments(facade, null);
     }
@@ -352,6 +391,8 @@ public sealed class SushiLanguageService
                 await this.parser.RemoveFile(existing);
             }
         }
+
+        await this.UpdatePostParsing(facade);
 
         await this.PublishDiagnosticsForAllDocuments(facade, null);
     }

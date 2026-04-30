@@ -1,3 +1,4 @@
+using Sushi.Diagnostics;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -17,4 +18,10 @@ public sealed class ExpressionStatementNode(ExpressionNode? expression) : Statem
 
     /// <inheritdoc />
     public override Token? GetStartToken() => this.Expression?.GetStartToken();
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Expression?.GetEndToken();
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Expression?.GetMessages() ?? [])];
 }

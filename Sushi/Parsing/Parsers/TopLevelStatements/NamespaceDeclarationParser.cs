@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
-using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Nodes.TopLevelStatements;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers.TopLevelStatements;
@@ -27,16 +27,9 @@ public sealed class NamespaceDeclarationParser : IParser
 
         ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
-        if (expression is not IdentifierNode and not NamespaceNode)
-        {
-            parser.Messages.Add(new InvalidNamespaceError(token, parser.Previous()!, parser.Reference.CurrentFilePath!));
-        }
-
         NamespaceDeclarationNode namespaceStatement = new(token, expression);
 
         await parser.ExpectAndPop(TokenType.Terminator);
-
-        await parser.Reference.StartNamespace(namespaceStatement);
 
         return namespaceStatement;
     }

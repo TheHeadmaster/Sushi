@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
@@ -9,14 +12,14 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="token">
 /// The <see cref="Token"/> that was actually found.
 /// </param>
-/// <param name="expectedType">
+/// <param name="expectedTypes">
 /// The <see cref="TokenType"/> values that were allowed in this context.
+/// </param>
+/// <param name="filePath">
+/// The path of the file that the error occurred in.
 /// </param>
 public sealed class WrongTokenError([NotNull] Token token, [NotNull] TokenType[] expectedTypes, [NotNull] string filePath) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition, filePath)
 {
-    /// <inheritdoc />
-    public override int MessageNumber => 4;
-
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
 
@@ -34,3 +37,4 @@ public sealed class WrongTokenError([NotNull] Token token, [NotNull] TokenType[]
     /// <inheritdoc />
     public override Task<int> GetMessageSpan() => Task.FromResult(token.Value.Length);
 }
+

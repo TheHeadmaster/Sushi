@@ -23,5 +23,10 @@ public enum TokenType
     /// <summary>
     /// This is a token that represents a terminator character, i.e. ";".
     /// </summary>
-    Terminator
+    Terminator,
+
+    /// <summary>
+    /// This is a token that represents the namespace keyword.
+    /// </summary>
+    Namespace
 }

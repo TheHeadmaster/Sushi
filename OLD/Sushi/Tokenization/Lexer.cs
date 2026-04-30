@@ -18,12 +18,7 @@ public sealed partial class Lexer
 
     private static async Task ConsumeTokenWithHighestAffinity([NotNull] TokenFile file)
     {
-        else if (IsKeyword(remainingInput, out string? keyword, out TokenType? keywordType))
-        {
-            handled = true;
-            tokenValue = keyword;
-            type = keywordType.Value;
-        }
+
         else if (IsIdentifier(remainingInput, out string? identifier))
         {
             handled = true;
@@ -94,41 +89,6 @@ public sealed partial class Lexer
         number = match.Value;
         return true;
     }
-
-    /// <summary>
-    /// Returns whether the specified input can be consumed as a keyword.
-    /// </summary>
-    /// <param name="remainingInput">The remaining input of the source file.</param>
-    /// <param name="keyword">The keyword that gets generated, if any.</param>
-    /// <param name="keywordType">The type of the keyword, if any.</param>
-    /// <returns>
-    /// True if the consumption was successful. False otherwise.
-    /// </returns>
-    private static bool IsKeyword(string remainingInput, [NotNullWhen(true)] out string? keyword, [NotNullWhen(true)] out TokenType? keywordType)
-    {
-        keyword = null;
-        keywordType = null;
-
-        Match match = Keyword().Match(remainingInput);
-
-        if (!match.Success)
-        {
-            return false;
-        }
-
-        foreach ((string key, TokenType value) in Constants.ReservedKeywords)
-        {
-            if (match.Value.Equals(key, StringComparison.Ordinal))
-            {
-                keyword = key;
-                keywordType = value;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     
 
     /// <summary>
@@ -181,14 +141,4 @@ public sealed partial class Lexer
     /// </returns>
     [GeneratedRegex(@"^[0-9]+(\.[0-9]+)?")]
     private static partial Regex NumberLiteral();
-
-
-    /// <summary>
-    /// Matches valid keyword strings.
-    /// </summary>
-    /// <returns>
-    /// The <see cref="Regex"/>.
-    /// </returns>
-    [GeneratedRegex(@"^[a-z][a-z0-9]*")]
-    private static partial Regex Keyword();
 }

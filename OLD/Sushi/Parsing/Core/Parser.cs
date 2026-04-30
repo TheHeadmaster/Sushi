@@ -14,10 +14,6 @@ namespace Sushi.Parsing.Core;
 /// </summary>
 public sealed class Parser
 {
-    /// <summary>
-    /// Handles tracking and resolution of references.
-    /// </summary>
-    public ReferenceResolver Reference { get; } = new();
 
     /// <summary>
     /// Uses a snippet of tokens as the source instead of a source file. Mostly used for testing.

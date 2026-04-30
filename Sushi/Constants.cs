@@ -16,4 +16,13 @@ public static class Constants
     {
         { ";", TokenType.Terminator },
     });
+
+    /// <summary>
+    /// Contains keywords reserved by the language, and therefore cannot be used as identifiers.
+    /// </summary>
+    public static ReadOnlyDictionary<string, TokenType> ReservedKeywords { get; } = new ReadOnlyDictionary<string, TokenType>(
+        new Dictionary<string, TokenType>()
+    {
+        { "namespace", TokenType.Namespace }
+    });
 }

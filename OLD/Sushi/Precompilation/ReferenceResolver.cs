@@ -30,10 +30,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// </summary>
     private readonly List<SushiType> types = [];
 
-    /// <summary>
-    /// The currently included namespaces in the resolving scope.
-    /// </summary>
-    private readonly List<string> includedNamespaces = [];
+
 
     /// <summary>
     /// Starts a new namespace scope. All type declarations inside of this scope will be a part of this namespace.
@@ -188,28 +185,9 @@ public sealed partial class ReferenceResolver : ASTVisitor
         return [..namespaceFilePaths.Distinct()];
     }
 
-    /// <inheritdoc />
-    protected override async Task VisitTree([NotNull] AbstractSyntaxTree tree)
-    {
-        this.types.AddRange(Constants.PrimitiveResolvedTypes);
 
-        foreach (FileNode child in tree.Children)
-        {
-            await this.Visit(child);
-        }
-    }
 
-    /// <inheritdoc />
-    protected override async Task VisitFile([NotNull] FileNode file)
-    {
-        this.includedNamespaces.Clear();
-        this.CurrentFilePath = file.FilePath;
 
-        foreach (StatementNode statement in file.Statements)
-        {
-            await this.Visit(statement);
-        }
-    }
 
     /// <inheritdoc />
     protected override async Task VisitUsing([NotNull] UsingNode usingNode)
@@ -245,13 +223,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
         }
     }
 
-    /// <inheritdoc />
-    protected override async Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration)
-    {
-        List<string> namespaceChain = await namespaceDeclaration.BuildNamespace();
 
-        this.includedNamespaces.Add(string.Join('.', namespaceChain));
-    }
 
     /// <inheritdoc />
     protected override async Task VisitClass([NotNull] ClassNode classNode)

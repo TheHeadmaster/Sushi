@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json.Linq;
 using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
@@ -18,9 +17,6 @@ namespace Sushi.Diagnostics.Errors;
 /// </param>
 public sealed class SyntaxError([NotNull] string currentLine, [NotNull] int lineNumber, [NotNull] int linePosition, [NotNull] Token token, [NotNull] string filePath) : CompilerMessage(currentLine, lineNumber, linePosition, filePath)
 {
-    /// <inheritdoc />
-    public override int MessageNumber => 1;
-
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
 

@@ -8,60 +8,6 @@ namespace Sushi.Precompilation;
 /// </summary>
 public abstract class ASTVisitor
 {
-    /// <summary>
-    /// Visits a <see cref="SyntaxNode"/>.
-    /// </summary>
-    /// <param name="node">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    public virtual async Task Visit(SyntaxNode node)
-    {
-        await (node switch
-        {
-            AbstractSyntaxTree tree => this.VisitTree(tree),
-            AssignmentNode assignment => this.VisitAssignment(assignment),
-            BinaryExpressionNode binary => this.VisitBinary(binary),
-            BlockNode block => this.VisitBlock(block),
-            ClassNode classNode => this.VisitClass(classNode),
-            ConstantNode constant => this.VisitConstant(constant),
-            CreateNode create => this.VisitCreate(create),
-            CreatorDeclarationNode creator => this.VisitCreatorDeclaration(creator),
-            DestroyNode destroy => this.VisitDestroy(destroy),
-            DestroyerDeclarationNode destroyer => this.VisitDestroyerDeclaration(destroyer),
-            DoWhileNode doWhile => this.VisitDoWhile(doWhile),
-            ExpressionStatementNode expression => this.VisitExpressionStatement(expression),
-            FileNode file => this.VisitFile(file),
-            IdentifierNode identifier => this.VisitIdentifier(identifier),
-            IfNode ifNode => this.VisitIf(ifNode),
-            MemberDeclarationNode member => this.VisitMemberDeclaration(member),
-            MethodCallNode method => this.VisitMethodCall(method),
-            MethodDeclarationNode method => this.VisitMethodDeclaration(method),
-            NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
-            NamespaceNode namespaceNode => this.VisitNamespace(namespaceNode),
-            ParameterListNode parameterList => this.VisitParameterList(parameterList),
-            ParameterNode parameter => this.VisitParameter(parameter),
-            TypeNode type => this.VisitType(type),
-            UnaryExpressionNode unary => this.VisitUnary(unary),
-            UsingNode usingNode => this.VisitUsing(usingNode),
-            VariableDeclarationNode variable => this.VisitVariableDeclaration(variable),
-            WhileNode whileNode => this.VisitWhile(whileNode),
-            _ => Task.CompletedTask
-        });
-    }
-
-    /// <summary>
-    /// Visits an <see cref="AbstractSyntaxTree"/>.
-    /// </summary>
-    /// <param name="tree">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitTree([NotNull] AbstractSyntaxTree tree) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="AssignmentNode"/>.
@@ -141,39 +87,6 @@ public abstract class ASTVisitor
     protected virtual Task VisitDoWhile([NotNull] DoWhileNode doWhile) => Task.CompletedTask;
 
     /// <summary>
-    /// Visits an <see cref="ExpressionStatementNode"/>.
-    /// </summary>
-    /// <param name="expression">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitExpressionStatement([NotNull] ExpressionStatementNode expression) => Task.CompletedTask;
-
-    /// <summary>
-    /// Visits a <see cref="FileNode"/>.
-    /// </summary>
-    /// <param name="file">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitFile([NotNull] FileNode file) => Task.CompletedTask;
-
-    /// <summary>
-    /// Visits an <see cref="IdentifierNode"/>.
-    /// </summary>
-    /// <param name="identifier">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitIdentifier([NotNull] IdentifierNode identifier) => Task.CompletedTask;
-
-    /// <summary>
     /// Visits a <see cref="IfNode"/>.
     /// </summary>
     /// <param name="ifNode">
@@ -217,27 +130,6 @@ public abstract class ASTVisitor
     /// </returns>
     protected virtual Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method) => Task.CompletedTask;
 
-    /// <summary>
-    /// Visits a <see cref="NamespaceDeclarationNode"/>.
-    /// </summary>
-    /// <param name="namespaceDeclaration">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration) => Task.CompletedTask;
-
-    /// <summary>
-    /// Visits a <see cref="NamespaceNode"/>.
-    /// </summary>
-    /// <param name="namespaceNode">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitNamespace([NotNull] NamespaceNode namespaceNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="TypeNode"/>.

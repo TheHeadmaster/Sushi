@@ -13,11 +13,11 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="endToken">
 /// The token where the error ends.
 /// </param>
+/// <param name="filePath">
+/// The path to the file where the error occurred.
+/// </param>
 public sealed class InvalidNamespaceError([NotNull] Token startToken, [NotNull] Token endToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
-    /// <inheritdoc />
-    public override int MessageNumber => 7;
-
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
 

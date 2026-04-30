@@ -9,11 +9,11 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="token">
 /// The <see cref="Token"/> that was actually found.
 /// </param>
+/// <param name="filePath">
+/// The path of the file that the error came from.
+/// </param>
 public sealed class UnexpectedPrefixOperator([NotNull] Token token, [NotNull] string filePath) : CompilerMessage(token.CurrentLine, token.LineNumber, token.LinePosition, filePath)
 {
-    /// <inheritdoc />
-    public override int MessageNumber => 5;
-
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
 

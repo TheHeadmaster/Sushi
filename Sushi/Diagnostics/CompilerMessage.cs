@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Serilog;
+using Sushi.Diagnostics.Errors;
 using Range = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 
 namespace Sushi.Diagnostics;
@@ -25,7 +26,16 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
     /// <summary>
     /// The message number is a unique identifier that categorizes the type of message.
     /// </summary>
-    public abstract int MessageNumber { get; }
+    public int MessageNumber => this switch
+    {
+        SyntaxError => 1,
+        UnexpectedEndOfFileError => 2,
+        WrongTokenError => 3,
+        UnexpectedPrefixOperator => 4,
+        UnexpectedInfixOperator => 5,
+        InvalidNamespaceError => 6,
+        _ => throw new InvalidOperationException()
+    };
 
     /// <summary>
     /// The line number of the message.

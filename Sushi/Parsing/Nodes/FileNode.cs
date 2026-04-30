@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes;
@@ -34,4 +35,10 @@ public sealed class FileNode([NotNull] string filePath, [NotNull] string fileNam
 
     /// <inheritdoc />
     public override Token? GetStartToken() => this.Statements.FirstOrDefault()?.GetStartToken();
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Statements.LastOrDefault()?.GetEndToken();
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Statements.SelectMany(statement => statement.GetMessages()))];
 }

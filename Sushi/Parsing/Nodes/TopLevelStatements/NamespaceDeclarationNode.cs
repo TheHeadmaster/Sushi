@@ -1,7 +1,10 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
+using Sushi.Parsing.Nodes.Expressions.Core;
+using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes.TopLevelStatements;
 
 /// <summary>
 /// Represents a namespace declaration.
@@ -21,6 +24,9 @@ public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNo
 
     /// <inheritdoc />
     public override Token? GetStartToken() => token;
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Body?.GetEndToken();
 
     /// <summary>
     /// Builds a namespace chain from this using node's namespace expression.
@@ -76,4 +82,7 @@ public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNo
 
         return Task.FromResult(nextNode);
     }
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Body?.GetMessages() ?? [])];
 }

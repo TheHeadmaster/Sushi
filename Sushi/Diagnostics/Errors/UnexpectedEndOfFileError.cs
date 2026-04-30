@@ -10,11 +10,11 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="startToken">
 /// The token where the error starts.
 /// </param>
-public sealed class UnexpectedEndOfFile([NotNull] Token startToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition + startToken.Value.Length, filePath)
+/// <param name="filePath">
+/// The path of the file where the error occurred.
+/// </param>
+public sealed class UnexpectedEndOfFileError([NotNull] Token startToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition + startToken.Value.Length, filePath)
 {
-    /// <inheritdoc />
-    public override int MessageNumber => 3;
-
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
 
