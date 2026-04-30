@@ -147,6 +147,12 @@ public static partial class Lexer
             tokenValue = newline;
             type = TokenType.Newline;
         }
+        else if (IsSymbol(file.Lookahead(1) ?? string.Empty, out string? symbol, out TokenType? symbolType))
+        {
+            handled = true;
+            tokenValue = symbol;
+            type = symbolType.Value;
+        }
 
         if (!handled)
         {
@@ -167,6 +173,33 @@ public static partial class Lexer
         }
 
         file.CurrentPosition += tokenValue.Length;
+    }
+
+    /// <summary>
+    /// Returns whether the specified input can be consumed as a symbol.
+    /// </summary>
+    /// <param name="sample">The first few characters of the remaining input as a sample.</param>
+    /// <param name="symbol">The symbol that gets generated, if any.</param>
+    /// <param name="symbolType">The type of the symbol, if any.</param>
+    /// <returns>
+    /// True if the consumption was successful. False otherwise.
+    /// </returns>
+    private static bool IsSymbol(string sample, [NotNullWhen(true)] out string? symbol, [NotNullWhen(true)] out TokenType? symbolType)
+    {
+        symbol = null;
+        symbolType = null;
+
+        foreach ((string key, TokenType value) in Constants.Symbols.OrderByDescending(x => x.Key.Length))
+        {
+            if (key == sample || key == sample[0].ToString())
+            {
+                symbol = key;
+                symbolType = value;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
