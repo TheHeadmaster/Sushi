@@ -49,7 +49,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
 
         if (namespaceDeclaration.Body is not IdentifierNode and not NamespaceNode)
         {
-            this.messages.Add(new InvalidNamespaceError(namespaceDeclaration.Body.GetStartToken(), namespaceDeclaration.Body.GetEndToken(), this.currentFile.FilePath));
+            this.messages.Add(new InvalidNamespaceError(namespaceDeclaration.Body.GetStartToken()!, namespaceDeclaration.Body.GetEndToken(), this.currentFile.FilePath));
             return;
         }
 

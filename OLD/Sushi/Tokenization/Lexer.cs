@@ -19,12 +19,7 @@ public sealed partial class Lexer
     private static async Task ConsumeTokenWithHighestAffinity([NotNull] TokenFile file)
     {
 
-        else if (IsIdentifier(remainingInput, out string? identifier))
-        {
-            handled = true;
-            tokenValue = identifier;
-            type = TokenType.Identifier;
-        }
+
         else if (IsString(remainingInput, out string? stringLiteral))
         {
             handled = true;
@@ -39,33 +34,6 @@ public sealed partial class Lexer
         }
     }
 
-    /// <summary>
-    /// Returns whether the specified input can be consumed as an identifier.
-    /// </summary>
-    /// <param name="remainingInput">The remaining input of the source file.</param>
-    /// <param name="identifier">The identifier that gets generated, if any.</param>
-    /// <returns>
-    /// True if the consumption was successful. False otherwise.
-    /// </returns>
-    private static bool IsIdentifier(string remainingInput, [NotNullWhen(true)] out string? identifier)
-    {
-        identifier = null;
-
-        Match match = Identifier().Match(remainingInput);
-
-        if (!match.Success)
-        {
-            return false;
-        }
-
-        if (!match.Value.StartsWith("@", StringComparison.InvariantCultureIgnoreCase) && Constants.ReservedKeywords.ContainsKey(match.Value))
-        {
-            return false;
-        }
-
-        identifier = match.Value.Replace("@", string.Empty, StringComparison.InvariantCultureIgnoreCase);
-        return true;
-    }
 
     /// <summary>
     /// Returns whether the specified input can be consumed as a number.
@@ -115,14 +83,7 @@ public sealed partial class Lexer
     }
 
    
-    /// <summary>
-    /// Matches valid identifier strings.
-    /// </summary>
-    /// <returns>
-    /// The <see cref="Regex"/>.
-    /// </returns>
-    [GeneratedRegex(@"^@?[a-zA-Z][a-zA-Z0-9]*")]
-    private static partial Regex Identifier();
+
 
     /// <summary>
     /// Matches valid string literal strings.

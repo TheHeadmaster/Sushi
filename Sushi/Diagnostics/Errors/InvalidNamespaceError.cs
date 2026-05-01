@@ -16,7 +16,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="filePath">
 /// The path to the file where the error occurred.
 /// </param>
-public sealed class InvalidNamespaceError([NotNull] Token startToken, [NotNull] Token endToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
+public sealed class InvalidNamespaceError([NotNull] Token startToken, Token? endToken, [NotNull] string filePath) : CompilerMessage(startToken.CurrentLine, startToken.LineNumber, startToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;
@@ -25,5 +25,7 @@ public sealed class InvalidNamespaceError([NotNull] Token startToken, [NotNull] 
     public override Task<string> GetDescription() => Task.FromResult($"Namespace expressions can only contain identifiers and the dot operator");
 
     /// <inheritdoc />
-    public override Task<int> GetMessageSpan() => Task.FromResult(endToken.LinePosition - startToken.LinePosition + endToken.Value.Length);
+    public override Task<int> GetMessageSpan() => Task.FromResult(endToken is null
+        ? startToken.Value.Length
+        : endToken.LinePosition - startToken.LinePosition + endToken.Value.Length);
 }

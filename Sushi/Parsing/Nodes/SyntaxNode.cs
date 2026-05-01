@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Tokenization;
 
@@ -35,4 +36,17 @@ public abstract class SyntaxNode
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     public abstract Token? GetEndToken();
+
+    /// <summary>
+    /// Addes a message to the messages list for this node.
+    /// </summary>
+    /// <param name="message">
+    /// The message to add.
+    /// </param>
+    public Task AddMessage([NotNull] CompilerMessage message)
+    {
+        this.Messages.Add(message);
+
+        return Task.CompletedTask;
+    }
 }

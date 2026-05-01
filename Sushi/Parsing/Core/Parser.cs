@@ -185,7 +185,7 @@ public sealed class Parser
     /// <returns>
     /// The <see cref="Token"/> or null if there isn't one.
     /// </returns>
-    public Task<Token?> PeekAndExpectNotEOF()
+    public async Task<Token?> PeekAndExpectNotEOF()
     {
         Token? token = this.Peek();
 
@@ -195,10 +195,10 @@ public sealed class Parser
             // We can assume every file has at least one token, and therefore
             // if Peek(0) returns null then Previous() must return a non-null value.
             Token previous = this.Previous()!;
-            this.currentFileNode.Messages.Add(new UnexpectedEndOfFileError(previous, this.currentFile.FilePath));
+            await this.currentFileNode.AddMessage(new UnexpectedEndOfFileError(previous, this.currentFile.FilePath));
         }
 
-        return Task.FromResult(token);
+        return token;
     }
 
     /// <summary>
@@ -220,7 +220,7 @@ public sealed class Parser
 
         if (!types.Contains(token.Type))
         {
-            this.currentFileNode.Messages.Add(new WrongTokenError(token, types, this.currentFile.FilePath));
+            await this.currentFileNode.AddMessage(new WrongTokenError(token, types, this.currentFile.FilePath));
         }
 
         this.Pop();
@@ -266,7 +266,7 @@ public sealed class Parser
 
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            this.currentFileNode.Messages.Add(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
+            await this.currentFileNode.AddMessage(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
             return null;
         }
 
@@ -283,7 +283,7 @@ public sealed class Parser
 
             if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                this.currentFileNode.Messages.Add(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
+                await this.currentFileNode.AddMessage(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
                 return left;
             }
 
