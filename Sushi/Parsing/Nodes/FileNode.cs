@@ -40,5 +40,5 @@ public sealed class FileNode([NotNull] string filePath, [NotNull] string fileNam
     public override Token? GetEndToken() => this.Statements.LastOrDefault()?.GetEndToken();
 
     /// <inheritdoc />
-    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Statements.SelectMany(statement => statement.GetMessages()))];
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Statements.SelectMany(statement => statement.AggregateMessages()))];
 }

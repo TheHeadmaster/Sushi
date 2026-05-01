@@ -24,5 +24,5 @@ public sealed class IdentifierNode([NotNull] Token token) : ExpressionNode
     public override Token? GetEndToken() => token;
 
     /// <inheritdoc />
-    public override List<CompilerMessage> GetMessages() => this.Messages;
+    public override List<CompilerMessage> AggregateMessages() => this.Messages;
 }

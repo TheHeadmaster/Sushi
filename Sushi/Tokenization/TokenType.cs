@@ -28,5 +28,10 @@ public enum TokenType
     /// <summary>
     /// This is a token that represents the namespace keyword.
     /// </summary>
-    Namespace
+    Namespace,
+
+    /// <summary>
+    /// This is a token that represents an identifier.
+    /// </summary>
+    Identifier
 }

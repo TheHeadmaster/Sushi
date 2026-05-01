@@ -9,7 +9,7 @@ public enum BindingPower
     /// The lowest binding power.
     /// </summary>
     Primary = 0,
-    
+
     /// <summary>
     /// Assignment, sush as equals.
     /// </summary>

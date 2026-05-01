@@ -84,5 +84,5 @@ public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNo
     }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Body?.GetMessages() ?? [])];
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Body?.AggregateMessages() ?? [])];
 }

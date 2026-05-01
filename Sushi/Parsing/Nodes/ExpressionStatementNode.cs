@@ -23,5 +23,5 @@ public sealed class ExpressionStatementNode(ExpressionNode? expression) : Statem
     public override Token? GetEndToken() => this.Expression?.GetEndToken();
 
     /// <inheritdoc />
-    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Expression?.GetMessages() ?? [])];
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Expression?.AggregateMessages() ?? [])];
 }

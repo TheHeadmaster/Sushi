@@ -20,5 +20,5 @@ public sealed class AbstractSyntaxTree : SyntaxNode
     public override Token? GetEndToken() => this.Children.LastOrDefault()?.GetEndToken();
 
     /// <inheritdoc/>
-    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Children.SelectMany(y => y.GetMessages()))];
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Children.SelectMany(y => y.AggregateMessages()))];
 }

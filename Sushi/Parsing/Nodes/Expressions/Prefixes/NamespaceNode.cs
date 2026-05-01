@@ -32,5 +32,5 @@ public sealed class NamespaceNode(IdentifierNode? identifier, ExpressionNode? ri
     public override Token? GetEndToken() => this.Right?.GetEndToken();
 
     /// <inheritdoc />
-    public override List<CompilerMessage> GetMessages() => [..this.Messages.Concat(this.Right?.GetMessages() ?? [])];
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Right?.AggregateMessages() ?? [])];
 }
