@@ -1,6 +1,7 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Nodes.TopLevelStatements;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers.TopLevelStatements;

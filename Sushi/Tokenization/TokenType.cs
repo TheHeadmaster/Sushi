@@ -39,4 +39,9 @@ public enum TokenType
     /// This is a token that represents a navigation operator.
     /// </summary>
     Dot,
+
+    /// <summary>
+    /// This is a token that represents the using keyword.
+    /// </summary>
+    Using,
 }

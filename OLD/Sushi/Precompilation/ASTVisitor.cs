@@ -21,17 +21,6 @@ public abstract class ASTVisitor
     protected virtual Task VisitAssignment([NotNull] AssignmentNode assignment) => Task.CompletedTask;
 
     /// <summary>
-    /// Visits a <see cref="BinaryExpressionNode"/>.
-    /// </summary>
-    /// <param name="binary">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitBinary([NotNull] BinaryExpressionNode binary) => Task.CompletedTask;
-
-    /// <summary>
     /// Visits a <see cref="BlockNode"/>.
     /// </summary>
     /// <param name="block">
@@ -152,17 +141,6 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitUnary([NotNull] UnaryExpressionNode unary) => Task.CompletedTask;
-
-    /// <summary>
-    /// Visits a <see cref="UsingNode"/>.
-    /// </summary>
-    /// <param name="usingNode">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitUsing([NotNull] UsingNode usingNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="WhileNode"/>.

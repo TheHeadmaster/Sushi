@@ -1,7 +1,10 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
+using Sushi.Parsing.Nodes.Expressions.Core;
+using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes.TopLevelStatements;
 
 /// <summary>
 /// Represents a using statement.
@@ -9,15 +12,15 @@ namespace Sushi.Parsing.Nodes;
 /// <param name="token">
 /// The token that starts the using statement.
 /// </param>
-/// <param name="identifier">
-/// The identifier expression.
+/// <param name="expression">
+/// The expression.
 /// </param>
-public sealed class UsingNode([NotNull] Token token, ExpressionNode? identifier) : StatementNode
+public sealed class UsingNode([NotNull] Token token, ExpressionNode? expression) : StatementNode
 {
     /// <summary>
     /// The identifier expression.
     /// </summary>
-    public ExpressionNode? Identifier { get; set; } = identifier;
+    public ExpressionNode? Expression { get; set; } = expression;
 
     /// <summary>
     /// Contains the resolved namespaces expanded from the using statement.
@@ -35,7 +38,7 @@ public sealed class UsingNode([NotNull] Token token, ExpressionNode? identifier)
     /// </returns>
     public async Task<List<string>> BuildNamespace()
     {
-        ExpressionNode? currentNode = this.Identifier;
+        ExpressionNode? currentNode = this.Expression;
 
         List<string> namespaceChain = [];
 
@@ -81,4 +84,11 @@ public sealed class UsingNode([NotNull] Token token, ExpressionNode? identifier)
 
         return Task.FromResult(nextNode);
     }
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Expression?.AggregateMessages() ?? []];
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Expression?.GetEndToken();
 }
+

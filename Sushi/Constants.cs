@@ -24,6 +24,7 @@ public static class Constants
     public static ReadOnlyDictionary<string, TokenType> ReservedKeywords { get; } = new ReadOnlyDictionary<string, TokenType>(
         new Dictionary<string, TokenType>()
     {
-        { "namespace", TokenType.Namespace }
+        { "namespace", TokenType.Namespace },
+        { "using", TokenType.Using }
     });
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
+using Sushi.Parsing.Nodes.Expressions.Infixes;
 using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Parsing.Nodes.TopLevelStatements;
 
@@ -25,14 +26,27 @@ public abstract class ASTVisitor
         await (node switch
         {
             AbstractSyntaxTree tree => this.VisitTree(tree),
+            BinaryExpressionNode binary => this.VisitBinary(binary),
             ExpressionStatementNode expression => this.VisitExpressionStatement(expression),
             FileNode file => this.VisitFile(file),
             IdentifierNode identifier => this.VisitIdentifier(identifier),
-            NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
             NamespaceNode namespaceNode => this.VisitNamespace(namespaceNode),
+            NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
+            UsingNode usingNode => this.VisitUsing(usingNode),
             _ => Task.CompletedTask
         });
     }
+
+    /// <summary>
+    /// Visits a <see cref="BinaryExpressionNode"/>.
+    /// </summary>
+    /// <param name="binary">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitBinary([NotNull] BinaryExpressionNode binary) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="ExpressionStatementNode"/>.
@@ -99,4 +113,15 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitTree([NotNull] AbstractSyntaxTree tree) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="UsingNode"/>.
+    /// </summary>
+    /// <param name="usingNode">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitUsing([NotNull] UsingNode usingNode) => Task.CompletedTask;
 }
