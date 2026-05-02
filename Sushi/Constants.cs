@@ -15,6 +15,7 @@ public static class Constants
         new Dictionary<string, TokenType>()
     {
         { ";", TokenType.Terminator },
+        { ".", TokenType.Dot        }
     });
 
     /// <summary>

@@ -33,5 +33,10 @@ public enum TokenType
     /// <summary>
     /// This is a token that represents an identifier.
     /// </summary>
-    Identifier
+    Identifier,
+
+    /// <summary>
+    /// This is a token that represents a navigation operator.
+    /// </summary>
+    Dot,
 }

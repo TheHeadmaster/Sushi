@@ -1,10 +1,11 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Nodes.Expressions.Infixes;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.Infixes;
 
 /// <summary>
 /// Handles the parsing of infix operators, such as addition and multiplication operators.
@@ -15,13 +16,7 @@ public class InfixOperatorParser : IParser
     public ParserType Type { get; } = ParserType.Infix;
 
     /// <inheritdoc />
-    public List<TokenType> AllowedStartTokens { get; } =
-    [
-        TokenType.Plus,
-        TokenType.Minus,
-        TokenType.Asterisk,
-        TokenType.Slash
-    ];
+    public List<TokenType> AllowedStartTokens { get; } = [TokenType.Dot];
 
     /// <summary>
     /// Maps each token to a binding power.
@@ -29,10 +24,7 @@ public class InfixOperatorParser : IParser
     private static readonly ReadOnlyDictionary<TokenType, BindingPower> infixBindingPowers = new(
         new Dictionary<TokenType, BindingPower>()
     {
-        { TokenType.Plus, BindingPower.SumDifference },
-        { TokenType.Minus, BindingPower.SumDifference },
-        { TokenType.Asterisk, BindingPower.ProductQuotient },
-        { TokenType.Slash, BindingPower.ProductQuotient },
+        { TokenType.Dot, BindingPower.Navigation }
     });
 
     /// <inheritdoc />

@@ -1,8 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
-using Sushi.Parsing.Core;
+﻿using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
+using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes.Expressions.Infixes;
 
 /// <summary>
 /// Represents a binary expression, such as add or multiply.
@@ -23,10 +24,7 @@ public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? 
     /// </summary>
     public OperatorType Operator { get; set; } = token.Type switch
     {
-        TokenType.Plus => OperatorType.Add,
-        TokenType.Minus => OperatorType.Subtract,
-        TokenType.Asterisk => OperatorType.Multiply,
-        TokenType.Slash => OperatorType.Divide,
+        TokenType.Dot => OperatorType.Navigation,
         _ => throw new NotImplementedException()
     };
 
@@ -42,4 +40,10 @@ public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? 
 
     /// <inheritdoc />
     public override Token? GetStartToken() => this.Left?.GetStartToken();
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Right?.GetEndToken();
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Left?.AggregateMessages() ?? [], .. this.Right?.AggregateMessages() ?? []];
 }

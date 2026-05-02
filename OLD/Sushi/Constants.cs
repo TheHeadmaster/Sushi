@@ -53,8 +53,7 @@ public static class Constants
         { "+", TokenType.Plus },
         { "-", TokenType.Minus },
         { "*", TokenType.Asterisk },
-        { "/", TokenType.Slash },
-        { ".", TokenType.Dot }
+        { "/", TokenType.Slash }
     });
 
     /// <summary>
