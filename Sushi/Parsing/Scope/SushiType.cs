@@ -1,4 +1,4 @@
-namespace Sushi.Parsing.Scope;
+﻿namespace Sushi.Parsing.Scope;
 
 /// <summary>
 /// Represents a type, such as a class or built-in type such as int32.

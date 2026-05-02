@@ -1,4 +1,4 @@
-namespace Sushi.Parsing.Scope;
+﻿namespace Sushi.Parsing.Scope;
 
 /// <summary>
 /// Represents an identifier, such as a variable or parameter name.

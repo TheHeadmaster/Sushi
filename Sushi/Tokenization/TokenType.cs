@@ -44,4 +44,39 @@ public enum TokenType
     /// This is a token that represents the using keyword.
     /// </summary>
     Using,
+
+    /// <summary>
+    /// This is a token that represents the class keyword.
+    /// </summary>
+    Class,
+
+    /// <summary>
+    /// This is a token that represents the public keyword.
+    /// </summary>
+    Public,
+
+    /// <summary>
+    /// This is a token that represents the internal keyword.
+    /// </summary>
+    Internal,
+
+    /// <summary>
+    /// This is a token that represents the private keyword.
+    /// </summary>
+    Private,
+
+    /// <summary>
+    /// This is a token that represents the static keyword.
+    /// </summary>
+    Static,
+
+    /// <summary>
+    /// This is a token that represents an opening squiggly bracket.
+    /// </summary>
+    OpeningSquiggly,
+
+    /// <summary>
+    /// This is a token that represents a closing squiggly bracket.
+    /// </summary>
+    ClosingSquiggly,
 }

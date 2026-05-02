@@ -32,17 +32,6 @@ public abstract class ASTVisitor
     protected virtual Task VisitBlock([NotNull] BlockNode block) => Task.CompletedTask;
 
     /// <summary>
-    /// Visits a <see cref="ClassNode"/>.
-    /// </summary>
-    /// <param name="classNode">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitClass([NotNull] ClassNode classNode) => Task.CompletedTask;
-
-    /// <summary>
     /// Visits a <see cref="ConstantNode"/>.
     /// </summary>
     /// <param name="constant">
@@ -120,16 +109,6 @@ public abstract class ASTVisitor
     protected virtual Task VisitMethodDeclaration([NotNull] MethodDeclarationNode method) => Task.CompletedTask;
 
 
-    /// <summary>
-    /// Visits a <see cref="TypeNode"/>.
-    /// </summary>
-    /// <param name="type">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitType([NotNull] TypeNode type) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="UnaryExpressionNode"/>.

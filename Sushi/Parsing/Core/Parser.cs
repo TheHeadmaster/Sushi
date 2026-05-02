@@ -34,7 +34,7 @@ public sealed class Parser
     /// <summary>
     /// The current file node.
     /// </summary>
-    private FileNode currentFileNode = null!;
+    public FileNode CurrentFileNode { get; private set; } = null!;
 
     /// <summary>
     /// The available parsers.
@@ -147,9 +147,9 @@ public sealed class Parser
         this.currentFile = file;
 
         List<StatementNode> statements = [];
-        this.currentFileNode = new FileNode(file.FilePath, file.FileName, statements);
+        this.CurrentFileNode = new FileNode(file.FilePath, file.FileName, statements);
         statements.AddRange(await this.ParseStatements());
-        this.tree.Children.Add(this.currentFileNode);
+        this.tree.Children.Add(this.CurrentFileNode);
     }
 
     /// <summary>
@@ -195,7 +195,7 @@ public sealed class Parser
             // We can assume every file has at least one token, and therefore
             // if Peek(0) returns null then Previous() must return a non-null value.
             Token previous = this.Previous()!;
-            await this.currentFileNode.AddMessage(new UnexpectedEndOfFileError(previous, this.currentFile.FilePath));
+            await this.CurrentFileNode.AddMessage(new UnexpectedEndOfFileError(previous, this.currentFile.FilePath));
         }
 
         return token;
@@ -220,7 +220,7 @@ public sealed class Parser
 
         if (!types.Contains(token.Type))
         {
-            await this.currentFileNode.AddMessage(new WrongTokenError(token, types, this.currentFile.FilePath));
+            await this.CurrentFileNode.AddMessage(new WrongTokenError(token, types, this.currentFile.FilePath));
         }
 
         this.Pop();
@@ -266,7 +266,7 @@ public sealed class Parser
 
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            await this.currentFileNode.AddMessage(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
+            await this.CurrentFileNode.AddMessage(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
             return null;
         }
 
@@ -283,7 +283,7 @@ public sealed class Parser
 
             if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                await this.currentFileNode.AddMessage(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
+                await this.CurrentFileNode.AddMessage(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
                 return left;
             }
 

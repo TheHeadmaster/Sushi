@@ -1,9 +1,11 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
+using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Parsers;
+namespace Sushi.Parsing.Parsers.TopLevelStatements;
 
 /// <summary>
 /// Handles the parsing of the static modifier.
@@ -31,14 +33,28 @@ public class StaticParser : IParser
             return null;
         }
 
-        StatementNode? right = await parser.ParseStatement(parser.Peek()!, ParserRole.StaticModifier);
+        Token? nextToken = await parser.PeekAndExpectNotEOF();
 
-        if (right is not ICanBeStatic staticNode)
+        if (nextToken is null)
         {
             return null;
         }
 
-        staticNode.IsStatic = true;
+        StatementNode? right = await parser.ParseStatement(nextToken, ParserRole.StaticModifier);
+
+        if (right is null)
+        {
+            return null;
+        }
+
+        if (right is ICanBeStatic staticNode)
+        {
+            staticNode.IsStatic = true;
+        }
+        else
+        {
+            await right.AddMessage(new IllegalStaticModifierError(token, parser.CurrentFileNode.FilePath));
+        }
 
         return right;
     }

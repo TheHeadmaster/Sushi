@@ -103,31 +103,6 @@ repository:
     - include: '#named-argument'
     - include: '#argument'
     - include: '#punctuation-comma'
-  class-declaration:
-    begin: (?=\bclass\b)
-    end: (?<=\})|(?=;)
-    patterns:
-    - include: "#comment"
-    - include: "#preprocessor"
-    - begin: \s*(class)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
-      beginCaptures:
-        1 : { name: storage.type.class.sus }
-        2 : { name: entity.name.type.class.sus }
-      end: (?=\{)|(?=;)
-      patterns:
-        - include: "#comment"
-        - include: "#type-parameter-list"
-        - include: "#parenthesized-parameter-list"
-        - include: "#base-types"
-        - include: "#generic-constraints"
-    - begin: \{
-      beginCaptures:
-        0: { name: punctuation.curlybrace.open.sus }
-      end: \}
-      endCaptures:
-        0: { name: punctuation.curlybrace.close.sus }
-      patterns:
-      - include: "#members"
 
   creator-declaration:
     begin: (creator)\s*(?=\()
@@ -377,9 +352,6 @@ repository:
     - include: "#variable-initializer"
     - include: "#creator-declaration"
     - include: "#destroyer-declaration"
-  modifier:
-    match: \s*(public|private|const|static|protected|internal|readonly)\s+
-    name: storage.modifier.sus
   named-argument:
     begin: (\@?[a-zA-Z][a-zA-Z0-9]*)\s*(:)
     beginCaptures:

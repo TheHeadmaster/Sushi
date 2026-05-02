@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Tokenization;
 
 namespace Sushi;
@@ -14,8 +15,10 @@ public static class Constants
     public static ReadOnlyDictionary<string, TokenType> Symbols { get; } = new ReadOnlyDictionary<string, TokenType>(
         new Dictionary<string, TokenType>()
     {
-        { ";", TokenType.Terminator },
-        { ".", TokenType.Dot        }
+        { ";", TokenType.Terminator      },
+        { ".", TokenType.Dot             },
+        { "{", TokenType.OpeningSquiggly },
+        { "}", TokenType.ClosingSquiggly }
     });
 
     /// <summary>
@@ -25,6 +28,28 @@ public static class Constants
         new Dictionary<string, TokenType>()
     {
         { "namespace", TokenType.Namespace },
-        { "using", TokenType.Using }
+        { "using",     TokenType.Using     },
+        { "class",     TokenType.Class     },
+        { "public",    TokenType.Public    },
+        { "internal",  TokenType.Internal  },
+        { "private",   TokenType.Private   },
+        { "static",    TokenType.Static    }
     });
+
+    /// <summary>
+    /// Tries to get the primitive type for the specified token.
+    /// </summary>
+    /// <param name="token">
+    /// The token to try to get the type for. 
+    /// </param>
+    /// <returns>
+    /// A string containing the type or an empty string if it was not found.
+    /// </returns>
+    public static string TryGetPrimitiveType([NotNull] Token token) => token.Type switch
+    {
+        //TokenType.Int32Primitive => "int32",
+        //TokenType.Float32Primitive => "float32",
+        //TokenType.BoolPrimitive => "bool",
+        _ => string.Empty
+    };
 }

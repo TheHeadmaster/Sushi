@@ -1,9 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
-using Sushi.Parsing.Core;
+﻿using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
+using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes.TopLevelStatements;
 
 /// <summary>
 /// Represents a class declaration.
@@ -36,14 +36,19 @@ public sealed class ClassNode([NotNull] Token token, TypeNode? typeName, [NotNul
     public AccessModifier AccessModifier { get; set; }
 
     /// <inheritdoc />
-    public override Token GetStartToken() => token;
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Members.SelectMany(x => x.AggregateMessages()), .. this.TypeName.AggregateMessages()];
 
     /// <inheritdoc />
-    public override async Task Compile([NotNull] CompilerVisitor compiler)
+    public bool AllowsModifier(AccessModifier modifier) => modifier switch
     {
-        foreach (StatementNode node in this.Members)
-        {
-            await node.Compile(compiler);
-        }
-    }
+        AccessModifier.Public or AccessModifier.Internal => true,
+        _ => false
+    };
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => this.Members.LastOrDefault()?.GetEndToken();
+
+    /// <inheritdoc />
+    public override Token GetStartToken() => token;
 }
+

@@ -6,7 +6,33 @@ patterns:
   - include: "#comment"
   - include: "#using-statement"
   - include: "#namespace-declaration"
+  - include: "#modifier"
+  - include: "#class-declaration"
 repository:
+  class-declaration:
+    begin: (?=\bclass\b)
+    end: (?<=\})|(?=;)
+    patterns:
+    - include: "#comment"
+    - begin: \s*(class)\s+(\@?[a-zA-Z][a-zA-Z0-9]*)
+      beginCaptures:
+        1 : { name: storage.type.class.sus }
+        2 : { name: entity.name.type.class.sus }
+      end: (?=\{)|(?=;)
+      patterns:
+        - include: "#comment"
+        # - include: "#type-parameter-list"
+        # - include: "#parenthesized-parameter-list"
+        # - include: "#base-types"
+        # - include: "#generic-constraints"
+    - begin: \{
+      beginCaptures:
+        0: { name: punctuation.curlybrace.open.sus }
+      end: \}
+      endCaptures:
+        0: { name: punctuation.curlybrace.close.sus }
+      # patterns:
+      # - include: "#members"
   comment:
     patterns:
       - name: comment.line.double-slash.sus
@@ -23,6 +49,9 @@ repository:
         captures:
           "0":
             name: punctuation.definition.comment.sus
+  modifier:
+    match: \s*(public|private|const|static|protected|internal|readonly)\s+
+    name: storage.modifier.sus
   namespace-declaration:
     begin: \s*(namespace)\s+
     beginCaptures:

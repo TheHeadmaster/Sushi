@@ -1,5 +1,7 @@
 // comment
 /* Block Comment */
-using NameOfNamespace.A;
+using NameOfNamespace.NameOfSecondNamespace;
 
-namespace NameOfNamespace.A;
+namespace NameOfNamespace.NameOfSubNamespace;
+
+public static class AClass { }

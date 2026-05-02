@@ -1,9 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
-using Sushi.Compilation;
+﻿using System.Diagnostics.CodeAnalysis;
+using Sushi.Diagnostics;
 using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 
-namespace Sushi.Parsing.Nodes;
+namespace Sushi.Parsing.Nodes.Expressions.Core;
 
 /// <summary>
 /// Represents a type that is defined somewhere else in the code.
@@ -41,4 +41,10 @@ public sealed class TypeNode([NotNull] Token token) : StatementNode
 
     /// <inheritdoc />
     public override Token? GetStartToken() => token;
+
+    /// <inheritdoc />
+    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages];
+
+    /// <inheritdoc />
+    public override Token? GetEndToken() => token;
 }

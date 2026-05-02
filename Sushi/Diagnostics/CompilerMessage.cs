@@ -34,6 +34,8 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
         UnexpectedPrefixOperator => 4,
         UnexpectedInfixOperator => 5,
         InvalidNamespaceError => 6,
+        IllegalAccessModifierError => 7,
+        IllegalStaticModifierError => 8,
         _ => throw new InvalidOperationException()
     };
 

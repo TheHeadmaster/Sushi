@@ -27,11 +27,13 @@ public abstract class ASTVisitor
         {
             AbstractSyntaxTree tree => this.VisitTree(tree),
             BinaryExpressionNode binary => this.VisitBinary(binary),
+            ClassNode classNode => this.VisitClass(classNode),
             ExpressionStatementNode expression => this.VisitExpressionStatement(expression),
             FileNode file => this.VisitFile(file),
             IdentifierNode identifier => this.VisitIdentifier(identifier),
             NamespaceNode namespaceNode => this.VisitNamespace(namespaceNode),
             NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
+            TypeNode type => this.VisitType(type),
             UsingNode usingNode => this.VisitUsing(usingNode),
             _ => Task.CompletedTask
         });
@@ -47,6 +49,17 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitBinary([NotNull] BinaryExpressionNode binary) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="ClassNode"/>.
+    /// </summary>
+    /// <param name="classNode">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitClass([NotNull] ClassNode classNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits an <see cref="ExpressionStatementNode"/>.
@@ -113,6 +126,17 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitTree([NotNull] AbstractSyntaxTree tree) => Task.CompletedTask;
+
+    /// <summary>
+    /// Visits a <see cref="TypeNode"/>.
+    /// </summary>
+    /// <param name="type">
+    /// The node to visit.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    protected virtual Task VisitType([NotNull] TypeNode type) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="UsingNode"/>.

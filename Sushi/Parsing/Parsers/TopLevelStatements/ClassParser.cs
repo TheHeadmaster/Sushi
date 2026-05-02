@@ -1,8 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
-using Sushi.Diagnostics.Errors;
+﻿using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
-using Sushi.Parsing.Parsers.SubStatements;
+using Sushi.Parsing.Nodes.Expressions.Core;
+using Sushi.Parsing.Nodes.TopLevelStatements;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Parsers.TopLevelStatements;
@@ -30,12 +30,9 @@ public sealed class ClassParser : IParser
 
         TypeNode? identifier = identifierToken is null ? null : new(identifierToken);
 
-        if (identifier is not null)
+        if (identifier is null)
         {
-            if (!await parser.Reference.TryAddType(identifier))
-            {
-                parser.Messages.Add(new TypeNameCollisionError(identifierToken!, parser.Reference.CurrentFilePath!));
-            }
+            return null;
         }
 
         await parser.ExpectAndPop(TokenType.OpeningSquiggly);
