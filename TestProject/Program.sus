@@ -1,2 +1,3 @@
-// sadjlkas
-/* shadlksdhjakl */
+// comment
+/* Block Comment */
+namespace NameOfNamespace;

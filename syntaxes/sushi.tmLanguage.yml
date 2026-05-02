@@ -4,6 +4,7 @@ fileTypes:
   - sus
 patterns:
   - include: "#comment"
+  - include: "#namespace-declaration"
 repository:
   comment:
     patterns:
@@ -21,3 +22,22 @@ repository:
         captures:
           "0":
             name: punctuation.definition.comment.sus
+  namespace-declaration:
+    begin: \s*(namespace)\s+
+    beginCaptures:
+      1: { name: storage.type.namespace.sus }
+    end: (;)
+    endCaptures:
+      1: { name: punctuation.semicolon.sus }
+    patterns:
+      - include: "#comment"
+      - include: "#namespace-identifier"
+  namespace-identifier:
+    patterns:
+      - match: (\@?[a-zA-Z][a-zA-Z0-9]*)(\.)
+        captures:
+          1: { name: entity.name.namespace.sus }
+          2: { name: punctuation.accessor.sus }
+      - match: (\@?[a-zA-Z][a-zA-Z0-9]*)
+        captures:
+          1: { name: entity.name.namespace.sus }
