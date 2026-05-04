@@ -1,4 +1,6 @@
-﻿namespace Sushi.Parsing.Nodes.Expressions.Core;
+﻿using Sushi.Tokenization;
+
+namespace Sushi.Parsing.Nodes.Expressions.Core;
 
 /// <summary>
 /// Marks a node as able to be static.
@@ -9,4 +11,9 @@ public interface ICanBeStatic
     /// Whether the node is static or not. True if static, false otherwise.
     /// </summary>
     public bool IsStatic { get; set; }
+
+    /// <summary>
+    /// The token that describes the static modifier.
+    /// </summary>
+    public Token? StaticToken { get; set; }
 }

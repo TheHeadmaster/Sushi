@@ -23,13 +23,13 @@ public sealed class NamespaceDeclarationParser : IParser
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop(TokenType.Namespace);
+        parser.Pop();
 
         ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
-        NamespaceDeclarationNode namespaceStatement = new(token, expression);
+        Token? terminator = await parser.PopIf(TokenType.Terminator);
 
-        await parser.ExpectAndPop(TokenType.Terminator);
+        NamespaceDeclarationNode namespaceStatement = new(token, expression, terminator);
 
         return namespaceStatement;
     }

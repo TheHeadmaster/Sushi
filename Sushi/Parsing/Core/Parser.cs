@@ -202,16 +202,16 @@ public sealed class Parser
     }
 
     /// <summary>
-    /// Asserts that the current <see cref="Token"/> is one of the specified <see cref="TokenType"/> values,
-    /// and emits an error if it is not or if the end of file was reached.
+    /// Checks if the current <see cref="Token"/> is one of the specified <see cref="TokenType"/> values,
+    /// and pops it if it is.
     /// </summary>
     /// <param name="types">
-    /// The <see cref="TokenType"/> values to expect.
+    /// The <see cref="TokenType"/> values to check for.
     /// </param>
     /// <returns>
-    /// The <see cref="Token"/> that was popped or null if the end of file was reached.
+    /// The <see cref="Token" /> that was popped or null if no token was popped or the end of file was reached.
     /// </returns>
-    public async Task<Token?> ExpectAndPop(params TokenType[] types)
+    public async Task<Token?> PopIf(params TokenType[] types)
     {
         if (await this.PeekAndExpectNotEOF() is not Token token)
         {
@@ -220,7 +220,7 @@ public sealed class Parser
 
         if (!types.Contains(token.Type))
         {
-            await this.CurrentFileNode.AddMessage(new WrongTokenError(token, types, this.currentFile.FilePath));
+            return null;
         }
 
         this.Pop();
@@ -266,8 +266,15 @@ public sealed class Parser
 
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Prefix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser prefix)
         {
-            await this.CurrentFileNode.AddMessage(new UnexpectedPrefixOperator(token, this.currentFile.FilePath));
-            return null;
+            if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
+            {
+                return null;
+            }
+
+            this.Pop();
+
+            // Attempt to return an infix just in case we can coerce a more meaningful error
+            return await infix.ParseInfix(this, null, token);
         }
 
         ExpressionNode? left = await prefix.ParsePrefix(this, token);
@@ -283,7 +290,6 @@ public sealed class Parser
 
             if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Infix && parser.AllowedStartTokens.Contains(token.Type)) is not IParser infix)
             {
-                await this.CurrentFileNode.AddMessage(new UnexpectedInfixOperator(token, this.currentFile.FilePath));
                 return left;
             }
 
@@ -314,8 +320,16 @@ public sealed class Parser
     {
         if (parsers.FirstOrDefault(parser => parser.Type is ParserType.Statement && parser.Roles.Contains(role) && parser.AllowedStartTokens.Contains(token.Type)) is not IParser statement)
         {
-            StatementNode returnStatement = new ExpressionStatementNode(await this.ParseExpression(BindingPower.Primary));
-            await this.ExpectAndPop(TokenType.Terminator);
+            ExpressionNode? expression = await this.ParseExpression(BindingPower.Primary);
+            Token? terminator = await this.PopIf(TokenType.Terminator);
+
+            if (expression is null && this.Pop() is { } nextToken)
+            {
+                await this.CurrentFileNode.AddMessage(new InvalidExpressionTermError(token, this.CurrentFileNode.FilePath));
+            }
+
+            StatementNode returnStatement = new ExpressionStatementNode(expression, terminator);
+
             return returnStatement;
         }
 

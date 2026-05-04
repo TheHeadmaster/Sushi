@@ -14,11 +14,14 @@ namespace Sushi.Parsing.Nodes.Expressions.Core;
 public sealed class InvalidSyntaxNode([NotNull] Token token) : ExpressionNode
 {
     /// <inheritdoc />
-    public override Token? GetStartToken() => token;
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        yield break;
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => token;
-
-    /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => this.Messages;
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        yield return token;
+    }
 }

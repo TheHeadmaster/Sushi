@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
@@ -17,7 +18,10 @@ namespace Sushi.Parsing.Nodes.Expressions.Infixes;
 /// <param name="right">
 /// The right-hand side of the expression.
 /// </param>
-public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? left, ExpressionNode? right) : ExpressionNode
+/// <param name="filePath">
+/// The path of the file that this node exists in.
+/// </param>
+public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? left, ExpressionNode? right, string filePath) : ExpressionNode
 {
     /// <summary>
     /// The binary operator being used.
@@ -39,11 +43,52 @@ public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? 
     public ExpressionNode? Right { get; set; } = right;
 
     /// <inheritdoc />
-    public override Token? GetStartToken() => this.Left?.GetStartToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.Left is not null)
+        {
+            await foreach (CompilerMessage message in this.Left.GetMessages())
+            {
+                yield return message;
+            }
+        }
+        else
+        {
+            yield return new EmptyBinaryExpressionError(token, "left", filePath);
+        }
+
+        if (this.Right is not null)
+        {
+            await foreach (CompilerMessage message in this.Right.GetMessages())
+            {
+                yield return message;
+            }
+        }
+        else
+        {
+            yield return new EmptyBinaryExpressionError(token, "right", filePath);
+        }
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Right?.GetEndToken();
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        if (this.Left is not null)
+        {
+            await foreach (Token leftToken in this.Left.GetTokens())
+            {
+                yield return leftToken;
+            }
+        }
 
-    /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Left?.AggregateMessages() ?? [], .. this.Right?.AggregateMessages() ?? []];
+        yield return token;
+
+        if (this.Right is not null)
+        {
+            await foreach (Token rightToken in this.Right.GetTokens())
+            {
+                yield return rightToken;
+            }
+        }
+    }
 }

@@ -5,6 +5,7 @@ using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Parsing.Nodes.TopLevelStatements;
+using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Precompilation;
 
@@ -42,14 +43,16 @@ public sealed partial class ReferenceResolver : ASTVisitor
     /// <inheritdoc />
     protected override async Task VisitNamespaceDeclaration([NotNull] NamespaceDeclarationNode namespaceDeclaration)
     {
-        if (namespaceDeclaration.Body is null)
+        if (namespaceDeclaration.Expression is null)
         {
             return;
         }
 
-        if (namespaceDeclaration.Body is not IdentifierNode and not NamespaceNode)
+        if (namespaceDeclaration.Expression is not IdentifierNode and not NamespaceNode)
         {
-            this.messages.Add(new InvalidNamespaceError(namespaceDeclaration.Body.GetStartToken()!, namespaceDeclaration.Body.GetEndToken(), this.currentFile.FilePath));
+            List<Token> tokens = await namespaceDeclaration.Expression.GetTokens().ToListAsync();
+
+            this.messages.Add(new InvalidNamespaceError(tokens.First(), tokens.Last(), this.currentFile.FilePath));
             return;
         }
 

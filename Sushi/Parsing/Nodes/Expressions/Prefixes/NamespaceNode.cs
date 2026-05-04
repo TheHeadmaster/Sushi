@@ -26,11 +26,42 @@ public sealed class NamespaceNode(IdentifierNode? identifier, ExpressionNode? ri
     public IdentifierNode? Name { get; set; } = identifier;
 
     /// <inheritdoc />
-    public override Token? GetStartToken() => this.Name?.GetStartToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.Right is not null)
+        {
+            await foreach (CompilerMessage message in this.Right.GetMessages())
+            {
+                yield return message;
+            }
+        }
+
+        if (this.Name is not null)
+        {
+            await foreach (CompilerMessage message in this.Name.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Right?.GetEndToken();
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        if (this.Right is not null)
+        {
+            await foreach (Token token in this.Right.GetTokens())
+            {
+                yield return token;
+            }
+        }
 
-    /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Right?.AggregateMessages() ?? [])];
+        if (this.Name is not null)
+        {
+            await foreach (Token token in this.Name.GetTokens())
+            {
+                yield return token;
+            }
+        }
+    }
 }

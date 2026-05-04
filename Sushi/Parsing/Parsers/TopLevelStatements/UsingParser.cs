@@ -23,13 +23,13 @@ public sealed class UsingParser : IParser
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop(TokenType.Using);
+        parser.Pop();
 
         ExpressionNode? expression = await parser.ParseExpression(BindingPower.Primary);
 
-        UsingNode usingStatement = new(token, expression);
+        Token? terminator = await parser.PopIf(TokenType.Terminator);
 
-        await parser.ExpectAndPop(TokenType.Terminator);
+        UsingNode usingStatement = new(token, expression, terminator, parser.CurrentFileNode.FilePath);
 
         return usingStatement;
     }

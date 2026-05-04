@@ -20,7 +20,7 @@ public class IdentifierParser : IParser
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop(TokenType.Identifier);
+        parser.Pop();
         return new IdentifierNode(token);
     }
 

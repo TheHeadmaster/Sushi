@@ -9,7 +9,11 @@ namespace Sushi.Parsing.Nodes;
 /// <param name="expression">
 /// The expression contained in the statement.
 /// </param>
-public sealed class ExpressionStatementNode(ExpressionNode? expression) : StatementNode
+/// <param name="terminatorToken">
+/// The terminator token that is expected to be at the end of the node.
+/// Not all statements require a terminator, such as sub-statements.
+/// </param>
+public sealed class ExpressionStatementNode(ExpressionNode? expression, Token? terminatorToken) : StatementNode(terminatorToken)
 {
     /// <summary>
     /// The expression.
@@ -17,11 +21,31 @@ public sealed class ExpressionStatementNode(ExpressionNode? expression) : Statem
     public ExpressionNode? Expression { get; set; } = expression;
 
     /// <inheritdoc />
-    public override Token? GetStartToken() => this.Expression?.GetStartToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.Expression is not null)
+        {
+            await foreach (CompilerMessage message in this.Expression.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Expression?.GetEndToken();
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        if (this.Expression is not null)
+        {
+            await foreach (Token token in this.Expression.GetTokens())
+            {
+                yield return token;
+            }
+        }
 
-    /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Expression?.AggregateMessages() ?? [])];
+        if (this.TerminatorToken is not null)
+        {
+            yield return this.TerminatorToken;
+        }
+    }
 }

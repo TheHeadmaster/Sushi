@@ -31,7 +31,7 @@ public class InfixOperatorParser : IParser
     public async Task<ExpressionNode?> ParseInfix([NotNull] Parser parser, ExpressionNode? left, [NotNull] Token token)
     {
         ExpressionNode? right = await parser.ParseExpression(infixBindingPowers[token.Type]);
-        return new BinaryExpressionNode(token, left, right);
+        return new BinaryExpressionNode(token, left, right, parser.CurrentFileNode.FilePath);
     }
 
     /// <inheritdoc />

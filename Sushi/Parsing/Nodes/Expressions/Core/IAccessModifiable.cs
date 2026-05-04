@@ -1,4 +1,6 @@
-﻿namespace Sushi.Parsing.Nodes.Expressions.Core;
+﻿using Sushi.Tokenization;
+
+namespace Sushi.Parsing.Nodes.Expressions.Core;
 
 /// <summary>
 /// Marks a node as able to have an access modifier, such as public or protected.
@@ -9,6 +11,11 @@ public interface IAccessModifiable
     /// The access modifier of the node.
     /// </summary>
     public AccessModifier AccessModifier { get; set; }
+
+    /// <summary>
+    /// The token that describes the access modifier.
+    /// </summary>
+    public Token? AccessModifierToken { get; set; }
 
     /// <summary>
     /// Returns whether this node allows the specified modifier.

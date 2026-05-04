@@ -11,7 +11,7 @@ namespace Sushi.Parsing.Nodes.Expressions.Core;
 /// <param name="token">
 /// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class TypeNode([NotNull] Token token) : StatementNode
+public sealed class TypeNode([NotNull] Token token) : StatementNode(null)
 {
     /// <summary>
     /// The name of the type.
@@ -40,11 +40,14 @@ public sealed class TypeNode([NotNull] Token token) : StatementNode
     }
 
     /// <inheritdoc />
-    public override Token? GetStartToken() => token;
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        yield break;
+    }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages];
-
-    /// <inheritdoc />
-    public override Token? GetEndToken() => token;
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        yield return token;
+    }
 }

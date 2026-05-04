@@ -308,7 +308,7 @@ public sealed class SushiLanguageService
     /// <returns>
     /// An awaitable <see cref="Task"/> that returns a <see cref="List{T}"/> of <see cref="CompilerMessage"/>.
     /// </returns>
-    private Task<List<CompilerMessage>> GetMessages() => Task.FromResult<List<CompilerMessage>>([.. this.tree.AggregateMessages().Concat(this.tokenFiles.SelectMany(x => x.Messages))]);
+    private async Task<List<CompilerMessage>> GetMessages() => [.. await this.tree.GetMessages().ToListAsync(), .. this.tokenFiles.SelectMany(x => x.Messages)];
 
     /// <summary>
     /// Updates the specified document and publishes diagnostics for it.

@@ -8,7 +8,7 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <summary>
 /// Represents a class declaration.
 /// </summary>
-/// <param name="token">
+/// <param name="classToken">
 /// The <see cref="Token"/> that marks the start of the entire class declaration.
 /// </param>
 /// <param name="typeName">
@@ -17,7 +17,24 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <param name="members">
 /// The class members.
 /// </param>
-public sealed class ClassNode([NotNull] Token token, TypeNode? typeName, [NotNull] List<StatementNode> members) : StatementNode, ICanBeStatic, IAccessModifiable
+/// <param name="terminatorToken">
+/// The terminator token that is expected to be at the end of the node.
+/// Not all statements require a terminator, such as sub-statements.
+/// </param>
+/// <param name="openingSquiggly">
+/// The opening squiggly token.
+/// </param>
+/// <param name="closingSquiggly">
+/// The closing squiggly token.
+/// </param>
+public sealed class ClassNode(
+    [NotNull] Token classToken,
+    TypeNode? typeName,
+    [NotNull] List<StatementNode> members,
+    Token? terminatorToken,
+    Token? openingSquiggly,
+    Token? closingSquiggly)
+    : StatementNode(terminatorToken), ICanBeStatic, IAccessModifiable
 {
     /// <inheritdoc />
     public bool IsStatic { get; set; }
@@ -36,7 +53,16 @@ public sealed class ClassNode([NotNull] Token token, TypeNode? typeName, [NotNul
     public AccessModifier AccessModifier { get; set; }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Members.SelectMany(x => x.AggregateMessages()), .. this.TypeName.AggregateMessages()];
+    public Token? AccessModifierToken { get; set; }
+
+    /// <inheritdoc />
+    public Token? StaticToken { get; set; }
+
+    /// <inheritdoc />
+    public Token? OpeningSquiggly { get; set; } = openingSquiggly;
+
+    /// <inheritdoc />
+    public Token? ClosingSquiggly { get; set; } = closingSquiggly;
 
     /// <inheritdoc />
     public bool AllowsModifier(AccessModifier modifier) => modifier switch
@@ -46,9 +72,65 @@ public sealed class ClassNode([NotNull] Token token, TypeNode? typeName, [NotNul
     };
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Members.LastOrDefault()?.GetEndToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.TypeName is not null)
+        {
+            await foreach (CompilerMessage message in this.TypeName.GetMessages())
+            {
+                yield return message;
+            }
+        }
+
+        foreach (StatementNode member in this.Members)
+        {
+            await foreach (CompilerMessage message in member.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override Token GetStartToken() => token;
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        if (this.AccessModifierToken is not null)
+        {
+            yield return this.AccessModifierToken;
+        }
+
+        if (this.StaticToken is not null)
+        {
+            yield return this.StaticToken;
+        }
+
+        yield return classToken;
+
+        if (this.TypeName is not null)
+        {
+            await foreach (Token token in this.TypeName.GetTokens())
+            {
+                yield return token;
+            }
+        }
+
+        if (this.OpeningSquiggly is not null)
+        {
+            yield return this.OpeningSquiggly;
+        }
+
+        foreach (StatementNode statement in this.Members)
+        {
+            await foreach (Token token in statement.GetTokens())
+            {
+                yield return token;
+            }
+        }
+
+        if (this.ClosingSquiggly is not null)
+        {
+            yield return this.ClosingSquiggly;
+        }
+    }
 }
 

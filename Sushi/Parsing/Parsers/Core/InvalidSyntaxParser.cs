@@ -20,7 +20,7 @@ public sealed class InvalidSyntaxParser : IParser
     /// <inheritdoc />
     public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop([.. this.AllowedStartTokens]);
+        parser.Pop();
         return new InvalidSyntaxNode(token);
     }
 

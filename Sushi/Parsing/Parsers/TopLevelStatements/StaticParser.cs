@@ -26,12 +26,7 @@ public class StaticParser : IParser
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        Token? staticToken = await parser.ExpectAndPop(TokenType.Static);
-
-        if (staticToken is null)
-        {
-            return null;
-        }
+        parser.Pop();
 
         Token? nextToken = await parser.PeekAndExpectNotEOF();
 
@@ -53,7 +48,7 @@ public class StaticParser : IParser
         }
         else
         {
-            await right.AddMessage(new IllegalStaticModifierError(token, parser.CurrentFileNode.FilePath));
+            await parser.CurrentFileNode.AddMessage(new IllegalStaticModifierError(token, parser.CurrentFileNode.FilePath));
         }
 
         return right;

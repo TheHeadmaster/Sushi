@@ -24,18 +24,13 @@ public sealed class ClassParser : IParser
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        await parser.ExpectAndPop(TokenType.Class);
+        parser.Pop();
 
-        Token? identifierToken = await parser.ExpectAndPop(TokenType.Identifier);
+        Token? identifierToken = await parser.PopIf(TokenType.Identifier);
 
         TypeNode? identifier = identifierToken is null ? null : new(identifierToken);
 
-        if (identifier is null)
-        {
-            return null;
-        }
-
-        await parser.ExpectAndPop(TokenType.OpeningSquiggly);
+        Token? openingSquiggly = await parser.PopIf(TokenType.OpeningSquiggly);
 
         List<StatementNode> statements = [];
 
@@ -51,9 +46,9 @@ public sealed class ClassParser : IParser
             }
         }
 
-        await parser.ExpectAndPop(TokenType.ClosingSquiggly);
+        Token? closingSquiggly = await parser.PopIf(TokenType.ClosingSquiggly);
 
-        ClassNode classNode = new(token, identifier, statements);
+        ClassNode classNode = new(token, identifier, statements, null, openingSquiggly, closingSquiggly);
 
         return classNode;
     }

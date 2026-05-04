@@ -9,24 +9,22 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <summary>
 /// Represents a namespace declaration.
 /// </summary>
-/// <param name="token">
+/// <param name="namespaceToken">
 /// The starting token of the namespace declaration.
 /// </param>
-/// <param name="body">
+/// <param name="expression">
 /// The expression body of the namespace.
 /// </param>
-public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNode? body) : StatementNode
+/// <param name="terminatorToken">
+/// The terminator token that is expected to be at the end of the node.
+/// Not all statements require a terminator, such as sub-statements.
+/// </param>
+public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, ExpressionNode? expression, Token? terminatorToken) : StatementNode(terminatorToken)
 {
     /// <summary>
     /// The expression body of the namespace.
     /// </summary>
-    public ExpressionNode? Body { get; set; } = body;
-
-    /// <inheritdoc />
-    public override Token? GetStartToken() => token;
-
-    /// <inheritdoc />
-    public override Token? GetEndToken() => this.Body?.GetEndToken();
+    public ExpressionNode? Expression { get; set; } = expression;
 
     /// <summary>
     /// Builds a namespace chain from this using node's namespace expression.
@@ -36,7 +34,7 @@ public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNo
     /// </returns>
     public async Task<List<string>> BuildNamespace()
     {
-        ExpressionNode? currentNode = this.Body;
+        ExpressionNode? currentNode = this.Expression;
 
         List<string> namespaceChain = [];
 
@@ -82,7 +80,34 @@ public sealed class NamespaceDeclarationNode([NotNull] Token token, ExpressionNo
 
         return Task.FromResult(nextNode);
     }
+    /// <inheritdoc />
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.Expression is not null)
+        {
+            await foreach (CompilerMessage message in this.Expression.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Body?.AggregateMessages() ?? [])];
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        yield return namespaceToken;
+
+        if (this.Expression is not null)
+        {
+            await foreach (Token token in this.Expression.GetTokens())
+            {
+                yield return token;
+            }
+        }
+
+        if (this.TerminatorToken is not null)
+        {
+            yield return this.TerminatorToken;
+        }
+    }
 }

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
@@ -9,13 +10,20 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <summary>
 /// Represents a using statement.
 /// </summary>
-/// <param name="token">
+/// <param name="usingToken">
 /// The token that starts the using statement.
 /// </param>
 /// <param name="expression">
 /// The expression.
 /// </param>
-public sealed class UsingNode([NotNull] Token token, ExpressionNode? expression) : StatementNode
+/// <param name="terminatorToken">
+/// The terminator token that is expected to be at the end of the node.
+/// Not all statements require a terminator, such as sub-statements.
+/// </param>
+/// <param name="filePath">
+/// The path of the file that this node exists in.
+/// </param>
+public sealed class UsingNode([NotNull] Token usingToken, ExpressionNode? expression, Token? terminatorToken, string filePath) : StatementNode(terminatorToken)
 {
     /// <summary>
     /// The identifier expression.
@@ -26,9 +34,6 @@ public sealed class UsingNode([NotNull] Token token, ExpressionNode? expression)
     /// Contains the resolved namespaces expanded from the using statement.
     /// </summary>
     public List<string> ResolvedNamespaces { get; set; } = [];
-
-    /// <inheritdoc />
-    public override Token? GetStartToken() => token;
 
     /// <summary>
     /// Builds a namespace chain from this using node's namespace expression.
@@ -86,9 +91,38 @@ public sealed class UsingNode([NotNull] Token token, ExpressionNode? expression)
     }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages, .. this.Expression?.AggregateMessages() ?? []];
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        if (this.Expression is not null)
+        {
+            await foreach (CompilerMessage message in this.Expression.GetMessages())
+            {
+                yield return message;
+            }
+        }
+        else
+        {
+            yield return new EmptyUsingStatementError(usingToken, filePath);
+        }
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Expression?.GetEndToken();
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        yield return usingToken;
+
+        if (this.Expression is not null)
+        {
+            await foreach (Token token in this.Expression.GetTokens())
+            {
+                yield return token;
+            }
+        }
+
+        if (this.TerminatorToken is not null)
+        {
+            yield return this.TerminatorToken;
+        }
+    }
 }
 

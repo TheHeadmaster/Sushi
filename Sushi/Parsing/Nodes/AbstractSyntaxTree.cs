@@ -14,11 +14,26 @@ public sealed class AbstractSyntaxTree : SyntaxNode
     public List<FileNode> Children { get; set; } = [];
 
     /// <inheritdoc />
-    public override Token? GetStartToken() => this.Children.FirstOrDefault()?.GetStartToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        foreach (FileNode node in this.Children)
+        {
+            await foreach (CompilerMessage message in node.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Children.LastOrDefault()?.GetEndToken();
-
-    /// <inheritdoc/>
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Children.SelectMany(y => y.AggregateMessages()))];
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        foreach (FileNode node in this.Children)
+        {
+            await foreach (Token token in node.GetTokens())
+            {
+                yield return token;
+            }
+        }
+    }
 }

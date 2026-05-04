@@ -27,12 +27,7 @@ public class AccessModifierParser : IParser
     /// <inheritdoc />
     public async Task<StatementNode?> ParseStatement([NotNull] Parser parser, [NotNull] Token token)
     {
-        Token? accessToken = await parser.ExpectAndPop([.. this.AllowedStartTokens]);
-
-        if (accessToken is null)
-        {
-            return null;
-        }
+        parser.Pop();
 
         Token? nextToken = await parser.PeekAndExpectNotEOF();
 
@@ -45,10 +40,11 @@ public class AccessModifierParser : IParser
 
         if (right is null)
         {
+            await parser.CurrentFileNode.AddMessage(new IllegalAccessModifierError(token, parser.CurrentFileNode.FilePath));
             return null;
         }
 
-        AccessModifier modifier = accessToken.Type switch
+        AccessModifier modifier = token.Type switch
         {
             TokenType.Public => AccessModifier.Public,
             TokenType.Internal => AccessModifier.Internal,
@@ -62,7 +58,7 @@ public class AccessModifierParser : IParser
         }
         else
         {
-            await right.AddMessage(new IllegalAccessModifierError(token, parser.CurrentFileNode.FilePath));
+            await parser.CurrentFileNode.AddMessage(new IllegalAccessModifierError(token, parser.CurrentFileNode.FilePath));
         }
 
         return right;

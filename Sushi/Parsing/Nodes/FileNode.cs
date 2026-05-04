@@ -33,12 +33,44 @@ public sealed class FileNode([NotNull] string filePath, [NotNull] string fileNam
     /// </summary>
     public List<StatementNode> Statements { get; set; } = statements;
 
-    /// <inheritdoc />
-    public override Token? GetStartToken() => this.Statements.FirstOrDefault()?.GetStartToken();
+    /// <summary>
+    /// The messages collected from the general parser.
+    /// </summary>
+    private readonly List<CompilerMessage> messages = [];
 
     /// <inheritdoc />
-    public override Token? GetEndToken() => this.Statements.LastOrDefault()?.GetEndToken();
+    public override async IAsyncEnumerable<CompilerMessage> GetMessages()
+    {
+        foreach (CompilerMessage message in this.messages)
+        {
+            yield return message;
+        }
+
+        foreach (StatementNode statement in this.Statements)
+        {
+            await foreach (CompilerMessage message in statement.GetMessages())
+            {
+                yield return message;
+            }
+        }
+    }
 
     /// <inheritdoc />
-    public override List<CompilerMessage> AggregateMessages() => [.. this.Messages.Concat(this.Statements.SelectMany(statement => statement.AggregateMessages()))];
+    public override async IAsyncEnumerable<Token> GetTokens()
+    {
+        foreach (StatementNode statement in this.Statements)
+        {
+            await foreach (Token token in statement.GetTokens())
+            {
+                yield return token;
+            }
+        }
+    }
+
+    public Task AddMessage(CompilerMessage message)
+    {
+        this.messages.Add(message);
+
+        return Task.CompletedTask;
+    }
 }

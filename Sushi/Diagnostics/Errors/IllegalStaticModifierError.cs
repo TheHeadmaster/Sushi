@@ -3,9 +3,8 @@ using Sushi.Tokenization;
 
 namespace Sushi.Diagnostics.Errors;
 
-
 /// <summary>
-/// Error that is emitted when an access modifier is used on something that isn't access modifiable or restricted to a specific subset of access modifiers.
+/// Error that is emitted when a static modifier is used on something that isn't static modifiable.
 /// </summary>
 /// <param name="startToken">
 /// The token where the error starts.
