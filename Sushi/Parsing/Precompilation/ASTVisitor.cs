@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Parsing.Nodes.Expressions.Infixes;
-using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Parsing.Nodes.TopLevelStatements;
 
 namespace Sushi.Parsing.Precompilation;
@@ -31,7 +30,6 @@ public abstract class ASTVisitor
             ExpressionStatementNode expression => this.VisitExpressionStatement(expression),
             FileNode file => this.VisitFile(file),
             IdentifierNode identifier => this.VisitIdentifier(identifier),
-            NamespaceNode namespaceNode => this.VisitNamespace(namespaceNode),
             NamespaceDeclarationNode namespaceDeclaration => this.VisitNamespaceDeclaration(namespaceDeclaration),
             TypeNode type => this.VisitType(type),
             UsingNode usingNode => this.VisitUsing(usingNode),
@@ -93,17 +91,6 @@ public abstract class ASTVisitor
     /// An awaitable <see cref="Task"/>.
     /// </returns>
     protected virtual Task VisitIdentifier([NotNull] IdentifierNode identifier) => Task.CompletedTask;
-
-    /// <summary>
-    /// Visits a <see cref="NamespaceNode"/>.
-    /// </summary>
-    /// <param name="namespaceNode">
-    /// The node to visit.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    protected virtual Task VisitNamespace([NotNull] NamespaceNode namespaceNode) => Task.CompletedTask;
 
     /// <summary>
     /// Visits a <see cref="NamespaceDeclarationNode"/>.

@@ -3,7 +3,6 @@ using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Parsing.Nodes.Expressions.Infixes;
-using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes.TopLevelStatements;
@@ -24,7 +23,7 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <param name="filePath">
 /// The path of the file that this node exists in.
 /// </param>
-public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, ExpressionNode? expression, Token? terminatorToken, string filePath) : StatementNode(terminatorToken)
+public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, ExpressionNode? expression, Token? terminatorToken, [NotNull] string filePath) : StatementNode(terminatorToken)
 {
     /// <summary>
     /// The expression body of the namespace.
@@ -39,25 +38,20 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
     /// </returns>
     public async Task<List<string>> BuildNamespace()
     {
-        ExpressionNode? currentNode = this.Expression;
-
         List<string> namespaceChain = [];
 
-        while (true)
+        if (this.Expression is null)
         {
-            if (currentNode is null)
-            {
-                break;
-            }
-
-            currentNode = await ConsumeNamespaceOrIdentifier(currentNode, namespaceChain);
+            return namespaceChain;
         }
+
+        await ConsumeNamespaceChain(this.Expression, namespaceChain);
 
         return namespaceChain;
     }
 
     /// <summary>
-    /// Consumes a namespace or identifier node and adds the namespace part to the chain.
+    /// Consumes a binary expression node or identifier node and adds the namespace part to the chain.
     /// </summary>
     /// <param name="node">
     /// The node to consume.
@@ -66,28 +60,36 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
     /// The namespace chain to modify.
     /// </param>
     /// <returns>
-    /// An awaitable <see cref="Task"/> that returns the next node in the chain.
+    /// An awaitable <see cref="Task"/>.
     /// </returns>
-    private static Task<ExpressionNode?> ConsumeNamespaceOrIdentifier([NotNull] ExpressionNode node, [NotNull] List<string> namespaceChain)
+    private static async Task ConsumeNamespaceChain([NotNull] ExpressionNode node, [NotNull] List<string> namespaceChain)
     {
-        ExpressionNode? nextNode = null;
-
-        if (node is NamespaceNode namespaceNode && namespaceNode.Name is not null)
+        if (node is BinaryExpressionNode binaryExpression)
         {
-            namespaceChain.Add(namespaceNode.Name.Name);
-            nextNode = namespaceNode.Right;
+            if (binaryExpression.Left is null || binaryExpression.Right is null)
+            {
+                return;
+            }
+
+            await ConsumeNamespaceChain(binaryExpression.Left, namespaceChain);
+            await ConsumeNamespaceChain(binaryExpression.Right, namespaceChain);
         }
         else if (node is IdentifierNode identifier)
         {
             namespaceChain.Add(identifier.Name);
-            nextNode = null;
         }
 
-        return Task.FromResult(nextNode);
+        return;
     }
+
     /// <inheritdoc />
     public override async IAsyncEnumerable<CompilerMessage> GetMessages()
     {
+        if (this.TerminatorToken is null)
+        {
+            yield return new UnterminatedStatementError(namespaceToken, filePath);
+        }
+
         if (this.Expression is not null)
         {
             await foreach (CompilerMessage message in this.Expression.GetMessages())
@@ -142,11 +144,6 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
             return null;
         }
 
-        if (expression is NamespaceNode namespaceNode)
-        {
-            return await this.AssertValidNamespaceDeclaration(namespaceNode.Name);
-        }
-
         if (expression is BinaryExpressionNode binaryExpression)
         {
             if (binaryExpression.Operator is not OperatorType.Navigation)
@@ -167,6 +164,8 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
             {
                 return rightMessage;
             }
+
+            return null;
         }
 
         if (expression is IdentifierNode)

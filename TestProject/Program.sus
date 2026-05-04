@@ -1,6 +1,6 @@
 // comment
 /* Block Comment */
-using NameOfNamespace.NameOfSecondNamespace; 
+using NameOfNamespace.NameOfSecondNamespace;
 
 namespace NameOfNamespace.NameOfSubNamespace;
 

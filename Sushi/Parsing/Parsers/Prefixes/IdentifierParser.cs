@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
@@ -21,7 +21,7 @@ public class IdentifierParser : IParser
     public async Task<ExpressionNode?> ParsePrefix([NotNull] Parser parser, [NotNull] Token token)
     {
         parser.Pop();
-        return new IdentifierNode(token);
+        return new IdentifierNode(token, parser.CurrentFileNode.FilePath);
     }
 
     /// <inheritdoc />

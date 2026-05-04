@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
@@ -17,10 +17,6 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <param name="members">
 /// The class members.
 /// </param>
-/// <param name="terminatorToken">
-/// The terminator token that is expected to be at the end of the node.
-/// Not all statements require a terminator, such as sub-statements.
-/// </param>
 /// <param name="openingSquiggly">
 /// The opening squiggly token.
 /// </param>
@@ -31,10 +27,9 @@ public sealed class ClassNode(
     [NotNull] Token classToken,
     TypeNode? typeName,
     [NotNull] List<StatementNode> members,
-    Token? terminatorToken,
     Token? openingSquiggly,
     Token? closingSquiggly)
-    : StatementNode(terminatorToken), ICanBeStatic, IAccessModifiable
+    : StatementNode(null), ICanBeStatic, IAccessModifiable
 {
     /// <inheritdoc />
     public bool IsStatic { get; set; }

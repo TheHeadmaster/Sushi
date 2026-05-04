@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
@@ -28,7 +28,7 @@ public sealed class ClassParser : IParser
 
         Token? identifierToken = await parser.PopIf(TokenType.Identifier);
 
-        TypeNode? identifier = identifierToken is null ? null : new(identifierToken);
+        TypeNode? identifier = identifierToken is null ? null : new(identifierToken, parser.CurrentFileNode.FilePath);
 
         Token? openingSquiggly = await parser.PopIf(TokenType.OpeningSquiggly);
 
@@ -48,7 +48,7 @@ public sealed class ClassParser : IParser
 
         Token? closingSquiggly = await parser.PopIf(TokenType.ClosingSquiggly);
 
-        ClassNode classNode = new(token, identifier, statements, null, openingSquiggly, closingSquiggly);
+        ClassNode classNode = new(token, identifier, statements, openingSquiggly, closingSquiggly);
 
         return classNode;
     }

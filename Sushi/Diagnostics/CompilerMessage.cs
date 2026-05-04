@@ -31,13 +31,15 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
         SyntaxError => 1,
         UnexpectedEndOfFileError => 2,
         WrongTokenError => 3,
-        InvalidNamespaceError => 4,
-        IllegalAccessModifierError => 5,
-        IllegalStaticModifierError => 6,
-        InvalidUsingStatementError => 7,
-        EmptyBinaryExpressionError => 8,
-        InvalidExpressionTermError => 9,
-        InvalidNamespaceDeclarationError => 10,
+        UnterminatedStatementError => 4,
+        InvalidNamespaceError => 5,
+        IllegalAccessModifierError => 6,
+        IllegalStaticModifierError => 7,
+        InvalidUsingStatementError => 8,
+        EmptyBinaryExpressionError => 9,
+        InvalidExpressionTermError => 10,
+        InvalidNamespaceDeclarationError => 11,
+        IllegalIdentifierError => 12,
         _ => throw new InvalidOperationException()
     };
 

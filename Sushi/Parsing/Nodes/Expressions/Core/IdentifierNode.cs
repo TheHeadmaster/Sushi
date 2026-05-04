@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Tokenization;
 
 namespace Sushi.Parsing.Nodes.Expressions.Core;
@@ -10,7 +11,10 @@ namespace Sushi.Parsing.Nodes.Expressions.Core;
 /// <param name="token">
 /// The <see cref="Token"/> that represents the identifier.
 /// </param>
-public sealed class IdentifierNode([NotNull] Token token) : ExpressionNode
+/// <param name="filePath">
+/// The 
+/// </param>
+public sealed class IdentifierNode([NotNull] Token token, [NotNull] string filePath) : ExpressionNode
 {
     /// <summary>
     /// The name of the identifier.
@@ -20,7 +24,10 @@ public sealed class IdentifierNode([NotNull] Token token) : ExpressionNode
     /// <inheritdoc />
     public override async IAsyncEnumerable<CompilerMessage> GetMessages()
     {
-        yield break;
+        if (char.IsLower(this.Name[0]))
+        {
+            yield return new IllegalIdentifierError(token, filePath);
+        }
     }
 
     /// <inheritdoc />

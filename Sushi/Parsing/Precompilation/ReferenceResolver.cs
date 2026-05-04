@@ -3,7 +3,7 @@ using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes;
 using Sushi.Parsing.Nodes.Expressions.Core;
-using Sushi.Parsing.Nodes.Expressions.Prefixes;
+using Sushi.Parsing.Nodes.Expressions.Infixes;
 using Sushi.Parsing.Nodes.TopLevelStatements;
 using Sushi.Tokenization;
 
@@ -48,7 +48,7 @@ public sealed partial class ReferenceResolver : ASTVisitor
             return;
         }
 
-        if (namespaceDeclaration.Expression is not IdentifierNode and not NamespaceNode)
+        if (namespaceDeclaration.Expression is not IdentifierNode and not BinaryExpressionNode)
         {
             List<Token> tokens = await namespaceDeclaration.Expression.GetTokens().ToListAsync();
 

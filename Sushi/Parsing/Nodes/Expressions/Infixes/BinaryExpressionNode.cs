@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
@@ -21,7 +21,7 @@ namespace Sushi.Parsing.Nodes.Expressions.Infixes;
 /// <param name="filePath">
 /// The path of the file that this node exists in.
 /// </param>
-public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? left, ExpressionNode? right, string filePath) : ExpressionNode
+public sealed class BinaryExpressionNode([NotNull] Token token, ExpressionNode? left, ExpressionNode? right, [NotNull] string filePath) : ExpressionNode
 {
     /// <summary>
     /// The binary operator being used.

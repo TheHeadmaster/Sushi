@@ -1,5 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Scope;
 using Sushi.Tokenization;
 
@@ -11,7 +12,10 @@ namespace Sushi.Parsing.Nodes.Expressions.Core;
 /// <param name="token">
 /// The <see cref="Token"/> used to mark the start of the node.
 /// </param>
-public sealed class TypeNode([NotNull] Token token) : StatementNode(null)
+/// <param name="filePath">
+/// The path of the file that this node exists in.
+/// </param>
+public sealed class TypeNode([NotNull] Token token, [NotNull] string filePath) : StatementNode(null)
 {
     /// <summary>
     /// The name of the type.
@@ -42,7 +46,10 @@ public sealed class TypeNode([NotNull] Token token) : StatementNode(null)
     /// <inheritdoc />
     public override async IAsyncEnumerable<CompilerMessage> GetMessages()
     {
-        yield break;
+        if (token.Type is TokenType.Identifier && char.IsLower(this.Name[0]))
+        {
+            yield return new IllegalIdentifierError(token, filePath);
+        }
     }
 
     /// <inheritdoc />
