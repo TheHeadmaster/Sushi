@@ -4,7 +4,7 @@ using Sushi.Tokenization;
 namespace Sushi.Diagnostics.Errors;
 
 /// <summary>
-/// Error that is emitted when a namespace statement doesn't have an expression body.
+/// Error that is emitted when a namespace statement has an invalid expression body.
 /// </summary>
 /// <param name="namespaceToken">
 /// The <see cref="Token"/> with the namespace keyword.
