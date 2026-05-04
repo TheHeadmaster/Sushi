@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
+using Sushi.Parsing.Nodes.Expressions.Infixes;
 using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
 
@@ -93,6 +94,11 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
             {
                 yield return message;
             }
+
+            if ((await this.AssertValidNamespaceDeclaration(this.Expression)) is { } invalidMessage)
+            {
+                yield return invalidMessage;
+            }
         }
         else
         {
@@ -117,5 +123,58 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
         {
             yield return this.TerminatorToken;
         }
+    }
+
+    /// <summary>
+    /// Asserts that the expression is a valid namespace expression (i.e. isn't an addition or something).
+    /// </summary>
+    /// <returns>
+    /// <param name="expression">
+    /// The expression to check recursively.
+    /// </param>
+    /// An awaitable <see cref="Task"/> that returns a <see cref="CompilerMessage"/> if the expression isn't valid,
+    /// or null if everything is correct.
+    /// </returns>
+    private async Task<CompilerMessage?> AssertValidNamespaceDeclaration(ExpressionNode? expression)
+    {
+        if (expression is null)
+        {
+            return null;
+        }
+
+        if (expression is NamespaceNode namespaceNode)
+        {
+            return await this.AssertValidNamespaceDeclaration(namespaceNode.Name);
+        }
+
+        if (expression is BinaryExpressionNode binaryExpression)
+        {
+            if (binaryExpression.Operator is not OperatorType.Navigation)
+            {
+                return new InvalidNamespaceDeclarationError(await expression.GetTokens().FirstAsync(), filePath);
+            }
+
+            CompilerMessage? leftMessage = await this.AssertValidNamespaceDeclaration(binaryExpression.Left);
+
+            if (leftMessage is not null)
+            {
+                return leftMessage;
+            }
+
+            CompilerMessage? rightMessage = await this.AssertValidNamespaceDeclaration(binaryExpression.Right);
+
+            if (rightMessage is not null)
+            {
+                return rightMessage;
+            }
+        }
+
+        if (expression is IdentifierNode)
+        {
+            return null;
+        }
+
+        return new InvalidNamespaceDeclarationError(await expression.GetTokens().FirstAsync(), filePath);
+
     }
 }
