@@ -29,7 +29,7 @@ public sealed class NamespaceDeclarationParser : IParser
 
         Token? terminator = await parser.PopIf(TokenType.Terminator);
 
-        NamespaceDeclarationNode namespaceStatement = new(token, expression, terminator);
+        NamespaceDeclarationNode namespaceStatement = new(token, expression, terminator, parser.CurrentFileNode.FilePath);
 
         return namespaceStatement;
     }

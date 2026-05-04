@@ -12,7 +12,7 @@ namespace Sushi.Diagnostics.Errors;
 /// <param name="filePath">
 /// The path of the file that the error came from.
 /// </param>
-public sealed class EmptyUsingStatementError([NotNull] Token usingToken, [NotNull] string filePath) : CompilerMessage(usingToken.CurrentLine, usingToken.LineNumber, usingToken.LinePosition, filePath)
+public sealed class InvalidUsingStatementError([NotNull] Token usingToken, [NotNull] string filePath) : CompilerMessage(usingToken.CurrentLine, usingToken.LineNumber, usingToken.LinePosition, filePath)
 {
     /// <inheritdoc />
     public override CompilerMessageType Type => CompilerMessageType.Error;

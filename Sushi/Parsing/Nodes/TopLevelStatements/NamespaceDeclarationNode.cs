@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Parsing.Nodes.Expressions.Prefixes;
 using Sushi.Tokenization;
@@ -19,7 +20,10 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// The terminator token that is expected to be at the end of the node.
 /// Not all statements require a terminator, such as sub-statements.
 /// </param>
-public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, ExpressionNode? expression, Token? terminatorToken) : StatementNode(terminatorToken)
+/// <param name="filePath">
+/// The path of the file that this node exists in.
+/// </param>
+public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, ExpressionNode? expression, Token? terminatorToken, string filePath) : StatementNode(terminatorToken)
 {
     /// <summary>
     /// The expression body of the namespace.
@@ -89,6 +93,10 @@ public sealed class NamespaceDeclarationNode([NotNull] Token namespaceToken, Exp
             {
                 yield return message;
             }
+        }
+        else
+        {
+            yield return new InvalidNamespaceDeclarationError(namespaceToken, filePath);
         }
     }
 

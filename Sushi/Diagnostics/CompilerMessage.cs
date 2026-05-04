@@ -34,9 +34,10 @@ public abstract class CompilerMessage([NotNull] string currentLine, [NotNull] in
         InvalidNamespaceError => 4,
         IllegalAccessModifierError => 5,
         IllegalStaticModifierError => 6,
-        EmptyUsingStatementError => 7,
+        InvalidUsingStatementError => 7,
         EmptyBinaryExpressionError => 8,
         InvalidExpressionTermError => 9,
+        InvalidNamespaceDeclarationError => 10,
         _ => throw new InvalidOperationException()
     };
 

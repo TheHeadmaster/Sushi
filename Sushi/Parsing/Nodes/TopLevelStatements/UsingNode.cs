@@ -102,7 +102,7 @@ public sealed class UsingNode([NotNull] Token usingToken, ExpressionNode? expres
         }
         else
         {
-            yield return new EmptyUsingStatementError(usingToken, filePath);
+            yield return new InvalidUsingStatementError(usingToken, filePath);
         }
     }
 
