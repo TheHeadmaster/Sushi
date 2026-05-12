@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics.Errors;
 using Sushi.Parsing.Core;
 using Sushi.Parsing.Nodes;

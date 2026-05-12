@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
 namespace Sushi;
@@ -50,6 +51,15 @@ public static class Constants
         //TokenType.Int32Primitive => "int32",
         //TokenType.Float32Primitive => "float32",
         //TokenType.BoolPrimitive => "bool",
+        _ => string.Empty
+    };
+
+    public static string TryGetModifierKeyword(AccessModifier modifier) => modifier switch
+    {
+        AccessModifier.Public => "public",
+        AccessModifier.Internal => "internal",
+        AccessModifier.Private => "private",
+        AccessModifier.Static => "static",
         _ => string.Empty
     };
 }

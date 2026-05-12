@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Linq;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Errors;
+using Sushi.Parsing.Nodes.Configuration;
 using Sushi.Parsing.Nodes.Expressions.Core;
 using Sushi.Tokenization;
 
@@ -23,16 +26,18 @@ namespace Sushi.Parsing.Nodes.TopLevelStatements;
 /// <param name="closingSquiggly">
 /// The closing squiggly token.
 /// </param>
+/// <param name="filePath">
+/// The file path that the node came from.
+/// </param>
 public sealed class ClassNode(
     [NotNull] Token classToken,
     TypeNode? typeName,
     [NotNull] List<StatementNode> members,
     Token? openingSquiggly,
-    Token? closingSquiggly)
-    : StatementNode(null), ICanBeStatic, IAccessModifiable
+    Token? closingSquiggly,
+    [NotNull] string filePath)
+    : StatementNode(null), IConfigurableNode<ClassNode>
 {
-    /// <inheritdoc />
-    public bool IsStatic { get; set; }
 
     /// <summary>
     /// The name as a <see cref="TypeNode"/>.
@@ -45,26 +50,16 @@ public sealed class ClassNode(
     public List<StatementNode> Members { get; set; } = members;
 
     /// <inheritdoc />
-    public AccessModifier AccessModifier { get; set; }
-
-    /// <inheritdoc />
-    public Token? AccessModifierToken { get; set; }
-
-    /// <inheritdoc />
-    public Token? StaticToken { get; set; }
-
-    /// <inheritdoc />
     public Token? OpeningSquiggly { get; set; } = openingSquiggly;
 
     /// <inheritdoc />
     public Token? ClosingSquiggly { get; set; } = closingSquiggly;
 
     /// <inheritdoc />
-    public bool AllowsModifier(AccessModifier modifier) => modifier switch
-    {
-        AccessModifier.Public or AccessModifier.Internal => true,
-        _ => false
-    };
+    public List<AccessModifier> Modifiers { get; set; } = [];
+
+    /// <inheritdoc />
+    public List<Token> ModifierTokens { get; set; } = [];
 
     /// <inheritdoc />
     public override async IAsyncEnumerable<CompilerMessage> GetMessages()
@@ -74,6 +69,29 @@ public sealed class ClassNode(
             await foreach (CompilerMessage message in this.TypeName.GetMessages())
             {
                 yield return message;
+            }
+        }
+
+        Token? accessModifierDefined = null;
+        bool staticDefined = false;
+
+        foreach (AccessModifier modifier in this.Modifiers)
+        {
+            string modifierName = Constants.TryGetModifierKeyword(modifier);
+            Token existing = this.ModifierTokens.First(x => x.Value == modifierName);
+
+            if (modifier is AccessModifier. accessModifierDefined is not null)
+            {
+                yield return new IllegalModifierError(existing, $"Class already has access modifier \"{accessModifierDefined.Value}\", but \"{existing.Value}\" was also declared", filePath);
+            }
+            else
+            {
+                accessModifierDefined = existing;
+            }
+
+            if (!this.AllowsModifier(modifier))
+            {
+                yield return new IllegalModifierError(this.ModifierTokens.First(x => x.Value == modifierName), $"Classes cannot be {modifierName}", filePath);
             }
         }
 
@@ -89,14 +107,9 @@ public sealed class ClassNode(
     /// <inheritdoc />
     public override async IAsyncEnumerable<Token> GetTokens()
     {
-        if (this.AccessModifierToken is not null)
+        foreach (Token modifierToken in this.ModifierTokens)
         {
-            yield return this.AccessModifierToken;
-        }
-
-        if (this.StaticToken is not null)
-        {
-            yield return this.StaticToken;
+            yield return modifierToken;
         }
 
         yield return classToken;
@@ -127,5 +140,47 @@ public sealed class ClassNode(
             yield return this.ClosingSquiggly;
         }
     }
+
+    /// <inheritdoc />
+    public Task Configure([NotNull] INodeConfigurationContext<ClassNode> context)
+    {
+        context
+            .HasAccess(AccessModifier.Public, AccessModifier.Internal)
+            .IsRequired()
+            .IsSingle();
+
+        context.HasStatic();
+
+        context.HasModifierOrder()
+            .ByAccessModifier()
+            .ThenBy(Modifier.Static);
+
+        context.HasChild(x => x.TypeName)
+            .IsRequired();
+
+        context.HasChildren(x => x.Members);
+
+        context.HasToken(x => x.OpeningSquiggly)
+            .IsRequired();
+
+        context.HasToken(x => x.ClosingSquiggly)
+            .IsRequired();
+
+        return Task.CompletedTask;
+    }
+
+    public Task Parse([NotNull] IParserConfigurationContext<ClassNode> context)
+    {
+        context
+            .Modifiers()
+            .Keyword(TokenType.Class)
+            .TypeName()
+            .Enumerate(TokenType.OpeningSquiggly, TokenType.ClosingSquiggly, x =>
+            {
+                x.Statement(Member)
+            });
+
+    }
+
 }
 
