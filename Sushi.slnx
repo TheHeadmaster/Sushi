@@ -1,3 +1,5 @@
 <Solution>
-    
+    <Folder Name="/Compiler/">
+        <Project Path="Compiler/Sushi.csproj" />
+    </Folder>
 </Solution>
