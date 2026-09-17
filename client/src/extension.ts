@@ -9,8 +9,7 @@ import { ExtensionContext } from 'vscode';
 import {
 	LanguageClient,
 	LanguageClientOptions,
-	ServerOptions,
-	TransportKind
+	ServerOptions
 } from 'vscode-languageclient/node';
 
 let client: LanguageClient;

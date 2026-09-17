@@ -30,7 +30,7 @@
             "label": "watch: extension",
             "type": "npm",
             "script": "watch",
-            "path": "Extension",
+            "path": ".",
             "isBackground": true,
             "problemMatcher": "$tsc-watch",
             "dependsOn": "generate: syntax",

@@ -25,7 +25,7 @@
                 "--extensionDevelopmentPath=${workspaceFolder}"
             ],
             "outFiles": [
-                "${workspaceFolder}/out/**/*.js"
+                "${workspaceFolder}/client/out/**/*.js"
             ],
             "env": {
                 "SUSHI_LSP_DEBUG_PORT": "5057"
