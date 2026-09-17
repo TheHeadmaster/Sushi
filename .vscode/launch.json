@@ -14,7 +14,7 @@
             ],
             "cwd": "${workspaceFolder}/Compiler",
             "console": "internalConsole",
-            "stopAtEntry": false,
+            "stopAtEntry": false
         },
         {
             "name":"Sushi: VS Code Extension",
