@@ -19,11 +19,9 @@
         },
         {
             "label": "generate: syntax",
-            "type": "shell",
-            "command": "npx js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
+            "type": "npm",
+            "script": "generate:syntax",
+            "path": ".",
             "problemMatcher": []
         },
         {
