@@ -54,7 +54,7 @@ function createServerOptions(context: ExtensionContext): ServerOptions {
 
 	const executable: Executable = {
 		command,
-		args: ['lsp', '--stdio'],
+		args: ['-lsp', '-stdio'],
 		transport: TransportKind.stdio
 	};
 

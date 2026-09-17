@@ -1,0 +1,5 @@
+root = false
+
+# C# files
+[*.cs]
+dotnet_diagnostic.IDE0130.severity = none
