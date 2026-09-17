@@ -3,33 +3,28 @@
  * Licensed under the MIT License. See License.txt in the project root for license information.
  * ------------------------------------------------------------------------------------------ */
 
+import * as net from 'net';
 import * as path from 'path';
 import { ExtensionContext } from 'vscode';
 
 import {
+	Executable,
 	LanguageClient,
 	LanguageClientOptions,
-	ServerOptions
+	ServerOptions,
+	StreamInfo,
+	TransportKind
 } from 'vscode-languageclient/node';
 
-let client: LanguageClient;
+let client: LanguageClient | undefined;
 
-export function activate(context: ExtensionContext) {
-    let serverExe = context.asAbsolutePath(path.join('client', 'out', 'LSP'));
-	// If the extension is launched in debug mode then the debug server options are used
-	// Otherwise the run options are used
-    const serverOptions: ServerOptions = {
-        run: { command: `${serverExe}/Sushi.exe`, args: ["-lsp"] },
-        debug: { command: `${serverExe}/Sushi.exe`, args: ["-lsp"] },
-    };
+export function activate(context: ExtensionContext): void {
+	const serverOptions = createServerOptions(context);
 
-	// Options to control the language client
 	const clientOptions: LanguageClientOptions = {
-		// Register the server for plain text documents
 		documentSelector: [{ scheme: 'file', language: 'sushi' }]
 	};
 
-	// Create the language client and start the client.
 	client = new LanguageClient(
 		'sushiLanguageServer',
 		'Sushi Language Server',
@@ -37,8 +32,7 @@ export function activate(context: ExtensionContext) {
 		clientOptions
 	);
 
-	// Start the client. This will also launch the server
-	client.start();
+	void client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -46,4 +40,73 @@ export function deactivate(): Thenable<void> | undefined {
 		return undefined;
 	}
 	return client.stop();
+}
+
+function createServerOptions(context: ExtensionContext): ServerOptions {
+	const debugPortText = process.env.SUSHI_LSP_DEBUG_PORT;
+
+	if (debugPortText && debugPortText.trim().length > 0) {
+		const debugPort = Number.parseInt(debugPortText, 10);
+
+		if (!Number.isInteger(debugPort) || debugPort <= 0 || debugPort > 65535) {
+			throw new Error(`Invalid SUSHI_LSP_DEBUG_PORT value: "${debugPortText}"`);
+		}
+
+		return () => connectWithRetry('127.0.0.1', debugPort, 40, 250);
+	}
+
+	const command = getBundledServerCommand(context);
+
+	const executable: Executable = {
+		command,
+		args: ['lsp', '--stdio'],
+		transport: TransportKind.stdio
+	};
+
+	return {
+		run: executable,
+		debug: executable
+	};
+}
+
+function getBundledServerCommand(context: ExtensionContext): string {
+	// Placeholder for future platforms
+	if (process.platform === 'win32') {
+		return context.asAbsolutePath(path.join('server', 'Sushi.exe'));
+	}
+
+	return context.asAbsolutePath(path.join('server', "Sushi"));
+}
+
+function connectWithRetry(host: string, port: number, maxAttempts: number, delayMilliseconds: number): Promise<StreamInfo> {
+	return new Promise<StreamInfo>((resolve, reject) => {
+		let attempt = 0;
+
+		const tryConnect = () => {
+			attempt++;
+
+			const socket = net.connect(port, host);
+
+			const onError = (error: Error) => {
+				socket.removeAllListeners();
+
+				if (attempt >= maxAttempts) {
+					reject(new Error(`Could not connect to Sushi LSP at ${host}:${port} after ${attempt} attempts. Last error: ${error.message}`));
+					return;
+				}
+
+				setTimeout(tryConnect, delayMilliseconds);
+			};
+
+			socket.once('connect', () => {
+				socket.removeListener('error', onError);
+
+				resolve({ reader: socket, writer: socket });
+			});
+
+			socket.once('error', onError);
+		};
+
+		tryConnect();
+	});
 }
