@@ -1,8 +1,3 @@
-/* --------------------------------------------------------------------------------------------
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for license information.
- * ------------------------------------------------------------------------------------------ */
-
 import * as net from 'net';
 import * as path from 'path';
 import { ExtensionContext } from 'vscode';
@@ -18,7 +13,7 @@ import {
 
 let client: LanguageClient | undefined;
 
-export function activate(context: ExtensionContext): void {
+export async function activate(context: ExtensionContext): Promise<void> {
 	const serverOptions = createServerOptions(context);
 
 	const clientOptions: LanguageClientOptions = {
@@ -32,7 +27,7 @@ export function activate(context: ExtensionContext): void {
 		clientOptions
 	);
 
-	void client.start();
+	await client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {
@@ -46,7 +41,7 @@ function createServerOptions(context: ExtensionContext): ServerOptions {
 	const debugPortText = process.env.SUSHI_LSP_DEBUG_PORT;
 
 	if (debugPortText && debugPortText.trim().length > 0) {
-		const debugPort = Number.parseInt(debugPortText, 10);
+		const debugPort = Number(debugPortText);
 
 		if (!Number.isInteger(debugPort) || debugPort <= 0 || debugPort > 65535) {
 			throw new Error(`Invalid SUSHI_LSP_DEBUG_PORT value: "${debugPortText}"`);
