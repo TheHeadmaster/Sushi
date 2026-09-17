@@ -18,12 +18,23 @@
             }
         },
         {
+            "label": "generate: syntax",
+            "type": "shell",
+            "command": "npx js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "watch: extension",
             "type": "npm",
             "script": "watch",
             "path": "Extension",
             "isBackground": true,
             "problemMatcher": "$tsc-watch",
+            "dependsOn": "generate: syntax",
+            "dependsOrder": "sequence",
             "presentation": {
                 "reveal": "silent",
                 "panel": "dedicated"

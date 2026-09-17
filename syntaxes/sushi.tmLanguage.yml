@@ -1,0 +1,4 @@
+name: Sushi
+scopeName: source.sus
+fileTypes:
+  - sus
