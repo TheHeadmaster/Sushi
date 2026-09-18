@@ -6,6 +6,9 @@ root = true
 dotnet_diagnostic.CA1515.severity = none
 dotnet_diagnostic.IDE0058.severity = none
 
+# In a program where most everything is async, slapping async on every method name is noise.
+dotnet_diagnostic.VSTHRD200.severity = none
+
 # This warning is intended for libraries, where the code may be executed in arbitrary environments and where code
 # shouldn't make assumptions about the environment or how the caller of the method may be invoking or waiting on it.
 # It is generally appropriate to suppress the warning entirely for projects that represent application code rather
