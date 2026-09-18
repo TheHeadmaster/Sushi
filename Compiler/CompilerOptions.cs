@@ -14,12 +14,17 @@ public sealed class CompilerOptions
     /// <summary>
     /// The IP Address to listen on when in LSP mode.
     /// </summary>
-    public IPAddress ListenAddress { get; set; } = IPAddress.None;
+    public IPEndPoint? ListenEndpoint { get; private set; }
+
+    /// <summary>
+    /// Determines by which method the Language Server Protocol is transported between server and client.
+    /// </summary>
+    public LSPTransportMethod LSPTransportMethod { get; private set; }
 
     /// <summary>
     /// Whether the compiler is running in LSP mode.
     /// </summary>
-    public bool IsInLSPMode { get; set; }
+    public bool IsInLSPMode { get; private set; }
 
     /// <summary>
     /// Creates a new instance of <see cref="CompilerOptions"/>.
@@ -45,9 +50,9 @@ public sealed class CompilerOptions
 
         CompilerOptions options = new();
 
-        Dictionary<string, string> arguments = new(StringComparer.OrdinalIgnoreCase);
+        Dictionary<string, string> arguments = [with(StringComparer.OrdinalIgnoreCase)];
 
-        HashSet<string> flags = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<string> flags = [with(StringComparer.OrdinalIgnoreCase)];
 
         string? key = null;
 
@@ -83,20 +88,32 @@ public sealed class CompilerOptions
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
 
-        if (arguments.TryGetValue("tcp", out string? ipAddress))
+        if (arguments.TryGetValue("tcp", out string? endpointString))
         {
-            if (!IPAddress.TryParse(ipAddress, out IPAddress? address))
+            if (!IPEndPoint.TryParse(endpointString, out IPEndPoint? endpoint))
             {
-                Log.Error("Invalid IP Address {IPAddress}.", ipAddress);
+                Log.Error("Invalid TCP endpoint {Endpoint}.", endpointString);
                 Program.Exit(ExitCode.InvalidParameterSyntax);
             }
 
-            options.ListenAddress = address;
+            options.LSPTransportMethod = LSPTransportMethod.TCP;
+            options.ListenEndpoint = endpoint;
+        }
+
+        if (arguments.ContainsKey("tcp") && flags.Contains("stdio"))
+        {
+            Log.Error("Cannot use LSP with both --tcp and -stdio parameters. Choose one or the other.");
+            Program.Exit(ExitCode.InvalidParameterSyntax);
         }
 
         if (flags.Contains("lsp"))
         {
             options.IsInLSPMode = true;
+        }
+
+        if (flags.Contains("stdio"))
+        {
+            options.LSPTransportMethod = LSPTransportMethod.Stdio;
         }
 
         if (flags.Contains("debug"))
@@ -114,6 +131,16 @@ public sealed class CompilerOptions
     /// </summary>
     private void Validate()
     {
-        // stub for future argument validation.
+        if (!this.IsInLSPMode && this.LSPTransportMethod is not LSPTransportMethod.None)
+        {
+            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or ---tcp ip:port.");
+            Program.Exit(ExitCode.InvalidParameterSyntax);
+        }
+
+        if (this.LSPTransportMethod is LSPTransportMethod.TCP && this.ListenEndpoint is null)
+        {
+            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or ---tcp ip:port.");
+            Program.Exit(ExitCode.InvalidParameterSyntax);
+        }
     }
 }

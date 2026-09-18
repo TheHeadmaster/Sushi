@@ -5,6 +5,7 @@ using Serilog;
 using Serilog.Core;
 using Serilog.Formatting.Compact;
 using System.Globalization;
+using Serilog.Events;
 
 namespace Sushi;
 
@@ -56,7 +57,12 @@ public static class Program
             .MinimumLevel.ControlledBy(levelSwitch)
             .WriteTo.File(new CompactJsonFormatter(), Path.Combine(logsPath, "info.log"), rollingInterval: RollingInterval.Day)
             .WriteTo.Debug(formatProvider: CultureInfo.CurrentCulture)
-            .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level}] {Message:lj}{NewLine}{Exception}", theme: AppMeta.ConsoleTheme, applyThemeToRedirectedOutput: true, formatProvider: CultureInfo.CurrentCulture)
+            .WriteTo.Console(
+                outputTemplate: "[{Timestamp:HH:mm:ss} {Level}] {Message:lj}{NewLine}{Exception}",
+                theme: AppMeta.ConsoleTheme,
+                applyThemeToRedirectedOutput: true,
+                formatProvider: CultureInfo.CurrentCulture,
+                standardErrorFromLevel: LogEventLevel.Verbose)
             .CreateLogger();
 
         Log.Information("Welcome to Sushi Version {Version}.", AppMeta.GetVersion());
