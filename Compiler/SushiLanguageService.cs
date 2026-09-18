@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
 
@@ -39,12 +38,12 @@ public sealed class SushiLanguageService
         switch (AppMeta.Options.LSPTransportMethod)
         {
             case LSPTransportMethod.Stdio:
-                Stream input = Console.OpenStandardInput();
-                Stream output = Console.OpenStandardOutput();
+            {
+                await using Stream input = Console.OpenStandardInput();
+                await using Stream output = Console.OpenStandardOutput();
                 await this.RunLanguageServer(input, output);
-                await input.DisposeAsync();
-                await output.DisposeAsync();
                 break;
+            }
             case LSPTransportMethod.TCP:
                 await this.RunTCPLanguageServer();
                 break;
@@ -75,9 +74,9 @@ public sealed class SushiLanguageService
             .WithServerInfo(new ServerInfo
             {
                 Name = "Sushi",
-                Version = AppMeta.GetVersion().ToString()
+                Version = AppMeta.GetVersion()
             })
-            .OnInitialize(async (server, request, token) => await this.InitializeWorkspace([.. request.WorkspaceFolders ?? []]))
+            .OnInitialize((server, request, token) => this.InitializeWorkspace([.. request.WorkspaceFolders ?? []]))
             .WithServices(services => services.AddSingleton(this))
             //.WithHandler<WorkspaceFoldersHandler>()
             //.WithHandler<WorkspaceSymbolsHandler>()
@@ -105,6 +104,8 @@ public sealed class SushiLanguageService
         try
         {
             listener.Start();
+
+            Log.Information("Listening for LSP client on {Endpoint}.", endpoint);
 
             using TcpClient client = await listener.AcceptTcpClientAsync();
             await using NetworkStream stream = client.GetStream();
