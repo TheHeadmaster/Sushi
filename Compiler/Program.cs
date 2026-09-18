@@ -6,10 +6,6 @@ using Serilog.Core;
 using Serilog.Formatting.Compact;
 using System.Globalization;
 using Serilog.Events;
-using OmniSharp.Extensions.LanguageServer.Server;
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Sushi;
 
@@ -31,13 +27,15 @@ public static class Program
         {
             await Initialize(args);
 
+            SushiLanguageService service = new();
+
             if (AppMeta.Options.IsInLSPMode)
             {
-                await Diag.Monitor("LanguageServer", RunLanguageServer);
+                await Diag.Monitor("LanguageServer", service.RunLanguageServer);
             }
             else
             {
-                await Diag.Monitor("Compilation", Run);
+                await Diag.Monitor("Compilation", service.CompileJob);
             }
         }
         catch (Exception exception)
@@ -86,58 +84,6 @@ public static class Program
         AppDomain.CurrentDomain.ProcessExit += OnExit;
 
         AppMeta.Options = CompilerOptions.FromCommandLineArguments(args, levelSwitch);
-    }
-
-    /// <summary>
-    /// Runs the language server.
-    /// </summary>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    private static async Task RunLanguageServer()
-    {
-        SushiLanguageService service = new();
-
-        LanguageServer server = await LanguageServer.From(options => options
-            .WithInput(Console.OpenStandardInput())
-            .WithOutput(Console.OpenStandardOutput())
-            .OnInitialize((server, request, token) => Task.Run(async () =>
-            {
-                await service.InitializeWorkspace([.. request.WorkspaceFolders ?? []]);
-
-                return new InitializeResult
-                {
-                    ServerInfo = new ServerInfo
-                    {
-                        Name = "Sushi",
-                        Version = AppMeta.GetVersion().ToString()
-                    },
-                    Capabilities = new ServerCapabilities()
-                    {
-                        WorkspaceSymbolProvider = true,
-                    }
-                };
-            }))
-            .WithServices(services => services.AddSingleton(service))
-            //.WithHandler<WorkspaceFoldersHandler>()
-            //.WithHandler<DeletedFileHandler>()
-            //.WithHandler<CreatedFileHandler>()
-            //.WithHandler<TextDocumentSyncHandler>()
-        );
-
-        await server.WaitForExit;
-    }
-
-    /// <summary>
-    /// Runs the compiler.
-    /// </summary>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    private static async Task Run()
-    {
-        SushiLanguageService service = new();
-        await service.CompileJob();
     }
 
     /// <summary>
