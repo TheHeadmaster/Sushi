@@ -92,6 +92,7 @@ public sealed class CompilerOptions
                 if (!allowedKeys.Contains(key))
                 {
                     Log.Error("Invalid parameter {Parameter}.", arg);
+                    Program.Exit(ExitCode.InvalidParameterSyntax);
                 }
 
                 continue;
@@ -105,6 +106,7 @@ public sealed class CompilerOptions
                 if (!allowedFlags.Contains(flag))
                 {
                     Log.Error("Invalid parameter {Parameter}.", arg);
+                    Program.Exit(ExitCode.InvalidParameterSyntax);
                 }
 
                 continue;
