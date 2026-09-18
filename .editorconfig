@@ -6,6 +6,13 @@ root = true
 dotnet_diagnostic.CA1515.severity = none
 dotnet_diagnostic.IDE0058.severity = none
 
+# This warning is intended for libraries, where the code may be executed in arbitrary environments and where code
+# shouldn't make assumptions about the environment or how the caller of the method may be invoking or waiting on it.
+# It is generally appropriate to suppress the warning entirely for projects that represent application code rather
+# than library code; in fact, running this analyzer on application code (for example, button click event handlers in
+# a WinForms or WPF project) is likely to lead to the wrong actions being taken.
+dotnet_diagnostic.CA2007.severity = none
+
 # Indentation and spacing
 indent_size = 4
 indent_style = space

@@ -20,14 +20,14 @@ public static class Program
     /// <param name="args">
     /// The command line arguments.
     /// </param>
-    private static void Main(string[] args)
+    private static async Task Main(string[] args)
     {
 #pragma warning disable CA1031 // Do not catch general exception types
         try
         {
-            Initialize(args);
+            await Initialize(args);
 
-            Diag.Monitor("Run", Run);
+            await Diag.Monitor("Run", Run);
         }
         catch (Exception exception)
         {
@@ -43,7 +43,10 @@ public static class Program
     /// <param name="args">
     /// The command line arguments.
     /// </param>
-    private static void Initialize(string[] args)
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task Initialize(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -75,11 +78,42 @@ public static class Program
     }
 
     /// <summary>
-    /// Runs the compiler. 
+    /// Runs the program in LSP or Compiler mode. 
     /// </summary>
-    private static void Run()
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task Run()
     {
-        // TODO: run in LSP mode or direct build mode based on AppMeta compiler options.
+        if (AppMeta.Options.IsInLSPMode)
+        {
+            await RunLanguageServer();
+            return;
+        }
+
+        await RunCompiler();
+    }
+
+    /// <summary>
+    /// Runs the language server.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task RunLanguageServer()
+    {
+        
+    }
+
+    /// <summary>
+    /// Runs the compiler.
+    /// </summary>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
+    private static async Task RunCompiler()
+    {
+        
     }
 
     /// <summary>

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Security.Cryptography;
 using Serilog;
 
 namespace Sushi.Diagnostics;
@@ -18,7 +17,7 @@ public static class Diag
     /// <param name="monitorAction">
     /// The monitor action.
     /// </param>
-    public static void Monitor(string label, Action monitorAction)
+    public static async Task Monitor(string label, Func<Task> monitorAction)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(monitorAction);
@@ -27,7 +26,7 @@ public static class Diag
 
         Log.Information("Starting {Label}...", label);
 
-        monitorAction();
+        await monitorAction();
 
         stopwatch.Stop();
 
@@ -49,7 +48,7 @@ public static class Diag
     /// <returns>
     /// The result.
     /// </returns>
-    public static TResult Monitor<TResult>(string label, Func<TResult> monitorAction)
+    public static async Task<TResult> Monitor<TResult>(string label, Func<Task<TResult>> monitorAction)
     {
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(monitorAction);
@@ -58,7 +57,7 @@ public static class Diag
 
         Log.Information("Starting {Label}...", label);
 
-        TResult result = monitorAction();
+        TResult result = await monitorAction();
 
         stopwatch.Stop();
 
