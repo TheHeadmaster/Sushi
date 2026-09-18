@@ -32,6 +32,26 @@ public sealed class CompilerOptions
     private CompilerOptions() { }
 
     /// <summary>
+    /// The list of allowed flags.
+    /// </summary>
+    private static readonly HashSet<string> allowedFlags =
+    [
+      with(StringComparer.OrdinalIgnoreCase),
+      "lsp",
+      "stdio",
+      "debug"  
+    ];
+
+    /// <summary>
+    /// The list of allowed keys.
+    /// </summary>
+    private static readonly HashSet<string> allowedKeys =
+    [
+      with(StringComparer.OrdinalIgnoreCase),
+      "tcp"
+    ];
+
+    /// <summary>
     /// Processes the command line arguments into a <see cref="CompilerOptions"/> object.
     /// </summary>
     /// <param name="args">
@@ -68,11 +88,25 @@ public sealed class CompilerOptions
             if (arg.StartsWith("--", StringComparison.Ordinal))
             {
                 key = arg[2..];
+
+                if (!allowedKeys.Contains(key))
+                {
+                    Log.Error("Invalid parameter {Parameter}.", arg);
+                }
+
                 continue;
             }
             else if (arg.StartsWith('-'))
             {
-                flags.Add(arg[1..]);
+                string flag = arg[1..];
+
+                flags.Add(flag);
+
+                if (!allowedFlags.Contains(flag))
+                {
+                    Log.Error("Invalid parameter {Parameter}.", arg);
+                }
+
                 continue;
             }
             else
@@ -133,13 +167,19 @@ public sealed class CompilerOptions
     {
         if (!this.IsInLSPMode && this.LSPTransportMethod is not LSPTransportMethod.None)
         {
-            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or ---tcp ip:port.");
+            Log.Error("Cannot specify an LSP transport without enabling LSP mode with -lsp.");
+            Program.Exit(ExitCode.InvalidParameterSyntax);
+        }
+
+        if (this.IsInLSPMode && this.LSPTransportMethod is LSPTransportMethod.None)
+        {
+            Log.Error("LSP mode requires a transport method. Use -stdio or --tcp ip:port.");
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
 
         if (this.LSPTransportMethod is LSPTransportMethod.TCP && this.ListenEndpoint is null)
         {
-            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or ---tcp ip:port.");
+            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or --tcp ip:port.");
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
     }
