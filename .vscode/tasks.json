@@ -19,16 +19,20 @@
         },
         {
             "label": "generate: syntax",
-            "type": "npm",
-            "script": "generate:syntax",
-            "path": ".",
+            "type": "shell",
+            "command": "npm run generate:syntax",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "problemMatcher": []
         },
         {
             "label": "watch: extension",
-            "type": "npm",
-            "script": "watch",
-            "path": ".",
+            "type": "shell",
+            "command": "npm run watch",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "isBackground": true,
             "problemMatcher": "$tsc-watch",
             "dependsOn": "generate: syntax",

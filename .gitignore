@@ -418,3 +418,4 @@ FodyWeavers.xsd
 *.msp
 
 *.tsbuildinfo
+syntaxes/sushi.tmLanguage.json

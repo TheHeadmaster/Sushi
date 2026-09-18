@@ -68,7 +68,6 @@ public static class Program
         Log.Logger = new LoggerConfiguration()
             .MinimumLevel.ControlledBy(levelSwitch)
             .WriteTo.File(new CompactJsonFormatter(), Path.Combine(logsPath, "info.log"), rollingInterval: RollingInterval.Day)
-            .WriteTo.Debug(formatProvider: CultureInfo.CurrentCulture)
             .WriteTo.Console(
                 outputTemplate: "[{Timestamp:HH:mm:ss} {Level}] {Message:lj}{NewLine}{Exception}",
                 theme: AppMeta.ConsoleTheme,
