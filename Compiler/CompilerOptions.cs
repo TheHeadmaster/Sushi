@@ -3,6 +3,7 @@ using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using Sushi.Diagnostics;
+using Sushi.Diagnostics.Exceptions;
 
 namespace Sushi;
 
@@ -30,6 +31,8 @@ public sealed class CompilerOptions
     /// The path of the project or folder containing the project.
     /// </summary>
     public string ProjectOrFolderPath { get; private set; } = string.Empty;
+
+    public bool IsDebugLoggingEnabled { get; private set; }
 
     /// <summary>
     /// Creates a new instance of <see cref="CompilerOptions"/>.
@@ -97,8 +100,7 @@ public sealed class CompilerOptions
 
                 if (!allowedKeys.Contains(key))
                 {
-                    Log.Error("Invalid parameter {Parameter}.", arg);
-                    Program.Exit(ExitCode.InvalidParameterSyntax);
+                    throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Invalid parameter \"{arg}\".");
                 }
 
                 continue;
@@ -111,31 +113,27 @@ public sealed class CompilerOptions
 
                 if (!allowedFlags.Contains(flag))
                 {
-                    Log.Error("Invalid parameter {Parameter}.", arg);
-                    Program.Exit(ExitCode.InvalidParameterSyntax);
+                    throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Invalid parameter \"{arg}\".");
                 }
 
                 continue;
             }
             else
             {
-                Log.Error("Invalid parameter {Parameter} with no key specified. Please use key value pairs (--project \"C:\\Path\\To\\Folder\") or flags (-debug).", arg);
-                Program.Exit(ExitCode.InvalidParameterSyntax);
+                throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Invalid parameter {arg} with no key specified. Please use key value pairs (--project \"C:\\Path\\To\\Folder\") or flags (-debug).");
             }
         }
 
         if (key is not null)
         {
-            Log.Error("Parameter --{Parameter} requires a value.", key);
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Parameter --{key} requires a value.");
         }
 
         if (arguments.TryGetValue("tcp", out string? endpointString))
         {
             if (!IPEndPoint.TryParse(endpointString, out IPEndPoint? endpoint))
             {
-                Log.Error("Invalid TCP endpoint {Endpoint}.", endpointString);
-                Program.Exit(ExitCode.InvalidParameterSyntax);
+                throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Invalid TCP endpoint {endpointString}.");
             }
 
             options.LSPTransportMethod = LSPTransportMethod.TCP;
@@ -144,14 +142,12 @@ public sealed class CompilerOptions
 
         if (arguments.ContainsKey("tcp") && flags.Contains("stdio"))
         {
-            Log.Error("Cannot use LSP with both --tcp and -stdio parameters. Choose one or the other.");
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, $"Cannot use LSP with both --tcp and -stdio parameters. Choose one or the other.");
         }
 
         if (!arguments.TryGetValue("project", out string? projectOrFolderPath) && !flags.Contains("lsp"))
         {
-            Log.Error("A project file or folder path must be specified when compiling. Use the --project \"Path\\To\\File\\OrFolder.susproj\" parameter.");
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, "A project file or folder path must be specified when compiling. Use the --project \"Path\\To\\File\\OrFolder.susproj\" parameter.");
         }
 
         options.ProjectOrFolderPath = projectOrFolderPath ?? string.Empty;
@@ -168,7 +164,7 @@ public sealed class CompilerOptions
 
         if (flags.Contains("debug"))
         {
-            levelSwitch.MinimumLevel = LogEventLevel.Debug;
+            options.IsDebugLoggingEnabled = true;
         }
 
         options.Validate();
@@ -183,20 +179,17 @@ public sealed class CompilerOptions
     {
         if (!this.IsInLanguageServerMode && this.LSPTransportMethod is not LSPTransportMethod.None)
         {
-            Log.Error("Cannot specify an LSP transport without enabling LSP mode with -lsp.");
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, "Cannot specify an LSP transport without enabling LSP mode with -lsp.");
         }
 
         if (this.IsInLanguageServerMode && this.LSPTransportMethod is LSPTransportMethod.None)
         {
-            Log.Error("LSP mode requires a transport method. Use -stdio or --tcp ip:port.");
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, "LSP mode requires a transport method. Use -stdio or --tcp ip:port.");
         }
 
         if (this.LSPTransportMethod is LSPTransportMethod.TCP && this.ListenEndpoint is null)
         {
-            Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or --tcp ip:port.");
-            Program.Exit(ExitCode.InvalidParameterSyntax);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidParameterSyntax, "Cannot use LSP without supplying a transport method. Either use -stdio or --tcp ip:port.");
         }
 
         bool isFilePath = File.Exists(this.ProjectOrFolderPath);
@@ -205,14 +198,12 @@ public sealed class CompilerOptions
 
         if (!this.IsInLanguageServerMode && !isFilePath && !isFolderPath)
         {
-            Log.Error("File or Folder \"{FileOrFolderPath}\" does not exist on disk. Check your inputs.", this.ProjectOrFolderPath);
-            Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidProjectFileOrFolder, $"File or Folder \"{this.ProjectOrFolderPath}\" does not exist on disk. Check your inputs.");
         }
 
         if (!this.IsInLanguageServerMode && isFilePath && !IsProjectOrSolutionFile(this.ProjectOrFolderPath))
         {
-            Log.Error("File \"{FilePath}\" is not a valid .susproj or .susln file.", this.ProjectOrFolderPath);
-            Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+            throw new CompilerOptionsException(CompilerOptionsError.InvalidProjectFileOrFolder, $"File \"{this.ProjectOrFolderPath}\" is not a valid .susproj or .susln file.");
         }
 
         if (!this.IsInLanguageServerMode && isFolderPath)
@@ -223,8 +214,7 @@ public sealed class CompilerOptions
 
             if (string.IsNullOrWhiteSpace(projectFile))
             {
-                Log.Error("Folder \"{FolderPath}\" does not contain a valid .susproj or .susln file. Make sure it is in the top directory and not a sub directory.", this.ProjectOrFolderPath);
-                Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+                throw new CompilerOptionsException(CompilerOptionsError.InvalidProjectFileOrFolder, $"Folder \"{this.ProjectOrFolderPath}\" does not contain a valid .susproj or .susln file. Make sure it is in the top directory and not a sub directory.");
             }
         }
     }

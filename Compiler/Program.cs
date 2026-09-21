@@ -6,6 +6,7 @@ using Serilog.Core;
 using Serilog.Formatting.Compact;
 using System.Globalization;
 using Serilog.Events;
+using Sushi.Diagnostics.Exceptions;
 
 namespace Sushi;
 
@@ -37,6 +38,16 @@ public static class Program
             {
                 await Diag.Monitor("Compilation", service.CompileJob);
             }
+        }
+        catch (CompilerOptionsException exception)
+        {
+            Log.Error("{Message}", exception.Message);
+            Exit(exception.Error switch
+            {
+                CompilerOptionsError.InvalidParameterSyntax => ExitCode.InvalidParameterSyntax,
+                CompilerOptionsError.InvalidProjectFileOrFolder => ExitCode.InvalidProjectFileOrFolder,
+                _ => ExitCode.UnhandledException
+            });
         }
         catch (Exception exception)
         {
@@ -83,6 +94,11 @@ public static class Program
         AppDomain.CurrentDomain.ProcessExit += OnExit;
 
         AppMeta.Options = CompilerOptions.FromCommandLineArguments(args, levelSwitch);
+
+        if (AppMeta.Options.IsDebugLoggingEnabled)
+        {
+            levelSwitch.MinimumLevel = LogEventLevel.Debug;
+        }
     }
 
     /// <summary>
