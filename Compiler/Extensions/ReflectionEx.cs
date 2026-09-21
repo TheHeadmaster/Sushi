@@ -7,7 +7,8 @@ public static class ReflectionEx
 {
     /// <summary>
     /// Gets the leaf subclasses of the specified type. Leaf subclasses in this context
-    /// are classes that are themselves not inherited by a class and not abstract.
+    /// are classes that are themselves not inherited by a class and not abstract. Leaf
+    /// subclasses must have a parameterless constructor or this will throw an error.
     /// </summary>
     /// <typeparam name="T">
     /// The type to get the leaf subclasses of.
@@ -20,8 +21,8 @@ public static class ReflectionEx
         Assembly assembly = typeof(T).Assembly;
         Type baseType = typeof(T);
 
-        List<Type> concreteSubclasses = [.. assembly.GetTypes().Where(type => type.IsAssignableTo(baseType) && !type.IsAbstract && !type.IsInterface)];
-        List<Type> leafSubclasses = [.. concreteSubclasses.Where(type => !concreteSubclasses.Any(otherType => otherType.IsSubclassOf(type)))];
+        List<Type> subclasses = [.. assembly.GetTypes().Where(type => type != baseType && type.IsAssignableTo(baseType) && !type.IsInterface)];
+        List<Type> leafSubclasses = [.. subclasses.Where(type => !type.IsAbstract && !type.ContainsGenericParameters && !subclasses.Any(otherType => otherType.IsSubclassOf(type)))];
 
         List<T> instances = [];
 

@@ -29,7 +29,7 @@ public sealed class CompilerOptions
     /// <summary>
     /// The path of the project or folder containing the project.
     /// </summary>
-    public string ProjectOrFolderPath { get; set; } = string.Empty;
+    public string ProjectOrFolderPath { get; private set; } = string.Empty;
 
     /// <summary>
     /// Creates a new instance of <see cref="CompilerOptions"/>.
@@ -53,7 +53,8 @@ public sealed class CompilerOptions
     private static readonly HashSet<string> allowedKeys =
     [
       with(StringComparer.OrdinalIgnoreCase),
-      "tcp"
+      "tcp",
+      "project"
     ];
 
     /// <summary>
@@ -222,7 +223,7 @@ public sealed class CompilerOptions
 
             if (string.IsNullOrWhiteSpace(projectFile))
             {
-                Log.Error("Folder \"{FolderPath}\" does not contain a valid .susproj or .susln file. Make sure it is in the top directory and not a sub directory.");
+                Log.Error("Folder \"{FolderPath}\" does not contain a valid .susproj or .susln file. Make sure it is in the top directory and not a sub directory.", this.ProjectOrFolderPath);
                 Program.Exit(ExitCode.InvalidProjectFileOrFolder);
             }
         }
@@ -237,5 +238,13 @@ public sealed class CompilerOptions
     /// <returns>
     /// True if the file path has a .susproj or .susln extension. False otherwise.
     /// </returns>
-    private static bool IsProjectOrSolutionFile(string file) => Path.GetExtension(file) is not ".susproj" and not ".susln";
+    private static bool IsProjectOrSolutionFile(string file)
+    {
+        string extension = Path.GetExtension(file);
+
+        return extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
+
+        return Path.GetExtension(file) is ".susproj" or ".susln";
+    }
 }
