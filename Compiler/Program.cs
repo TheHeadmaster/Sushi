@@ -93,7 +93,7 @@ public static class Program
 
         AppDomain.CurrentDomain.ProcessExit += OnExit;
 
-        AppMeta.Options = CompilerOptions.FromCommandLineArguments(args, levelSwitch);
+        AppMeta.Options = CompilerOptions.FromCommandLineArguments(args);
 
         if (AppMeta.Options.IsDebugLoggingEnabled)
         {

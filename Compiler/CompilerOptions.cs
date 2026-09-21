@@ -1,8 +1,4 @@
 using System.Net;
-using Serilog;
-using Serilog.Core;
-using Serilog.Events;
-using Sushi.Diagnostics;
 using Sushi.Diagnostics.Exceptions;
 
 namespace Sushi;
@@ -66,16 +62,12 @@ public sealed class CompilerOptions
     /// <param name="args">
     /// The command line arguments.
     /// </param>
-    /// <param name="levelSwitch">
-    /// The level switch used to determine what log level to log with.
-    /// </param>
     /// <returns>
     /// A <see cref="CompilerOptions"/> object.
     /// </returns>
-    public static CompilerOptions FromCommandLineArguments(string[] args, LoggingLevelSwitch levelSwitch)
+    public static CompilerOptions FromCommandLineArguments(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
-        ArgumentNullException.ThrowIfNull(levelSwitch);
 
         CompilerOptions options = new();
 
