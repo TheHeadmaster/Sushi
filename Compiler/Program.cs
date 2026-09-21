@@ -29,7 +29,7 @@ public static class Program
 
             SushiLanguageService service = new();
 
-            if (AppMeta.Options.IsInLSPMode)
+            if (AppMeta.Options.IsInLanguageServerMode)
             {
                 await Diag.Monitor("LanguageServer", service.RunLanguageServer);
             }

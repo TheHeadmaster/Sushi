@@ -24,7 +24,7 @@ public sealed class CompilerOptions
     /// <summary>
     /// Whether the compiler is running in LSP mode.
     /// </summary>
-    public bool IsInLSPMode { get; private set; }
+    public bool IsInLanguageServerMode { get; private set; }
 
     /// <summary>
     /// Creates a new instance of <see cref="CompilerOptions"/>.
@@ -144,7 +144,7 @@ public sealed class CompilerOptions
 
         if (flags.Contains("lsp"))
         {
-            options.IsInLSPMode = true;
+            options.IsInLanguageServerMode = true;
         }
 
         if (flags.Contains("stdio"))
@@ -167,13 +167,13 @@ public sealed class CompilerOptions
     /// </summary>
     private void Validate()
     {
-        if (!this.IsInLSPMode && this.LSPTransportMethod is not LSPTransportMethod.None)
+        if (!this.IsInLanguageServerMode && this.LSPTransportMethod is not LSPTransportMethod.None)
         {
             Log.Error("Cannot specify an LSP transport without enabling LSP mode with -lsp.");
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
 
-        if (this.IsInLSPMode && this.LSPTransportMethod is LSPTransportMethod.None)
+        if (this.IsInLanguageServerMode && this.LSPTransportMethod is LSPTransportMethod.None)
         {
             Log.Error("LSP mode requires a transport method. Use -stdio or --tcp ip:port.");
             Program.Exit(ExitCode.InvalidParameterSyntax);
