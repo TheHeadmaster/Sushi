@@ -7,5 +7,6 @@ public enum ExitCode
 {
     Success,
     UnhandledException,
-    InvalidParameterSyntax
+    InvalidParameterSyntax,
+    InvalidProjectFileOrFolder
 }

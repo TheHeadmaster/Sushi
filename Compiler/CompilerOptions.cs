@@ -27,6 +27,11 @@ public sealed class CompilerOptions
     public bool IsInLanguageServerMode { get; private set; }
 
     /// <summary>
+    /// The path of the project or folder containing the project.
+    /// </summary>
+    public string ProjectOrFolderPath { get; set; } = string.Empty;
+
+    /// <summary>
     /// Creates a new instance of <see cref="CompilerOptions"/>.
     /// </summary>
     private CompilerOptions() { }
@@ -142,6 +147,14 @@ public sealed class CompilerOptions
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
 
+        if (!arguments.TryGetValue("project", out string? projectOrFolderPath) && !flags.Contains("lsp"))
+        {
+            Log.Error("A project file or folder path must be specified when compiling. Use the --project \"Path\\To\\File\\OrFolder.susproj\" parameter.");
+            Program.Exit(ExitCode.InvalidParameterSyntax);
+        }
+
+        options.ProjectOrFolderPath = projectOrFolderPath ?? string.Empty;
+
         if (flags.Contains("lsp"))
         {
             options.IsInLanguageServerMode = true;
@@ -184,5 +197,45 @@ public sealed class CompilerOptions
             Log.Error("Cannot use LSP without supplying a transport method. Either use -stdio or --tcp ip:port.");
             Program.Exit(ExitCode.InvalidParameterSyntax);
         }
+
+        bool isFilePath = File.Exists(this.ProjectOrFolderPath);
+
+        bool isFolderPath = Directory.Exists(this.ProjectOrFolderPath);
+
+        if (!this.IsInLanguageServerMode && !isFilePath && !isFolderPath)
+        {
+            Log.Error("File or Folder \"{FileOrFolderPath}\" does not exist on disk. Check your inputs.", this.ProjectOrFolderPath);
+            Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+        }
+
+        if (!this.IsInLanguageServerMode && isFilePath && !IsProjectOrSolutionFile(this.ProjectOrFolderPath))
+        {
+            Log.Error("File \"{FilePath}\" is not a valid .susproj or .susln file.", this.ProjectOrFolderPath);
+            Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+        }
+
+        if (!this.IsInLanguageServerMode && isFolderPath)
+        {
+            // No need to prefer .susln over .susproj in this step, because we will check that later downstream.
+            string? projectFile = Directory.EnumerateFiles(this.ProjectOrFolderPath, "*.*", SearchOption.TopDirectoryOnly)
+                .FirstOrDefault(IsProjectOrSolutionFile);
+
+            if (string.IsNullOrWhiteSpace(projectFile))
+            {
+                Log.Error("Folder \"{FolderPath}\" does not contain a valid .susproj or .susln file. Make sure it is in the top directory and not a sub directory.");
+                Program.Exit(ExitCode.InvalidProjectFileOrFolder);
+            }
+        }
     }
+
+    /// <summary>
+    /// Checks if the file path is a valid project or solution file.
+    /// </summary>
+    /// <param name="file">
+    /// The file path to check.
+    /// </param>
+    /// <returns>
+    /// True if the file path has a .susproj or .susln extension. False otherwise.
+    /// </returns>
+    private static bool IsProjectOrSolutionFile(string file) => Path.GetExtension(file) is not ".susproj" and not ".susln";
 }

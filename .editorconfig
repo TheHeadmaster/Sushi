@@ -5,6 +5,7 @@ root = true
 [*.cs]
 dotnet_diagnostic.CA1515.severity = none
 dotnet_diagnostic.IDE0058.severity = none
+dotnet_diagnostic.CA1711.severity = none
 
 # In a program where most everything is async, slapping async on every method name is noise.
 dotnet_diagnostic.VSTHRD200.severity = none
