@@ -3,9 +3,18 @@ root = true
 
 # C# files
 [*.cs]
+# Sometimes things need to be public for reflection, and this isn't an API so this one can just end up being noise.
 dotnet_diagnostic.CA1515.severity = none
+
+# The amount of objects that return a value that's not really used (such as in method chaining) is just too high.
+# This can often just be noise and I don't want to sprinkle underscores everywhere.
 dotnet_diagnostic.IDE0058.severity = none
+
+# Naming rules are too strict for my tastes, best judgement for naming is better.
 dotnet_diagnostic.CA1711.severity = none
+
+# byte[] is a defensible property value.
+dotnet_diagnostic.CA1819.severity = none
 
 # In a program where most everything is async, slapping async on every method name is noise.
 dotnet_diagnostic.VSTHRD200.severity = none

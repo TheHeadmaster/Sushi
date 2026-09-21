@@ -26,10 +26,40 @@
                 "extensions": [
                   ".sus"
                 ],
-                "configuration": "./language-configuration.json",
+                "configuration": "./sushi-language-configuration.json",
                 "icon": {
                   "light": "./Sushi.png",
                   "dark": "./Sushi.png"
+                }
+            },
+            {
+                "id": "susproj",
+                "aliases": [
+                    "SushiProject",
+                    "sushiproject"
+                ],
+                "extensions": [
+                    ".susproj"
+                ],
+                "configuration": "./susproj-language-configuration.json",
+                "icon": {
+                    "light": "./Sushi.png",
+                    "dark": "./Sushi.png"
+                }
+            },
+            {
+                "id": "susln",
+                "aliases": [
+                    "SushiSolution",
+                    "sushisolution"
+                ],
+                "extensions": [
+                    ".susln"
+                ],
+                "configuration": "./susln-language-configuration.json",
+                "icon": {
+                    "light": "./Sushi.png",
+                    "dark": "./Sushi.png"
                 }
             }
         ],
@@ -38,17 +68,35 @@
                 "language": "sushi",
                 "scopeName": "source.sus",
                 "path": "./syntaxes/sushi.tmLanguage.json"
+            },
+            {
+                "language": "susproj",
+                "scopeName": "source.susproj",
+                "path": "./syntaxes/susproj.tmLanguage.json"
+            },
+            {
+                "language": "susln",
+                "scopeName": "source.susln",
+                "path": "./syntaxes/susln.tmLanguage.json"
             }
         ],
         "configurationDefaults": {
             "[sushi]": {
                 "editor.semanticHighlighting.enabled": true,
                 "editor.tabSize": 4
+            },
+            "[susproj]": {
+                "editor.semanticHighlighting.enabled": true,
+                "editor.tabSize": 4
+            },
+            "[susln]": {
+                "editor.semanticHighlighting.enabled": true,
+                "editor.tabSize": 4
             }
         }
     },
     "scripts": {
-        "generate:syntax": "js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json",
+        "generate:syntax": "js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json && js-yaml syntaxes/susln.tmLanguage.yml > syntaxes/susln.tmLanguage.json && js-yaml syntaxes/susproj.tmLanguage.yml > syntaxes/susproj.tmLanguage.json",
         "compile": "tsc -p client/tsconfig.json",
         "watch": "tsc -p client/tsconfig.json -w",
         "lint": "eslint .",
