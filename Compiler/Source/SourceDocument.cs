@@ -5,13 +5,7 @@ namespace Sushi.Source;
 /// <summary>
 /// Represents a source document, such as a .sus file.
 /// </summary>
-/// <param name="uri">
-/// The document <see cref="Uri"/>.
-/// </param>
-/// <param name="diskSnapshot">
-/// The current disk snapshot for the source document.
-/// </param>
-public sealed class SourceDocument(Uri uri, SourceSnapshot diskSnapshot)
+public sealed class SourceDocument
 {
     /// <summary>
     /// The current snapshot for the source document.
@@ -21,7 +15,7 @@ public sealed class SourceDocument(Uri uri, SourceSnapshot diskSnapshot)
     /// <summary>
     /// The snapshot of the source directly from disk.
     /// </summary>
-    public SourceSnapshot DiskSnapshot { get; private set; } = diskSnapshot;
+    public SourceSnapshot DiskSnapshot { get; private set; }
 
     /// <summary>
     /// The snapshot of the source as it exists in-memory. Used for open documents with unsaved changes.
@@ -36,7 +30,27 @@ public sealed class SourceDocument(Uri uri, SourceSnapshot diskSnapshot)
     /// <summary>
     /// The document <see cref="Uri"/>.
     /// </summary>
-    public Uri Uri { get; } = uri;
+    public Uri Uri { get; }
+
+    /// <param name="uri">
+    /// The document <see cref="Uri"/>.
+    /// </param>
+    /// <param name="diskSnapshot">
+    /// The current disk snapshot for the source document.
+    /// </param>
+    public SourceDocument([NotNull] Uri uri, [NotNull] SourceSnapshot diskSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        ArgumentNullException.ThrowIfNull(diskSnapshot);
+
+        if (!uri.IsSamePath(diskSnapshot.Uri))
+        {
+            throw new ArgumentException("Snapshot belongs to a different document.", nameof(diskSnapshot));
+        }
+
+        this.DiskSnapshot = diskSnapshot;
+        this.Uri = uri;
+    }
 
     /// <summary>
     /// Updates the disk snapshot.

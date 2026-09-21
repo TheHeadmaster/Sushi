@@ -1,4 +1,3 @@
-using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Sushi.Source;
 
 namespace Sushi.Diagnostics;

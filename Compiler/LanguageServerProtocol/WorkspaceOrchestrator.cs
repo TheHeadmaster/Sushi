@@ -3,6 +3,10 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Sushi.Diagnostics;
+using Sushi.Source;
+using Sushi.Workspaces;
+using DiagnosticSeverity = Sushi.Diagnostics.DiagnosticSeverity;
+using OmniSharpDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol.Models.DiagnosticSeverity;
 
 namespace Sushi.LanguageServerProtocol;
 
@@ -117,17 +121,17 @@ public sealed class WorkspaceOrchestrator
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task OpenDocument([NotNull] Uri documentUri, int? version, string? text, CancellationToken cancellationToken)
+    public async Task OpenDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
     {
-        TokenFile file = text != null
-            ? await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath)
-            : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        cancellationToken.ThrowIfCancellationRequested();
 
-        await this.parser.UpdateFile(file);
+        SourceSnapshot snapshot = new(documentUri, version, text);
 
-        await this.UpdatePostParsing(facade);
+        SourceDocument document = this.workspace.GetOrAddDocument(documentUri, /* disk state */);
 
-        await this.PublishDiagnosticsForAllDocuments(facade, version);
+        document.UpdateEditor(snapshot);
+
+        await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
 
@@ -149,17 +153,16 @@ public sealed class WorkspaceOrchestrator
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task UpdateDocument([NotNull] Uri documentUri, int? version, string? text, CancellationToken cancellationToken)
+    public async Task ChangeDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
     {
-        TokenFile file = text != null
-            ? await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath)
-            : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        SourceSnapshot snapshot = new(documentUri, version, text);
 
-        await this.parser.UpdateFile(file);
+        SourceDocument document = this.workspace.GetDocument(documentUri);
 
-        await this.UpdatePostParsing(facade);
+        document.UpdateEditor(snapshot);
+        document.Close();
 
-        await this.PublishDiagnosticsForAllDocuments(facade, version);
+        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
     }
 
     /// <summary>
@@ -176,15 +179,14 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task CloseDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
     {
-        TokenFile file = text != null
-            ? await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath)
-            : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        SourceDocument document = this.workspace.GetDocument(documentUri);
 
-        await this.parser.UpdateFile(file);
+        SourceSnapshot diskSnapshot = await this.LoadDiskSnapshot(documentUri, cancellationToken);
 
-        await this.UpdatePostParsing(facade);
+        document.UpdateDisk(diskSnapshot);
+        document.Close();
 
-        await this.PublishDiagnosticsForAllDocuments(facade, version);
+        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
     }
 
     /// <summary>
@@ -201,15 +203,13 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task SaveDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
     {
-        TokenFile file = text != null
-            ? await this.UpdateSourceText(text, textDocumentUri.ToUri().AbsolutePath)
-            : await this.UpdateSource(textDocumentUri.ToUri().AbsolutePath);
+        SourceDocument document = this.workspace.GetDocument(documentUri);
 
-        await this.parser.UpdateFile(file);
+        SourceSnapshot diskSnapshot = await this.LoadDiskSnapshot(documentUri, cancellationToken);
 
-        await this.UpdatePostParsing(facade);
+        document.UpdateDisk(diskSnapshot);
 
-        await this.PublishDiagnosticsForAllDocuments(facade, version);
+        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
     }
 
     /// <summary>
@@ -244,5 +244,17 @@ public sealed class WorkspaceOrchestrator
         {
             await PublishDiagnosticsForDocument(languageServer, version, [], uri);
         }
+    }
+
+    private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
+    {
+        return severity switch
+        {
+            DiagnosticSeverity.Error => OmniSharpDiagnosticSeverity.Error,
+            DiagnosticSeverity.Warning => OmniSharpDiagnosticSeverity.Warning,
+            DiagnosticSeverity.Information => OmniSharpDiagnosticSeverity.Information,
+            DiagnosticSeverity.Hint => OmniSharpDiagnosticSeverity.Hint,
+            _ => throw new ArgumentOutOfRangeException(nameof(severity));
+        };
     }
 }

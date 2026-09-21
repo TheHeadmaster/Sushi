@@ -78,7 +78,7 @@ public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade lang
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidChangeTextDocumentParams request, CancellationToken cancellationToken)
     {
-        await workspaceOrchestrator.UpdateDocument(
+        await workspaceOrchestrator.ChangeDocument(
             request.TextDocument.Uri.ToUri(),
             request.TextDocument.Version,
             request.ContentChanges.Single().Text,
