@@ -63,9 +63,6 @@ public static class Program
     /// <param name="args">
     /// The command line arguments.
     /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
     private static void Initialize(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
