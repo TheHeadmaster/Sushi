@@ -17,7 +17,7 @@ public static class PathExtensions
     /// <returns>
     /// True if they're effectively the same path. False otherwise.
     /// </returns>
-    public static bool IsSamePath(this string path1, string path2) => Uri.Compare(new Uri(path1), new Uri(path2), ComparableComponents, UriFormat.SafeUnescaped, OSPathComparison) == 0;
+    public static bool IsSamePath(this string path1, string path2) => ToFileUri(path1).IsSamePath(ToFileUri(path2));
 
     /// <summary>
     /// Gets whether this path is the same as the specified <see cref="Uri"/> path.
@@ -31,7 +31,7 @@ public static class PathExtensions
     /// <returns>
     /// True if they're effectively the same path. False otherwise.
     /// </returns>
-    public static bool IsSamePath(this string path1, Uri path2) => Uri.Compare(new Uri(path1), path2, ComparableComponents, UriFormat.SafeUnescaped, OSPathComparison) == 0;
+    public static bool IsSamePath(this string path1, Uri path2) => ToFileUri(path1).IsSamePath(path2);
 
     /// <summary>
     /// Gets whether this path is the same as the specified string path.
@@ -45,7 +45,7 @@ public static class PathExtensions
     /// <returns>
     /// True if they're effectively the same path. False otherwise.
     /// </returns>
-    public static bool IsSamePath(this Uri path1, string path2) => Uri.Compare(path1, new Uri(path2), ComparableComponents, UriFormat.SafeUnescaped, OSPathComparison) == 0;
+    public static bool IsSamePath(this Uri path1, string path2) => path1.IsSamePath(ToFileUri(path2));
 
     /// <summary>
     /// Gets whether this path is the same as the specified <see cref="Uri"/> path.
@@ -62,8 +62,19 @@ public static class PathExtensions
     public static bool IsSamePath(this Uri path1, Uri path2) => Uri.Compare(path1, path2, ComparableComponents, UriFormat.SafeUnescaped, OSPathComparison) == 0;
 
     /// <summary>
+    /// Converts a path to a full file uri, fully resolving relative paths.
+    /// </summary>
+    /// <param name="path">
+    /// The path to convert.
+    /// </param>
+    /// <returns>
+    /// The <see cref="Uri"/> representation of the path string.
+    /// </returns>
+    private static Uri ToFileUri(string path) => new(Path.GetFullPath(path));
+
+    /// <summary>
     /// The <see cref="StringComparison"/> to use based on which operating system the user is on.
-    /// Windows uses a case-insensitive file system, every other supported operating system does not.
+    /// Uses the conventional path comparison for the current operating system.
     /// </summary>
     private static StringComparison OSPathComparison => OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
