@@ -6,7 +6,10 @@ namespace Sushi.Source;
 /// Represents a snapshot of a specific source file.
 /// </summary>
 public sealed class SourceSnapshot
-{
+{    
+    private readonly byte[] bytes;
+    private readonly int[] lineStarts;
+
     /// <summary>
     /// The document uri.
     /// </summary>
@@ -25,12 +28,12 @@ public sealed class SourceSnapshot
     /// <summary>
     /// The bytes of the source snapshot.
     /// </summary>
-    public byte[] Bytes { get; }
+    public ReadOnlyMemory<byte> Bytes => this.bytes;
 
     /// <summary>
     /// The list of line starts in the source snapshot.
     /// </summary>
-    public IReadOnlyList<int> LineStarts { get; }
+    public IReadOnlyList<int> LineStarts => this.lineStarts;
 
     public SourceSnapshot(Uri uri, int? version, string text)
     {
@@ -39,10 +42,10 @@ public sealed class SourceSnapshot
 
         this.Uri = uri;
         this.Version = version;
-        this.Bytes = Encoding.UTF8.GetBytes(text);
+        this.bytes = Encoding.UTF8.GetBytes(text);
         this.Text = text;
 
-        this.LineStarts = BuildLineStarts(this.Bytes);
+        this.lineStarts = BuildLineStarts(this.bytes);
     }
 
     /// <summary>

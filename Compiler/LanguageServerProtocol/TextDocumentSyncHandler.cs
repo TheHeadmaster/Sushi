@@ -15,10 +15,10 @@ namespace Sushi.LanguageServerProtocol;
 /// <param name="languageServer">
 /// The language server facade used to send responses.
 /// </param>
-/// <param name="sushi">
-/// The sushi language service.
+/// <param name="workspaceOrchestrator">
+/// The current workspace orchestrator.
 /// </param>
-public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade languageServer, [NotNull] SushiLanguageService sushi) : TextDocumentSyncHandlerBase
+public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade languageServer, [NotNull] WorkspaceOrchestrator workspaceOrchestrator) : TextDocumentSyncHandlerBase
 {
     /// <summary>
     /// Gets text document attributes for a specific document uri.
@@ -56,11 +56,10 @@ public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade lang
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidOpenTextDocumentParams request, CancellationToken cancellationToken)
     {
-        await sushi.UpdateDocument(
-            languageServer,
+        await workspaceOrchestrator.OpenDocument(
             request.TextDocument.Uri.ToUri(),
             request.TextDocument.Version,
-            text: null,
+            request.TextDocument.Text,
             cancellationToken);
         return new Unit();
     }
@@ -79,8 +78,7 @@ public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade lang
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidChangeTextDocumentParams request, CancellationToken cancellationToken)
     {
-        await sushi.UpdateDocument(
-            languageServer,
+        await workspaceOrchestrator.UpdateDocument(
             request.TextDocument.Uri.ToUri(),
             request.TextDocument.Version,
             request.ContentChanges.Single().Text,
@@ -102,11 +100,8 @@ public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade lang
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
-        await sushi.UpdateDocument(
-            languageServer,
+        await workspaceOrchestrator.SaveDocument(
             request.TextDocument.Uri.ToUri(),
-            version: null,
-            text: null,
             cancellationToken);
         return new Unit();
     }
@@ -125,12 +120,7 @@ public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade lang
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidCloseTextDocumentParams request, CancellationToken cancellationToken)
     {
-        await sushi.UpdateDocument(
-            languageServer,
-            request.TextDocument.Uri.ToUri(),
-            version: null,
-            text: null,
-            cancellationToken);
+        await workspaceOrchestrator.CloseDocument(request.TextDocument.Uri.ToUri(), cancellationToken);
         return Unit.Value;
     }
 

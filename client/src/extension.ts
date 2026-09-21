@@ -16,7 +16,7 @@ let client: LanguageClient | undefined;
 export async function activate(context: ExtensionContext): Promise<void> {
 	const serverOptions = createServerOptions(context);
 
-	const watcher = workspace.createFileSystemWatcher('**/*.{sus,susproj,susln');
+	const watcher = workspace.createFileSystemWatcher('**/*.{sus,susproj,susln}');
 
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: [

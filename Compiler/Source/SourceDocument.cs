@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Sushi.Source;
 
 /// <summary>
@@ -42,7 +44,17 @@ public sealed class SourceDocument(Uri uri, SourceSnapshot diskSnapshot)
     /// <param name="snapshot">
     /// The new snapshot.
     /// </param>
-    public void UpdateDisk(SourceSnapshot snapshot) => this.DiskSnapshot = snapshot;
+    public void UpdateDisk([NotNull] SourceSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (!this.Uri.IsSamePath(snapshot.Uri))
+        {
+            throw new ArgumentException("Snapshot belongs to a different document.", nameof(snapshot));
+        }
+
+        this.DiskSnapshot = snapshot;
+    }
 
     /// <summary>
     /// Updates the editor snapshot.
@@ -50,12 +62,22 @@ public sealed class SourceDocument(Uri uri, SourceSnapshot diskSnapshot)
     /// <param name="snapshot">
     /// The new snapshot.
     /// </param>
-    public void UpdateEditor(SourceSnapshot snapshot) => this.EditorSnapshot = snapshot;
+    public void UpdateEditor([NotNull] SourceSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (!this.Uri.IsSamePath(snapshot.Uri))
+        {
+            throw new ArgumentException("Snapshot belongs to a different document.", nameof(snapshot));
+        }
+
+        this.EditorSnapshot = snapshot;
+    }
 
     /// <summary>
     /// Closes the editor snapshot.
     /// </summary>
-    public void Clase() => this.EditorSnapshot = null;
+    public void Close() => this.EditorSnapshot = null;
 
     /// <summary>
     /// Returns whether the specified snapshot is the same as the current snapshot for this source document.
