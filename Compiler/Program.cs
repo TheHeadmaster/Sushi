@@ -26,7 +26,7 @@ public static class Program
 #pragma warning disable CA1031 // Do not catch general exception types
         try
         {
-            await Initialize(args);
+            Initialize(args);
 
             SushiLanguageService service = new();
 
@@ -66,7 +66,7 @@ public static class Program
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    private static async Task Initialize(string[] args)
+    private static void Initialize(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
 

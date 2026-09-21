@@ -28,6 +28,9 @@ public sealed class CompilerOptions
     /// </summary>
     public string ProjectOrFolderPath { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Whether debug logging is enabled.
+    /// </summary>
     public bool IsDebugLoggingEnabled { get; private set; }
 
     /// <summary>
