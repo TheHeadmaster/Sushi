@@ -244,7 +244,5 @@ public sealed class CompilerOptions
 
         return extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
             || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
-
-        return Path.GetExtension(file) is ".susproj" or ".susln";
     }
 }
