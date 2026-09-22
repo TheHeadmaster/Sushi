@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using Sushi.Source;
 
 namespace Sushi.Workspaces;
@@ -15,7 +15,7 @@ public sealed class SushiWorkspace
 
     public IReadOnlyList<SourceDocument> Documents => this.documents.AsReadOnly();
 
-    public bool TryGetDocument(Uri uri, out SourceDocument? document)
+    public bool TryGetDocument(Uri uri, [NotNullWhen(true)] out SourceDocument? document)
     {
         document = this.documents.FirstOrDefault(source => source.Uri.IsSamePath(uri));
 

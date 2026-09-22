@@ -4,7 +4,7 @@ using Sushi.Source;
 namespace Sushi.Analysis;
 
 /// <summary>
-/// Represents the compielr analysis produced for a specific source snapshot.
+/// Represents the compiler analysis produced for a specific source snapshot.
 /// </summary>
 /// <param name="Snapshot">
 /// The snapshot that was analyzed.

@@ -129,9 +129,20 @@ public sealed class WorkspaceOrchestrator
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        SourceSnapshot snapshot = new(documentUri, version, text);
+        SourceDocument document;
 
-        SourceDocument document = this.workspace.GetOrAddDocument(documentUri, /* disk state */);
+        if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+        {
+            SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+
+            document = this.workspace.AddDocument(documentUri, diskSnapshot);
+        }
+        else
+        {
+            document = existing;
+        }
+
+        SourceSnapshot snapshot = new(documentUri, version, text);
 
         document.UpdateEditor(snapshot);
 
@@ -165,7 +176,7 @@ public sealed class WorkspaceOrchestrator
 
         document.UpdateEditor(snapshot);
 
-        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+        await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
     /// <summary>
