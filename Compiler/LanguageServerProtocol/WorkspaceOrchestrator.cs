@@ -29,6 +29,8 @@ public sealed class WorkspaceOrchestrator
 
     private readonly SourceAnalyzer analyzer = new();
 
+    private readonly object foldersSyncRoot = new();
+
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
     /// </summary>
@@ -43,7 +45,7 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task Initialize([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders, CancellationToken cancellationToken)
     {
-        await this.ReplaceWorkspaceFolders(workspaceFolders);
+        this.ReplaceWorkspaceFolders(workspaceFolders);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -59,10 +61,15 @@ public sealed class WorkspaceOrchestrator
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    private async Task ReplaceWorkspaceFolders([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders)
+    private void ReplaceWorkspaceFolders([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders)
     {
-        this.folders.Clear();
-        this.folders.AddRange(workspaceFolders);
+        ArgumentNullException.ThrowIfNull(workspaceFolders);
+
+        lock (this.foldersSyncRoot)
+        {
+            this.folders.Clear();
+            this.folders.AddRange(workspaceFolders);
+        }
     }
 
     /// <summary>
@@ -82,33 +89,48 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task UpdateWorkspaceFolders([NotNull] IEnumerable<WorkspaceFolder> addedFolders, [NotNull] IEnumerable<WorkspaceFolder> removedFolders, CancellationToken cancellationToken)
     {
-        //TODO: TokenFiles will be replaced with SourceDocument structure, do something here that's equivalent
-        //this.tokenFiles.Clear();
+        ArgumentNullException.ThrowIfNull(addedFolders);
+        ArgumentNullException.ThrowIfNull(removedFolders);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (WorkspaceFolder addedFolder in addedFolders)
+        lock (this.foldersSyncRoot)
         {
-            this.folders.Add(addedFolder);
-        }
+            foreach (WorkspaceFolder removedFolder in removedFolders)
+            {
+                Uri removedUri = removedFolder.Uri.ToUri();
 
-        foreach (WorkspaceFolder removedFolder in removedFolders)
-        {
-            this.folders.Remove(removedFolder);
+                this.folders.RemoveAll(folder => folder.Uri.ToUri().IsSamePath(removedUri));
+                this.folders.Remove(removedFolder);
+            }
+
+            foreach (WorkspaceFolder addedFolder in addedFolders)
+            {
+                Uri addedUri = addedFolder.Uri.ToUri();
+
+                bool alreadyExists = this.folders.Any(folder => folder.Uri.ToUri().IsSamePath(addedUri));
+            
+                if (!alreadyExists)
+                {
+                    this.folders.Add(addedFolder);
+                }
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        //TODO: TokenFiles will be replaced with SourceDocument structure, do something here that's equivalent
-        //await this.UpdateTokenFiles();
-
-        //this.tree = await this.parser.ParseFiles(this.tokenFiles);
-
-        await this.UpdatePostParsing(languageServer);
+        await this.UpdateSourceDocuments(cancellationToken);
     }
 
     private async Task UpdateSourceDocuments(CancellationToken cancellationToken)
     {
+        WorkspaceFolder[] folders;
+
+        lock (this.foldersSyncRoot)
+        {
+            folders = [.. this.folders];
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         List<Uri> discoveredDocuments = [];
@@ -120,7 +142,7 @@ public sealed class WorkspaceOrchestrator
             AttributesToSkip = FileAttributes.ReparsePoint
         };
 
-        foreach (WorkspaceFolder folder in this.folders)
+        foreach (WorkspaceFolder folder in folders)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -152,17 +174,9 @@ public sealed class WorkspaceOrchestrator
 
                 SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-                SourceDocument document;
-
-                if (this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
-                {
-                    document = existing;
-                    document.UpdateDisk(diskSnapshot);
-                }
-                else
-                {
-                    document = this.workspace.AddDocument(documentUri, diskSnapshot);
-                }
+                SourceDocument document = this.workspace.GetorAddDocument(documentUri, diskSnapshot);
+                
+                document.UpdateDisk(diskSnapshot);
 
                 SourceSnapshot currentSnapshot = document.CurrentSnapshot;
 
@@ -220,7 +234,7 @@ public sealed class WorkspaceOrchestrator
         {
             SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-            document = this.workspace.AddDocument(documentUri, diskSnapshot);
+            document = this.workspace.GetorAddDocument(documentUri, diskSnapshot);
         }
         else
         {
