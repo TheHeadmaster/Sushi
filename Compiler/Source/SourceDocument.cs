@@ -17,7 +17,7 @@ public sealed class SourceDocument
         {
             lock (this.syncRoot)
             {
-                return this.EditorSnapshot ?? this.DiskSnapshot;
+                return this.editorSnapshot ?? this.diskSnapshot;
             }
         }
     }
@@ -25,19 +25,28 @@ public sealed class SourceDocument
     /// <summary>
     /// The snapshot of the source directly from disk.
     /// </summary>
-    public SourceSnapshot DiskSnapshot { get; private set; }
+    private SourceSnapshot diskSnapshot;
 
     /// <summary>
     /// The snapshot of the source as it exists in-memory. Used for open documents with unsaved changes.
     /// </summary>
-    public SourceSnapshot? EditorSnapshot { get; private set; }
+    private SourceSnapshot? editorSnapshot;
 
-    public AnalysisResult? Analysis { get; private set; }
+    private AnalysisResult? analysis;
 
     /// <summary>
     /// True if the source document is open in the editor. False otherwise.
     /// </summary>
-    public bool IsOpen => this.EditorSnapshot is not null;
+    public bool IsOpen
+    {
+        get
+        {
+            lock (this.syncRoot)
+            {
+                return this.editorSnapshot is not null;
+            }
+        }
+    }
 
     /// <summary>
     /// The document <see cref="Uri"/>.
@@ -62,7 +71,7 @@ public sealed class SourceDocument
             throw new ArgumentException("Snapshot belongs to a different document.", nameof(diskSnapshot));
         }
 
-        this.DiskSnapshot = diskSnapshot;
+        this.diskSnapshot = diskSnapshot;
         this.Uri = uri;
     }
 
@@ -83,7 +92,7 @@ public sealed class SourceDocument
 
         lock (this.syncRoot)
         {        
-            this.DiskSnapshot = snapshot;
+            this.diskSnapshot = snapshot;
         }
     }
 
@@ -105,7 +114,7 @@ public sealed class SourceDocument
         
         lock (this.syncRoot)
         {
-            this.EditorSnapshot = snapshot;
+            this.editorSnapshot = snapshot;
         }
     }
 
@@ -118,13 +127,13 @@ public sealed class SourceDocument
 
         if (!this.Uri.IsSamePath(diskSnapshot.Uri))
         {
-            throw new ArgumentException("Snapshot belongs to a different document.");
+            throw new ArgumentException("Snapshot belongs to a different document.", nameof(diskSnapshot));
         }
 
         lock (this.syncRoot)
         {  
-            this.DiskSnapshot = diskSnapshot;
-            this.EditorSnapshot = null;
+            this.diskSnapshot = diskSnapshot;
+            this.editorSnapshot = null;
         }
     }
 
@@ -144,14 +153,14 @@ public sealed class SourceDocument
 
         lock (this.syncRoot)
         {
-            SourceSnapshot currentSnapshot = this.EditorSnapshot ?? this.DiskSnapshot;
+            SourceSnapshot currentSnapshot = this.editorSnapshot ?? this.diskSnapshot;
 
             if (!ReferenceEquals(currentSnapshot, analysis.Snapshot))
             {
                 return false;
             }
 
-            this.Analysis = analysis;
+            this.analysis = analysis;
 
             return true;
         }
