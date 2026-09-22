@@ -303,8 +303,6 @@ public sealed class WorkspaceOrchestrator
         {
             return;
         }
-
-        document.UpdateAnalysis(result);
     }
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
@@ -315,7 +313,7 @@ public sealed class WorkspaceOrchestrator
             DiagnosticSeverity.Warning => OmniSharpDiagnosticSeverity.Warning,
             DiagnosticSeverity.Information => OmniSharpDiagnosticSeverity.Information,
             DiagnosticSeverity.Hint => OmniSharpDiagnosticSeverity.Hint,
-            _ => throw new ArgumentOutOfRangeException(nameof(severity));
+            _ => throw new ArgumentOutOfRangeException(nameof(severity))
         };
     }
 }

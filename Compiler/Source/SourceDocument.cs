@@ -11,7 +11,16 @@ public sealed class SourceDocument
     /// <summary>
     /// The current snapshot for the source document.
     /// </summary>
-    public SourceSnapshot CurrentSnapshot => this.EditorSnapshot ?? this.DiskSnapshot;
+    public SourceSnapshot CurrentSnapshot
+    {
+        get
+        {
+            lock (this.syncRoot)
+            {
+                return this.EditorSnapshot ?? this.DiskSnapshot;
+            }
+        }
+    }
 
     /// <summary>
     /// The snapshot of the source directly from disk.
@@ -34,6 +43,8 @@ public sealed class SourceDocument
     /// The document <see cref="Uri"/>.
     /// </summary>
     public Uri Uri { get; }
+
+    private readonly object syncRoot = new();
 
     /// <param name="uri">
     /// The document <see cref="Uri"/>.
@@ -70,7 +81,10 @@ public sealed class SourceDocument
             throw new ArgumentException("Snapshot belongs to a different document.", nameof(snapshot));
         }
 
-        this.DiskSnapshot = snapshot;
+        lock (this.syncRoot)
+        {        
+            this.DiskSnapshot = snapshot;
+        }
     }
 
     /// <summary>
@@ -88,24 +102,22 @@ public sealed class SourceDocument
             throw new ArgumentException("Snapshot belongs to a different document.", nameof(snapshot));
         }
 
-        this.EditorSnapshot = snapshot;
+        
+        lock (this.syncRoot)
+        {
+            this.EditorSnapshot = snapshot;
+        }
     }
 
     /// <summary>
     /// Closes the editor snapshot.
     /// </summary>
-    public void Close() => this.EditorSnapshot = null;
-
-    public void UpdateAnalysis(AnalysisResult analysis)
+    public void Close()
     {
-        ArgumentNullException.ThrowIfNull(analysis);
-
-        if (!this.IsCurrent(analysis.Snapshot))
+        lock (this.syncRoot)
         {
-            throw new ArgumentException("Analysis belongs to a stale source snapshot.", nameof(analysis));
+            this.EditorSnapshot = null;
         }
-
-        this.Analysis = analysis;
     }
 
     /// <summary>
@@ -122,13 +134,18 @@ public sealed class SourceDocument
     {
         ArgumentNullException.ThrowIfNull(analysis);
 
-        if (!this.IsCurrent(analysis.Snapshot))
+        lock (this.syncRoot)
         {
-            return false;
+            SourceSnapshot currentSnapshot = this.EditorSnapshot ?? this.DiskSnapshot;
+
+            if (!this.IsCurrent(analysis.Snapshot))
+            {
+                return false;
+            }
+
+            this.Analysis = analysis;
+
+            return true;
         }
-
-        this.UpdateAnalysis(analysis);
-
-        return true;
     }
 }
