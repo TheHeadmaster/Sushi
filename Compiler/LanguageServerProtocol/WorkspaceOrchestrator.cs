@@ -299,7 +299,7 @@ public sealed class WorkspaceOrchestrator
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!document.IsCurrent(result.Snapshot))
+        if (!document.TryUpdateAnalysis(result))
         {
             return;
         }

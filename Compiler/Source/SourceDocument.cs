@@ -118,4 +118,17 @@ public sealed class SourceDocument
     /// True if the two snapshots are the same. False otherwise.
     /// </returns>
     public bool IsCurrent(SourceSnapshot snapshot) => ReferenceEquals(this.CurrentSnapshot, snapshot);
+    public bool TryUpdateAnalysis(AnalysisResult analysis)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+
+        if (!this.IsCurrent(analysis.Snapshot))
+        {
+            return false;
+        }
+
+        this.UpdateAnalysis(analysis);
+
+        return true;
+    }
 }
