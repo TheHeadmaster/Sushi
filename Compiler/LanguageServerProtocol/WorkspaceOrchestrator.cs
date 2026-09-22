@@ -160,7 +160,6 @@ public sealed class WorkspaceOrchestrator
         SourceDocument document = this.workspace.GetDocument(documentUri);
 
         document.UpdateEditor(snapshot);
-        document.Close();
 
         await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
     }
