@@ -31,6 +31,10 @@ public sealed class WorkspaceOrchestrator
 
     private readonly object foldersSyncRoot = new();
 
+    private readonly SemaphoreSlim mutationGate = new(1, 1);
+
+    private sealed record AnalysisRequest(SourceDocument Document, SourceSnapshot Snapshot);
+
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
     /// </summary>
@@ -45,11 +49,24 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task Initialize([NotNull] IEnumerable<WorkspaceFolder> workspaceFolders, CancellationToken cancellationToken)
     {
-        this.ReplaceWorkspaceFolders(workspaceFolders);
+        ArgumentNullException.ThrowIfNull(workspaceFolders);
 
-        cancellationToken.ThrowIfCancellationRequested();
+        List<AnalysisRequest> analysisRequests;
 
-        await this.UpdateSourceDocuments(cancellationToken);
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
+        {
+            this.ReplaceWorkspaceFolders(workspaceFolders);
+
+            analysisRequests = await this.UpdateSourceDocuments(cancellationToken);
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        await this.AnalyzeDocuments(analysisRequests, cancellationToken);
     }
 
     /// <summary>
@@ -92,36 +109,45 @@ public sealed class WorkspaceOrchestrator
         ArgumentNullException.ThrowIfNull(addedFolders);
         ArgumentNullException.ThrowIfNull(removedFolders);
 
-        cancellationToken.ThrowIfCancellationRequested();
+        List<AnalysisRequest> analysisRequests;
 
-        lock (this.foldersSyncRoot)
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
         {
-            foreach (WorkspaceFolder removedFolder in removedFolders)
+            lock (this.foldersSyncRoot)
             {
-                Uri removedUri = removedFolder.Uri.ToUri();
-
-                this.folders.RemoveAll(folder => folder.Uri.ToUri().IsSamePath(removedUri));
-            }
-
-            foreach (WorkspaceFolder addedFolder in addedFolders)
-            {
-                Uri addedUri = addedFolder.Uri.ToUri();
-
-                bool alreadyExists = this.folders.Any(folder => folder.Uri.ToUri().IsSamePath(addedUri));
-            
-                if (!alreadyExists)
+                foreach (WorkspaceFolder removedFolder in removedFolders)
                 {
-                    this.folders.Add(addedFolder);
+                    Uri removedUri = removedFolder.Uri.ToUri();
+
+                    this.folders.RemoveAll(folder => folder.Uri.ToUri().IsSamePath(removedUri));
+                }
+
+                foreach (WorkspaceFolder addedFolder in addedFolders)
+                {
+                    Uri addedUri = addedFolder.Uri.ToUri();
+
+                    bool alreadyExists = this.folders.Any(folder => folder.Uri.ToUri().IsSamePath(addedUri));
+
+                    if (!alreadyExists)
+                    {
+                        this.folders.Add(addedFolder);
+                    }
                 }
             }
+
+            analysisRequests = await this.UpdateSourceDocuments(cancellationToken);
+        }
+        finally
+        {
+            this.mutationGate.Release();
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
-        await this.UpdateSourceDocuments(cancellationToken);
+        await this.AnalyzeDocuments(analysisRequests, cancellationToken);
     }
 
-    private async Task UpdateSourceDocuments(CancellationToken cancellationToken)
+    private async Task<List<AnalysisRequest>> UpdateSourceDocuments(CancellationToken cancellationToken)
     {
         WorkspaceFolder[] folders;
 
@@ -130,9 +156,8 @@ public sealed class WorkspaceOrchestrator
             folders = [.. this.folders];
         }
 
-        cancellationToken.ThrowIfCancellationRequested();
-
         List<Uri> discoveredDocuments = [];
+        List<AnalysisRequest> analysisRequests = [];
 
         EnumerationOptions enumerationOptions = new()
         {
@@ -177,9 +202,7 @@ public sealed class WorkspaceOrchestrator
                 
                 document.UpdateDisk(diskSnapshot);
 
-                SourceSnapshot currentSnapshot = document.CurrentSnapshot;
-
-                await this.AnalyzeDocument(document, currentSnapshot, cancellationToken);
+                analysisRequests.Add(new AnalysisRequest(document, document.CurrentSnapshot));
             }
         }
 
@@ -193,6 +216,18 @@ public sealed class WorkspaceOrchestrator
             {
                 this.workspace.RemoveDocument(document.Uri);
             }
+        }
+
+        return analysisRequests;
+    }
+
+    private async Task AnalyzeDocuments(IEnumerable<AnalysisRequest> requests, CancellationToken cancellationToken)
+    {
+        foreach (AnalysisRequest request in requests)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await this.AnalyzeDocument(request.Document, request.Snapshot, cancellationToken);
         }
     }
 
@@ -225,26 +260,38 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task OpenDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(documentUri);
 
         SourceDocument document;
+        SourceSnapshot editorSnapshot;
 
-        if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
         {
-            SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+         
+            if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+            {
+                SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-            document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
+                document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
+            }
+            else
+            {
+                document = existing;
+            }
+
+            editorSnapshot = new SourceSnapshot(documentUri, version, text);
+
+            document.UpdateEditor(editorSnapshot);   
         }
-        else
+        finally
         {
-            document = existing;
+            this.mutationGate.Release();
         }
 
-        SourceSnapshot snapshot = new(documentUri, version, text);
 
-        document.UpdateEditor(snapshot);
-
-        await this.AnalyzeDocument(document, snapshot, cancellationToken);
+        await this.AnalyzeDocument(document, editorSnapshot, cancellationToken);
     }
 
     /// <summary>
@@ -267,11 +314,21 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task ChangeDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
     {
+        SourceDocument document;
         SourceSnapshot snapshot = new(documentUri, version, text);
 
-        SourceDocument document = this.workspace.GetDocument(documentUri);
+        await this.mutationGate.WaitAsync(cancellationToken);
 
-        document.UpdateEditor(snapshot);
+        try
+        {
+            document = this.workspace.GetDocument(documentUri);
+
+            document.UpdateEditor(snapshot);
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
@@ -290,13 +347,27 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task CloseDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
     {
-        SourceDocument document = this.workspace.GetDocument(documentUri);
+        SourceDocument document;
+        SourceSnapshot snapshot;
 
-        SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+        await this.mutationGate.WaitAsync(cancellationToken);
 
-        document.Close(diskSnapshot);
+        try
+        {
+            document = this.workspace.GetDocument(documentUri);
 
-        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+            SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+
+            document.Close(diskSnapshot);
+
+            snapshot = document.CurrentSnapshot;
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
     /// <summary>
@@ -313,13 +384,26 @@ public sealed class WorkspaceOrchestrator
     /// </returns>
     public async Task SaveDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
     {
-        SourceDocument document = this.workspace.GetDocument(documentUri);
+        SourceDocument document;
+        SourceSnapshot snapshot;
 
-        SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+        await this.mutationGate.WaitAsync(cancellationToken);
 
-        document.UpdateDisk(diskSnapshot);
+        try
+        {
+            document = this.workspace.GetDocument(documentUri);
+            SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+            
+            document.UpdateDisk(diskSnapshot);
 
-        await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+            snapshot = document.CurrentSnapshot;
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
     /// <summary>
