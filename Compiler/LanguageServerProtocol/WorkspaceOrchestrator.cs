@@ -27,7 +27,7 @@ public sealed class WorkspaceOrchestrator
     /// </summary>
     private readonly List<WorkspaceFolder> folders = [];
 
-    private readonly SourceAnalyzer analyzer = new();
+    private readonly DocumentAnalyzer analyzer = new();
 
     private readonly object foldersSyncRoot = new();
 
@@ -101,7 +101,6 @@ public sealed class WorkspaceOrchestrator
                 Uri removedUri = removedFolder.Uri.ToUri();
 
                 this.folders.RemoveAll(folder => folder.Uri.ToUri().IsSamePath(removedUri));
-                this.folders.Remove(removedFolder);
             }
 
             foreach (WorkspaceFolder addedFolder in addedFolders)
