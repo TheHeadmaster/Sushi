@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sushi.Analysis;
 
 namespace Sushi.Source;
 
@@ -21,6 +22,8 @@ public sealed class SourceDocument
     /// The snapshot of the source as it exists in-memory. Used for open documents with unsaved changes.
     /// </summary>
     public SourceSnapshot? EditorSnapshot { get; private set; }
+
+    public AnalysisResult? Analysis { get; private set; }
 
     /// <summary>
     /// True if the source document is open in the editor. False otherwise.
@@ -92,6 +95,18 @@ public sealed class SourceDocument
     /// Closes the editor snapshot.
     /// </summary>
     public void Close() => this.EditorSnapshot = null;
+
+    public void UpdateAnalysis(AnalysisResult analysis)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+
+        if (!this.IsCurrent(analysis.Snapshot))
+        {
+            throw new ArgumentException("Analysis belongs to a stale source snapshot.", nameof(analysis));
+        }
+
+        this.Analysis = analysis;
+    }
 
     /// <summary>
     /// Returns whether the specified snapshot is the same as the current snapshot for this source document.

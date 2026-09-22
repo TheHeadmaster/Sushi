@@ -1,7 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Source;
 using Sushi.Workspaces;
@@ -24,6 +26,8 @@ public sealed class WorkspaceOrchestrator
     /// The workspace folders from the client. Contains the sushi project files when running in LSP mode.
     /// </summary>
     private readonly List<WorkspaceFolder> folders = [];
+
+    private readonly SourceAnalyzer analyzer = new();
 
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
@@ -243,6 +247,53 @@ public sealed class WorkspaceOrchestrator
         {
             await PublishDiagnosticsForDocument(languageServer, version, [], uri);
         }
+    }
+
+    private static readonly UTF8Encoding strictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    private static async Task<SourceSnapshot> LoadDiskSnapshot(Uri documentUri, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUri);
+
+        if (!documentUri.IsFile)
+        {
+            throw new ArgumentException("Only file URIs can be loaded from disk.", nameof(documentUri));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        byte[] bytes = await File.ReadAllBytesAsync(documentUri.LocalPath, cancellationToken);
+
+        ReadOnlySpan<byte> sourceBytes = bytes;
+
+        // An initial UTF-8 BOM has no semantic or observable effect in Sushi.
+        if (sourceBytes.Length >= 3 && sourceBytes[0] == 0xEF && sourceBytes[1] == 0xBB && sourceBytes[2] == 0xBF)
+        {
+            sourceBytes = sourceBytes[3..];
+        }
+
+        string text = strictUtf8.GetString(sourceBytes);
+
+        return new SourceSnapshot(documentUri, version: null, text);
+    }
+
+    private async Task AnalyzeDocument(SourceDocument document, SourceSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        AnalysisResult result = await this.analyzer.Analyze(snapshot, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!document.IsCurrent(result.Snapshot))
+        {
+            return;
+        }
+
+        document.UpdateAnalysis(result);
     }
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
