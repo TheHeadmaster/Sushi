@@ -47,7 +47,7 @@ public sealed class WorkspaceOrchestrator
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        await UpdateSourceDocuments(cancellationToken);
+        await this.UpdateSourceDocuments(cancellationToken);
     }
 
     /// <summary>
@@ -107,6 +107,91 @@ public sealed class WorkspaceOrchestrator
         await this.UpdatePostParsing(languageServer);
     }
 
+    private async Task UpdateSourceDocuments(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        List<Uri> discoveredDocuments = [];
+
+        EnumerationOptions enumerationOptions = new()
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint
+        };
+
+        foreach (WorkspaceFolder folder in this.folders)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            Uri folderUri = folder.Uri.ToUri();
+
+            if (!folderUri.IsFile)
+            {
+                continue;
+            }
+
+            string folderPath = folderUri.LocalPath;
+
+            if (!Directory.Exists(folderPath))
+            {
+                continue;
+            }
+
+            foreach (string filePath in Directory.EnumerateFiles(folderPath, "*", enumerationOptions))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!IsWorkspaceDocument(filePath))
+                {
+                    continue;
+                }
+
+                Uri documentUri = new(Path.GetFullPath(filePath));
+
+                discoveredDocuments.Add(documentUri);
+
+                SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+
+                SourceDocument document;
+
+                if (this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+                {
+                    document = existing;
+                    document.UpdateDisk(diskSnapshot);
+                }
+                else
+                {
+                    document = this.workspace.AddDocument(documentUri, diskSnapshot);
+                }
+
+                SourceSnapshot currentSnapshot = document.CurrentSnapshot;
+
+                await this.AnalyzeDocument(document, currentSnapshot, cancellationToken);
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        foreach (SourceDocument document in this.workspace.Documents.ToArray())
+        {
+            bool stillExists = discoveredDocuments.Any(uri => uri.IsSamePath(document.Uri));
+
+            if (!stillExists && !document.IsOpen)
+            {
+                this.workspace.RemoveDocument(document.Uri);
+            }
+        }
+    }
+
+    private static bool IsWorkspaceDocument(string filePath)
+    {
+        string extension = Path.GetExtension(filePath);
+
+        return extension.Equals(".sus", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Opens the specified document and publishes diagnostics for it.
     /// </summary>
@@ -148,7 +233,6 @@ public sealed class WorkspaceOrchestrator
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
-
 
     /// <summary>
     /// Updates the specified document and publishes diagnostics for it.
