@@ -112,10 +112,18 @@ public sealed class SourceDocument
     /// <summary>
     /// Closes the editor snapshot.
     /// </summary>
-    public void Close()
+    public void Close([NotNull] SourceSnapshot diskSnapshot)
     {
-        lock (this.syncRoot)
+        ArgumentNullException.ThrowIfNull(diskSnapshot);
+
+        if (!this.Uri.IsSamePath(diskSnapshot.Uri))
         {
+            throw new ArgumentException("Snapshot belongs to a different document.");
+        }
+
+        lock (this.syncRoot)
+        {  
+            this.DiskSnapshot = diskSnapshot;
             this.EditorSnapshot = null;
         }
     }
@@ -138,7 +146,7 @@ public sealed class SourceDocument
         {
             SourceSnapshot currentSnapshot = this.EditorSnapshot ?? this.DiskSnapshot;
 
-            if (!this.IsCurrent(analysis.Snapshot))
+            if (!ReferenceEquals(currentSnapshot, analysis.Snapshot))
             {
                 return false;
             }

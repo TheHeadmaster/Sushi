@@ -195,10 +195,9 @@ public sealed class WorkspaceOrchestrator
     {
         SourceDocument document = this.workspace.GetDocument(documentUri);
 
-        SourceSnapshot diskSnapshot = await this.LoadDiskSnapshot(documentUri, cancellationToken);
+        SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-        document.UpdateDisk(diskSnapshot);
-        document.Close();
+        document.Close(diskSnapshot);
 
         await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
     }
@@ -219,7 +218,7 @@ public sealed class WorkspaceOrchestrator
     {
         SourceDocument document = this.workspace.GetDocument(documentUri);
 
-        SourceSnapshot diskSnapshot = await this.LoadDiskSnapshot(documentUri, cancellationToken);
+        SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
         document.UpdateDisk(diskSnapshot);
 
