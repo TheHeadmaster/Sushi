@@ -129,7 +129,7 @@ public sealed class SushiWorkspace
     /// <returns>
     /// The new or existing source document.
     /// </returns>
-    public SourceDocument GetorAddDocument(Uri uri, SourceSnapshot diskSnapshot)
+    public SourceDocument GetOrAddDocument(Uri uri, SourceSnapshot diskSnapshot)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentNullException.ThrowIfNull(diskSnapshot);

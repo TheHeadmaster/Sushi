@@ -174,7 +174,7 @@ public sealed class WorkspaceOrchestrator
 
                 SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-                SourceDocument document = this.workspace.GetorAddDocument(documentUri, diskSnapshot);
+                SourceDocument document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
                 
                 document.UpdateDisk(diskSnapshot);
 
@@ -234,7 +234,7 @@ public sealed class WorkspaceOrchestrator
         {
             SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-            document = this.workspace.GetorAddDocument(documentUri, diskSnapshot);
+            document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
         }
         else
         {
