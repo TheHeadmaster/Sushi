@@ -34,7 +34,7 @@ public sealed class SourceLexer
 
             if (IsBlockCommentStart(bytes, position))
             {
-                position = ScaneBlockComment(snapshot, bytes, position, diagnostics, cancellationToken);
+                position = ScanBlockComment(snapshot, bytes, position, diagnostics, cancellationToken);
                 continue;
             }
 
@@ -76,7 +76,7 @@ public sealed class SourceLexer
         return position;
     }
 
-    private static int ScaneBlockComment(SourceSnapshot snapshot, ReadOnlySpan<byte> bytes, int position, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static int ScanBlockComment(SourceSnapshot snapshot, ReadOnlySpan<byte> bytes, int position, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         int commentStart = position;
         int depth = 1;
