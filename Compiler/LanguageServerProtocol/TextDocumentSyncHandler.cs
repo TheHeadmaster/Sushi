@@ -4,7 +4,6 @@ using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server.Capabilities;
 
 namespace Sushi.LanguageServerProtocol;
@@ -18,7 +17,7 @@ namespace Sushi.LanguageServerProtocol;
 /// <param name="workspaceOrchestrator">
 /// The current workspace orchestrator.
 /// </param>
-public sealed class TextDocumentSyncHandler([NotNull] ILanguageServerFacade languageServer, [NotNull] WorkspaceOrchestrator workspaceOrchestrator) : TextDocumentSyncHandlerBase
+public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator workspaceOrchestrator) : TextDocumentSyncHandlerBase
 {
     /// <summary>
     /// Gets text document attributes for a specific document uri.

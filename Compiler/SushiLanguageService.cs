@@ -68,6 +68,7 @@ public sealed class SushiLanguageService
                 Version = AppMeta.GetVersion()
             })
             .OnInitialize((server, request, token) => this.workspace.Initialize([.. request.WorkspaceFolders ?? []], token))
+            .OnStarted((server, token) => this.workspace.Start(server, token))
             .WithServices(services =>
             {
                 services.AddSingleton(this);

@@ -1,14 +1,18 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
+using Serilog;
 using Sushi.Analysis;
-using Sushi.Diagnostics;
 using Sushi.Source;
 using Sushi.Workspaces;
 using DiagnosticSeverity = Sushi.Diagnostics.DiagnosticSeverity;
+
 using OmniSharpDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol.Models.DiagnosticSeverity;
+using LSPRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using Sushi.Diagnostics;
 
 namespace Sushi.LanguageServerProtocol;
 
@@ -67,6 +71,17 @@ public sealed class WorkspaceOrchestrator
         }
 
         await this.AnalyzeDocuments(analysisRequests, cancellationToken);
+    }
+
+    public Task Start(ILanguageServerFacade languageServer, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(languageServer);
+
+        this.languageServer = languageServer;
+
+        this.PublishDiagnosticsForAllDocuments(cancellationToken);
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -208,7 +223,7 @@ public sealed class WorkspaceOrchestrator
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        foreach (SourceDocument document in this.workspace.Documents.ToArray())
+        foreach (SourceDocument document in this.workspace.Documents)
         {
             bool stillExists = discoveredDocuments.Any(uri => uri.IsSamePath(document.Uri));
 
@@ -290,6 +305,8 @@ public sealed class WorkspaceOrchestrator
             this.mutationGate.Release();
         }
 
+        this.CancelScheduledAnalaysis(document);
+
         await this.AnalyzeDocument(document, editorSnapshot, cancellationToken);
     }
 
@@ -329,7 +346,7 @@ public sealed class WorkspaceOrchestrator
             this.mutationGate.Release();
         }
 
-        await this.AnalyzeDocument(document, snapshot, cancellationToken);
+        this.ScheduleAnalysis(document, snapshot, editorAnalysisDebounce);
     }
 
     /// <summary>
@@ -366,6 +383,8 @@ public sealed class WorkspaceOrchestrator
             this.mutationGate.Release();
         }
 
+        this.CancelScheduledAnalaysis(document);
+
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
@@ -401,6 +420,8 @@ public sealed class WorkspaceOrchestrator
         {
             this.mutationGate.Release();
         }
+
+        this.CancelScheduledAnalaysis(document);
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
@@ -448,6 +469,8 @@ public sealed class WorkspaceOrchestrator
         {
             return;
         }
+
+        this.PublishDiagnostics(result);
     }
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
@@ -460,5 +483,180 @@ public sealed class WorkspaceOrchestrator
             DiagnosticSeverity.Hint => OmniSharpDiagnosticSeverity.Hint,
             _ => throw new ArgumentOutOfRangeException(nameof(severity))
         };
+    }
+    
+    private static readonly TimeSpan editorAnalysisDebounce = TimeSpan.FromMilliseconds(250);
+
+    private readonly object analysisScheduleSyncRoot = new();
+
+    private readonly Dictionary<SourceDocument, CancellationTokenSource> scheduledAnalyses = [];
+
+    private ILanguageServerFacade? languageServer;
+
+    private void ScheduleAnalysis(SourceDocument document, SourceSnapshot snapshot, TimeSpan delay)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        CancellationTokenSource cancellation = new();
+
+        lock (this.analysisScheduleSyncRoot)
+        {
+            if (this.scheduledAnalyses.TryGetValue(document, out CancellationTokenSource? previous))
+            {
+                previous.Cancel();
+            }
+
+            this.scheduledAnalyses[document] = cancellation;
+        }
+
+        _ = this.RunScheduledAnalysis(document, snapshot, delay, cancellation);
+    }
+
+    private async Task RunScheduledAnalysis(SourceDocument document, SourceSnapshot snapshot, TimeSpan delay, CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellation.Token);
+
+            await this.AnalyzeDocument(document, snapshot, cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            // Expected when a newer snapshot supersedes this one.
+        }
+        
+#pragma warning disable CA1031 // Do not catch general exception types
+        catch (Exception exception)
+        {
+            Log.Error(exception, "Unhandled exception while performing scheduled analysis for {DocumentUri}.", document.Uri);
+        }
+#pragma warning restore CA1031 // Do not catch general exception types
+        finally
+        {
+            lock (this.analysisScheduleSyncRoot)
+            {
+                if (this.scheduledAnalyses.TryGetValue(document, out CancellationTokenSource? current) && ReferenceEquals(current, cancellation))
+                {
+                    this.scheduledAnalyses.Remove(document);
+                }
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private void CancelScheduledAnalaysis(SourceDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        lock (this.analysisScheduleSyncRoot)
+        {
+            if (this.scheduledAnalyses.Remove(document, out CancellationTokenSource? cancellation))
+            {
+                cancellation.Cancel();
+            }
+        }
+    }
+
+    private void PublishDiagnostics(AnalysisResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        if (this.languageServer is null)
+        {
+            return;
+        }
+
+        SourceSnapshot snapshot = result.Snapshot;
+
+        Diagnostic[] diagnostics = [.. result.Diagnostics.Select(diagnostic => ToLSPDiagnostic(diagnostic, snapshot))];
+
+        this.languageServer.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
+        {
+            Uri = DocumentUri.FromFileSystemPath(snapshot.Uri.LocalPath),
+            Version = snapshot.Version,
+            Diagnostics = new Container<Diagnostic>(diagnostics)
+        });
+    }
+
+    private static Diagnostic ToLSPDiagnostic(SushiDiagnostic diagnostic, SourceSnapshot expectedSnapshot)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+
+        ArgumentNullException.ThrowIfNull(expectedSnapshot);
+
+        SourceSpan span = diagnostic.Span;
+
+        if (!ReferenceEquals(span.Snapshot, expectedSnapshot))
+        {
+            throw new InvalidOperationException("Diagnostic belongs to a difference source snapshot.");
+        }
+
+        (int startLine, int startCharacter) = ToLSPPosition(span.Snapshot, span.Start);
+        (int endLine, int endCharacter) = ToLSPPosition(span.Snapshot, span.End);
+
+        return new Diagnostic
+        {
+            Code = diagnostic.Code,
+            Message = diagnostic.Message,
+            Severity = ToLspSeverity(diagnostic.Severity),
+            Range = new LSPRange(startLine, startCharacter, endLine, endCharacter),
+            Source = "Sushi Compiler"
+        };
+    }
+
+    private static (int Line, int Character) ToLSPPosition(SourceSnapshot snapshot, int byteOffset)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        if (byteOffset < 0 || byteOffset > snapshot.Bytes.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(byteOffset));
+        }
+
+        IReadOnlyList<int> lineStarts = snapshot.LineStarts;
+        
+        int low = 0;
+        int high = lineStarts.Count - 1;
+        int line = 0;
+
+        while (low <= high)
+        {
+            int middle = low + ((high - low) / 2);
+
+            if (lineStarts[middle] <= byteOffset)
+            {
+                line = middle;
+                low = middle + 1;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        int lineStart = lineStarts[line];
+
+        ReadOnlySpan<byte> prefixBytes = snapshot.Bytes.Span[lineStart..byteOffset];
+
+        string prefix = strictUtf8.GetString(prefixBytes);
+
+        return (line, prefix.Length);
+    }
+
+    private void PublishDiagnosticsForAllDocuments(CancellationToken cancellationToken)
+    {
+        foreach (SourceDocument document in this.workspace.Documents)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!document.TryGetCurrentAnalysis(out AnalysisResult? analysis))
+            {
+                continue;
+            }
+
+            this.PublishDiagnostics(analysis);
+        }
     }
 }

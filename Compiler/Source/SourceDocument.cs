@@ -165,4 +165,22 @@ public sealed class SourceDocument
             return true;
         }
     }
+
+    public bool TryGetCurrentAnalysis([NotNullWhen(true)] out AnalysisResult? result)
+    {
+        lock (this.syncRoot)
+        {
+            SourceSnapshot currentSnapshot = this.editorSnapshot ?? this.diskSnapshot;
+
+            if (this.analysis is null || !ReferenceEquals(this.analysis.Snapshot, currentSnapshot))
+            {
+                result = null;
+                return false;
+            }
+
+            result = this.analysis;
+
+            return true;
+        }
+    }
 }
