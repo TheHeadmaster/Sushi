@@ -258,7 +258,7 @@ public sealed class WorkspaceOrchestrator
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task OpenDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
+    public async Task OpenDocument([NotNull] Uri documentUri, int? version, string text, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(documentUri);
 
@@ -290,7 +290,6 @@ public sealed class WorkspaceOrchestrator
             this.mutationGate.Release();
         }
 
-
         await this.AnalyzeDocument(document, editorSnapshot, cancellationToken);
     }
 
@@ -312,7 +311,7 @@ public sealed class WorkspaceOrchestrator
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public async Task ChangeDocument([NotNull] Uri documentUri, int version, string text, CancellationToken cancellationToken)
+    public async Task ChangeDocument([NotNull] Uri documentUri, int? version, string text, CancellationToken cancellationToken)
     {
         SourceDocument document;
         SourceSnapshot snapshot = new(documentUri, version, text);
@@ -404,40 +403,6 @@ public sealed class WorkspaceOrchestrator
         }
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
-    }
-
-    /// <summary>
-    /// Publishes diagnostic messages for all documents in the workspace.
-    /// </summary>
-    /// <param name="languageServer">
-    /// The language server facade used to make the publish call.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    private async Task PublishDiagnosticsForAllDocuments([NotNull] ILanguageServerFacade languageServer)
-    {
-        List<SushiDiagnostic> diagnostics = await this.GetMessages();
-
-        List<DocumentUri> uris = [.. this.tokenFiles.Select(x => DocumentUri.FromFileSystemPath(x.FilePath))];
-
-        foreach (IGrouping<string, SushiDiagnostic> group in diagnostics.GroupBy(x => x.FilePath))
-        {
-            int existingIndex = uris.FindIndex(x => x.ToUri().IsSamePath(group.Key));
-
-            if (existingIndex != -1)
-            {
-                uris.RemoveAt(existingIndex);
-            }
-
-            DocumentUri document = DocumentUri.FromFileSystemPath(group.Key);
-            await PublishDiagnosticsForDocument(languageServer, version, [.. group], document);
-        }
-
-        foreach (DocumentUri uri in uris)
-        {
-            await PublishDiagnosticsForDocument(languageServer, version, [], uri);
-        }
     }
 
     private static readonly UTF8Encoding strictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);

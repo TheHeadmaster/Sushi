@@ -17,11 +17,11 @@ public sealed class DocumentAnalyzer
 
         string extension = Path.GetExtension(snapshot.Uri.LocalPath);
 
-        return extension.ToLowerInvariant() switch
+        return extension switch
         {
-            ".sus" => this.sourceAnalyzer.Analyze(snapshot, cancellationToken),
-            ".susproj" => this.projectAnalyzer.Analyze(snapshot, cancellationToken),
-            ".susln" => this.solutionAnalyzer.Analyze(snapshot, cancellationToken),
+            var x when x.Equals(".sus", StringComparison.OrdinalIgnoreCase) => this.sourceAnalyzer.Analyze(snapshot, cancellationToken),
+            var x when x.Equals(".susproj", StringComparison.OrdinalIgnoreCase) => this.projectAnalyzer.Analyze(snapshot, cancellationToken),
+            var x when x.Equals(".susln", StringComparison.OrdinalIgnoreCase) => this.solutionAnalyzer.Analyze(snapshot, cancellationToken),
             _ => throw new ArgumentException($"Unsupported Sushi document type \"{extension}\".", nameof(snapshot))
         };
     }
