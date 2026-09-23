@@ -656,4 +656,88 @@ public sealed class WorkspaceOrchestrator
             this.PublishDiagnostics(analysis);
         }
     }
+
+    public async Task DeleteDocument([NotNull] IEnumerable<Uri> documentUris, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUris);
+
+        List<SourceDocument> documents = [];
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+        
+        try
+        {
+            foreach (Uri documentUri in documentUris)
+            {
+                if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+                {
+                    continue;
+                }
+                else
+                {
+                    this.CancelScheduledAnalysis(existing);
+                    if (existing.IsOpen)
+                    {
+                        documents.Add(existing);
+                        // TODO: Update disk snapshot? Delete it? It's non-nullable, figure out
+                        // what to do while keeping the editor snapshot since it's open
+                    }
+                    else
+                    {
+                        this.workspace.RemoveDocument(documentUri);
+                    }
+                }
+            }
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        foreach (SourceDocument document in documents)
+        {        
+            await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+        }
+    }
+
+    public async Task CreateDocument([NotNull] IEnumerable<Uri> documentUris, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUris);
+
+        List<SourceDocument> documents = [];
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+        
+        try
+        {
+            foreach (Uri documentUri in documentUris)
+            {
+                SourceDocument document;
+
+                if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+                {
+                    SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+
+                    document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
+                }
+                else
+                {
+                    document = existing;
+                }
+
+                documents.Add(document);
+
+                this.CancelScheduledAnalysis(document);
+            }
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        foreach (SourceDocument document in documents)
+        {        
+            await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+        }
+    }
 }

@@ -2,51 +2,47 @@ using System.Diagnostics.CodeAnalysis;
 using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
-namespace Sushi.LSP;
+namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Handler for DidDeleteFile requests.
+/// Handles DidDeleteFile updates.
 /// </summary>
-/// <param name="facade">
-/// The language server facade.
+/// <param name="workspaceOrchestrator">
+/// The current workspace orchestrator.
 /// </param>
-/// <param name="sushi">
-/// The sushi language service.
-/// </param>
-public sealed class DeletedFileHandler([NotNull] ILanguageServerFacade facade, [NotNull] SushiLanguageService sushi) : DidDeleteFileHandlerBase
+public sealed class DeletedFileHandler([NotNull] WorkspaceOrchestrator workspaceOrchestrator) : DidDeleteFileHandlerBase
 {
     /// <summary>
-    /// Handles the DidDeleteFile request.
+    /// Handles a did delete file request.
     /// </summary>
     /// <param name="request">
     /// The request.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel the operation.
+    /// The cancellation token.
     /// </param>
     /// <returns>
-    /// An awaitable <see cref="Task."/>
+    /// An awaitable <see cref="Task"/>.
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidDeleteFileParams request, CancellationToken cancellationToken)
     {
-        await sushi.RemoveDocuments(facade, [.. request.Files.Select(x => x.Uri)]);
-        return Unit.Value;
+        await workspaceOrchestrator.DeleteDocument(request.Files.Select(file => file.Uri), cancellationToken);
+        return new Unit();
     }
 
     /// <summary>
-    /// Creates the registration options for this request.
+    /// Creates the registration options for the handler.
     /// </summary>
     /// <param name="capability">
-    /// The capability for FileOperationsWorkspace.
+    /// The capability.
     /// </param>
     /// <param name="clientCapabilities">
-    /// The client capabilities.
+    /// The capabilities supported by the client.
     /// </param>
     /// <returns>
-    /// The new options.
+    /// The new did delete file registration options.
     /// </returns>
     protected override DidDeleteFileRegistrationOptions CreateRegistrationOptions(FileOperationsWorkspaceClientCapabilities capability, ClientCapabilities clientCapabilities)
     {
@@ -57,10 +53,11 @@ public sealed class DeletedFileHandler([NotNull] ILanguageServerFacade facade, [
                 {
                     Pattern = new FileOperationPattern()
                     {
-                        Glob = "**/*.sus",
+                        Glob = "**/*.{sus,susproj,susln}",
                         Matches = FileOperationPatternKind.File
                     }
-                })
+                }
+            )
         };
     }
 }

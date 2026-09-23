@@ -2,21 +2,17 @@ using System.Diagnostics.CodeAnalysis;
 using MediatR;
 using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
-using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 
-namespace Sushi.LSP;
+namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
 /// Handles DidChangeWorkspaceFolders requests.
 /// </summary>
-/// <param name="facade">
-/// Represents the language server.
+/// <param name="workspaceOrchestrator">
+/// The current workspace orchestrator.
 /// </param>
-/// <param name="sushi">
-/// The sushi language service.
-/// </param>
-public sealed class WorkspaceFoldersHandler([NotNull] ILanguageServerFacade facade, [NotNull] SushiLanguageService sushi) : DidChangeWorkspaceFoldersHandlerBase
+public sealed class WorkspaceFoldersHandler([NotNull] WorkspaceOrchestrator workspaceOrchestrator) : DidChangeWorkspaceFoldersHandlerBase
 {
     /// <summary>
     /// Handles a DidChangeWorkspaceFolders request.
@@ -24,23 +20,30 @@ public sealed class WorkspaceFoldersHandler([NotNull] ILanguageServerFacade faca
     /// <param name="request">
     /// The request to handle.
     /// </param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
+    /// <param name="cancellationToken">
+    /// The cancellation token.
+    /// </param>
+    /// <returns>
+    /// An awaitable <see cref="Task"/>.
+    /// </returns>
     public override async Task<Unit> Handle([NotNull] DidChangeWorkspaceFoldersParams request, CancellationToken cancellationToken)
     {
-        await sushi.UpdateWorkspaceFolders(facade, [.. request.Event.Added], [.. request.Event.Removed], cancellationToken);
+        await workspaceOrchestrator.UpdateWorkspaceFolders(request.Event.Added, request.Event.Removed, cancellationToken);
 
-        return Unit.Value;
+        return new Unit();
     }
 
     /// <summary>
-    /// Creates the registration options for this handler.
+    /// Creates the registration options for the handler.
     /// </summary>
+    /// <param name="capability">
+    /// The capability.
+    /// </param>
     /// <param name="clientCapabilities">
-    /// The capabilities from the client.
+    /// The capabilities supported by the client.
     /// </param>
     /// <returns>
-    /// The registration options.
+    /// The new did change workspace folder registration options.
     /// </returns>
     protected override DidChangeWorkspaceFolderRegistrationOptions CreateRegistrationOptions(ClientCapabilities clientCapabilities)
     {
