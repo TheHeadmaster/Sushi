@@ -11,9 +11,6 @@ namespace Sushi.LanguageServerProtocol;
 /// <summary>
 /// Handles text document sync updates.
 /// </summary>
-/// <param name="languageServer">
-/// The language server facade used to send responses.
-/// </param>
 /// <param name="workspaceOrchestrator">
 /// The current workspace orchestrator.
 /// </param>

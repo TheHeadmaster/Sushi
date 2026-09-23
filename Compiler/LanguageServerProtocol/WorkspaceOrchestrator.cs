@@ -298,14 +298,14 @@ public sealed class WorkspaceOrchestrator
 
             editorSnapshot = new SourceSnapshot(documentUri, version, text);
 
-            document.UpdateEditor(editorSnapshot);   
+            document.UpdateEditor(editorSnapshot);
+            
+            this.CancelScheduledAnalysis(document);
         }
         finally
         {
             this.mutationGate.Release();
         }
-
-        this.CancelScheduledAnalaysis(document);
 
         await this.AnalyzeDocument(document, editorSnapshot, cancellationToken);
     }
@@ -338,15 +338,13 @@ public sealed class WorkspaceOrchestrator
         try
         {
             document = this.workspace.GetDocument(documentUri);
-
-            document.UpdateEditor(snapshot);
+            document.UpdateEditor(snapshot);     
+            this.ScheduleAnalysis(document, snapshot, editorAnalysisDebounce);
         }
         finally
         {
             this.mutationGate.Release();
         }
-
-        this.ScheduleAnalysis(document, snapshot, editorAnalysisDebounce);
     }
 
     /// <summary>
@@ -377,13 +375,13 @@ public sealed class WorkspaceOrchestrator
             document.Close(diskSnapshot);
 
             snapshot = document.CurrentSnapshot;
+        
+            this.CancelScheduledAnalysis(document);
         }
         finally
         {
             this.mutationGate.Release();
         }
-
-        this.CancelScheduledAnalaysis(document);
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
@@ -415,13 +413,12 @@ public sealed class WorkspaceOrchestrator
             document.UpdateDisk(diskSnapshot);
 
             snapshot = document.CurrentSnapshot;
+            this.CancelScheduledAnalysis(document);
         }
         finally
         {
             this.mutationGate.Release();
         }
-
-        this.CancelScheduledAnalaysis(document);
 
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
@@ -546,7 +543,7 @@ public sealed class WorkspaceOrchestrator
         }
     }
 
-    private void CancelScheduledAnalaysis(SourceDocument document)
+    private void CancelScheduledAnalysis(SourceDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -590,7 +587,7 @@ public sealed class WorkspaceOrchestrator
 
         if (!ReferenceEquals(span.Snapshot, expectedSnapshot))
         {
-            throw new InvalidOperationException("Diagnostic belongs to a difference source snapshot.");
+            throw new InvalidOperationException("Diagnostic belongs to a different source snapshot.");
         }
 
         (int startLine, int startCharacter) = ToLSPPosition(span.Snapshot, span.Start);
