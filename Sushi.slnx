@@ -2,4 +2,7 @@
     <Folder Name="/Compiler/">
         <Project Path="Compiler/Sushi.csproj" />
     </Folder>
+    <Folder Name="/Sushi.Testing/">
+        <Project Path="Sushi.Testing/Sushi.Testing.csproj" />
+    </Folder>
 </Solution>
