@@ -95,6 +95,11 @@
             }
         }
     },
+    "activationEvents": [
+        "workspaceContains:**/*.sus",
+        "workspaceContains:**/*.susproj",
+        "workspaceContains:**/*.susln"
+    ],
     "scripts": {
         "generate:syntax": "js-yaml syntaxes/sushi.tmLanguage.yml > syntaxes/sushi.tmLanguage.json && js-yaml syntaxes/susln.tmLanguage.yml > syntaxes/susln.tmLanguage.json && js-yaml syntaxes/susproj.tmLanguage.yml > syntaxes/susproj.tmLanguage.json",
         "compile": "tsc -p client/tsconfig.json",
