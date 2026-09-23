@@ -419,3 +419,5 @@ FodyWeavers.xsd
 
 *.tsbuildinfo
 syntaxes/sushi.tmLanguage.json
+syntaxes/susln.tmLanguage.json
+syntaxes/susproj.tmLanguage.json

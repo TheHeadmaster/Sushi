@@ -1,3 +1,4 @@
+using Sushi.Lexing;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -7,12 +8,18 @@ namespace Sushi.Analysis;
 /// </summary>
 public sealed class SourceAnalyzer
 {
+    private readonly SourceLexer lexer = new();
+
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(new AnalysisResult(snapshot, []));
+        LexerResult lexerResult = this.lexer.Lex(snapshot, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult(new AnalysisResult(snapshot, lexerResult.Diagnostics));
     }
 }
