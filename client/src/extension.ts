@@ -1,6 +1,6 @@
 import * as net from 'net';
 import * as path from 'path';
-import { ExtensionContext, workspace } from 'vscode';
+import { ExtensionContext } from 'vscode';
 
 import {
 	Executable,
@@ -16,18 +16,12 @@ let client: LanguageClient | undefined;
 export async function activate(context: ExtensionContext): Promise<void> {
 	const serverOptions = createServerOptions(context);
 
-	const watcher = workspace.createFileSystemWatcher('**/*.{sus,susproj,susln}');
-
 	const clientOptions: LanguageClientOptions = {
 		documentSelector: [
 			{ scheme: 'file', language: 'sushi' },
 			{ scheme: 'file', language: 'susproj' },
 			{ scheme: 'file', language: 'susln' }
 		],
-
-		synchronize: {
-			fileEvents: watcher
-		}
 	};
 
 	client = new LanguageClient(

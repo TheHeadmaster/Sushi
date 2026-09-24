@@ -75,8 +75,7 @@ public sealed class SushiLanguageService
                 services.AddSingleton(this.workspace);
             })
             .WithHandler<WorkspaceFoldersHandler>()
-            .WithHandler<DeletedFileHandler>()
-            .WithHandler<CreatedFileHandler>()
+            .WithHandler<WatchedFilesHandler>()
             .WithHandler<TextDocumentSyncHandler>()
         );
 

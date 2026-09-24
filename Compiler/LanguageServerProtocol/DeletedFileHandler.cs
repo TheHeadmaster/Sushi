@@ -28,7 +28,7 @@ public sealed class DeletedFileHandler([NotNull] WorkspaceOrchestrator workspace
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidDeleteFileParams request, CancellationToken cancellationToken)
     {
-        await workspaceOrchestrator.DeleteDocument(request.Files.Select(file => file.Uri), cancellationToken);
+        //await workspaceOrchestrator.DeleteDocument(request.Files.Select(file => file.Uri), cancellationToken);
         return new Unit();
     }
 

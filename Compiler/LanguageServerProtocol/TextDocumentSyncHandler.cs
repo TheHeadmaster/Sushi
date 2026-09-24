@@ -57,7 +57,7 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
             request.TextDocument.Version,
             request.TextDocument.Text,
             cancellationToken);
-        return new Unit();
+        return Unit.Value;
     }
 
     /// <summary>
@@ -79,7 +79,7 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
             request.TextDocument.Version,
             request.ContentChanges.Single().Text,
             cancellationToken);
-        return new Unit();
+        return Unit.Value;
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
         await workspaceOrchestrator.SaveDocument(
             request.TextDocument.Uri.ToUri(),
             cancellationToken);
-        return new Unit();
+        return Unit.Value;
     }
 
     /// <summary>

@@ -28,7 +28,7 @@ public sealed class CreatedFileHandler([NotNull] WorkspaceOrchestrator workspace
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidCreateFileParams request, CancellationToken cancellationToken)
     {
-        await workspaceOrchestrator.CreateDocument(request.Files.Select(file => file.Uri), cancellationToken);
+        //await workspaceOrchestrator.CreateDocument(request.Files.Select(file => file.Uri), cancellationToken);
         return new Unit();
     }
 

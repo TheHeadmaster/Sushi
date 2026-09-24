@@ -229,7 +229,11 @@ public sealed class WorkspaceOrchestrator
 
             if (!stillExists && !document.IsOpen)
             {
+                this.CancelScheduledAnalysis(document);
+
                 this.workspace.RemoveDocument(document.Uri);
+
+                this.ClearDiagnostics(document.Uri);
             }
         }
 
@@ -347,44 +351,6 @@ public sealed class WorkspaceOrchestrator
         }
     }
 
-    /// <summary>
-    /// Closes the specified document and publishes diagnostics for it.
-    /// </summary>
-    /// <param name="documentUri">
-    /// The document uri.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The cancellation token.
-    /// </param>
-    /// <returns>
-    /// An awaitable <see cref="Task"/>.
-    /// </returns>
-    public async Task CloseDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
-    {
-        SourceDocument document;
-        SourceSnapshot snapshot;
-
-        await this.mutationGate.WaitAsync(cancellationToken);
-
-        try
-        {
-            document = this.workspace.GetDocument(documentUri);
-
-            SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
-
-            document.Close(diskSnapshot);
-
-            snapshot = document.CurrentSnapshot;
-        
-            this.CancelScheduledAnalysis(document);
-        }
-        finally
-        {
-            this.mutationGate.Release();
-        }
-
-        await this.AnalyzeDocument(document, snapshot, cancellationToken);
-    }
 
     /// <summary>
     /// Saves the specified document and publishes diagnostics for it.
@@ -462,12 +428,23 @@ public sealed class WorkspaceOrchestrator
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!document.TryUpdateAnalysis(result))
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
         {
-            return;
+            if (!document.TryUpdateAnalysis(result))
+            {
+                return;
+            }
+
+            this.PublishDiagnostics(result);
+        }
+        finally
+        {
+            this.mutationGate.Release();
         }
 
-        this.PublishDiagnostics(result);
+
     }
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
@@ -483,6 +460,8 @@ public sealed class WorkspaceOrchestrator
     }
     
     private static readonly TimeSpan editorAnalysisDebounce = TimeSpan.FromMilliseconds(250);
+
+    private static readonly TimeSpan fileSystemAnalysisDebounce = TimeSpan.FromMilliseconds(500);
 
     private readonly object analysisScheduleSyncRoot = new();
 
@@ -657,77 +636,151 @@ public sealed class WorkspaceOrchestrator
         }
     }
 
-    public async Task DeleteDocument([NotNull] IEnumerable<Uri> documentUris, CancellationToken cancellationToken)
+    public async Task ApplyFileChanges([NotNull] IEnumerable<FileEvent> changes, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(documentUris);
+        ArgumentNullException.ThrowIfNull(changes);
 
-        List<SourceDocument> documents = [];
+        FileEvent[] fileEvents = [.. changes];
 
         await this.mutationGate.WaitAsync(cancellationToken);
-        
+
         try
         {
-            foreach (Uri documentUri in documentUris)
+            foreach (FileEvent fileEvent in fileEvents)
             {
-                if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+                cancellationToken.ThrowIfCancellationRequested();
+
+                Uri documentUri = fileEvent.Uri.ToUri();
+
+                if (!documentUri.IsFile || !IsWorkspaceDocument(documentUri.LocalPath))
                 {
                     continue;
                 }
-                else
+
+                switch (fileEvent.Type)
                 {
-                    this.CancelScheduledAnalysis(existing);
-                    if (existing.IsOpen)
-                    {
-                        documents.Add(existing);
-                        // TODO: Update disk snapshot? Delete it? It's non-nullable, figure out
-                        // what to do while keeping the editor snapshot since it's open
-                    }
-                    else
-                    {
-                        this.workspace.RemoveDocument(documentUri);
-                    }
+                    case FileChangeType.Created:
+                    case FileChangeType.Changed:
+                        await this.RefreshDiskDocument(documentUri, cancellationToken);
+                        break;
+                    case FileChangeType.Deleted:
+                        this.HandleDeletedDiskDocument(documentUri);
+                        break;
+                    default:
+#pragma warning disable CA2208 // Instantiate argument exceptions correctly
+                        throw new ArgumentOutOfRangeException(nameof(fileEvent), fileEvent.Type, "Unsupported file change type.");
+#pragma warning restore CA2208 // Instantiate argument exceptions correctly
                 }
             }
         }
         finally
         {
             this.mutationGate.Release();
-        }
-
-        foreach (SourceDocument document in documents)
-        {        
-            await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
         }
     }
 
-    public async Task CreateDocument([NotNull] IEnumerable<Uri> documentUris, CancellationToken cancellationToken)
+    private async Task RefreshDiskDocument(Uri documentUri, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(documentUris);
+        if (!File.Exists(documentUri.LocalPath))
+        {
+            this.HandleDeletedDiskDocument(documentUri);
+            return;
+        }
 
-        List<SourceDocument> documents = [];
+        SourceSnapshot diskSnapshot;
 
-        await this.mutationGate.WaitAsync(cancellationToken);
-        
         try
         {
-            foreach (Uri documentUri in documentUris)
+            diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+        }
+        catch (Exception _) when (_ is FileNotFoundException or DirectoryNotFoundException)
+        {
+            this.HandleDeletedDiskDocument(documentUri);
+
+            return;
+        }
+
+        SourceDocument document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
+
+        document.UpdateDisk(diskSnapshot);
+
+        if (document.IsOpen)
+        {
+            return;
+        }
+
+        this.ScheduleAnalysis(document, diskSnapshot, fileSystemAnalysisDebounce);
+    }
+
+    private void HandleDeletedDiskDocument(Uri documentUri)
+    {
+        if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? document))
+        {
+            this.ClearDiagnostics(documentUri);
+
+            return;
+        }
+
+        if (document.IsOpen)
+        {
+            // The in-memory editor snapshot remains authoritative.
+            // The stale disk snapshot will never become current while
+            // the editor snapshot exists.
+            return;
+        }
+
+        this.CancelScheduledAnalysis(document);
+        this.workspace.RemoveDocument(documentUri);
+        this.ClearDiagnostics(documentUri);
+    }
+
+    private void ClearDiagnostics(Uri documentUri)
+    {
+        ArgumentNullException.ThrowIfNull(documentUri);
+
+        if (this.languageServer is null)
+        {
+            return;
+        }
+
+        this.languageServer.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
+        {
+            Uri = DocumentUri.FromFileSystemPath(documentUri.LocalPath),
+            Version = null,
+            Diagnostics = new Container<Diagnostic>([])
+        });
+    }
+
+    public async Task CloseDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
+    {
+        SourceDocument? document = null;
+        SourceSnapshot? snapshot = null;
+
+        bool removed = false;
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
+        {
+            document = this.workspace.GetDocument(documentUri);
+
+            this.CancelScheduledAnalysis(document);
+
+            if (!File.Exists(documentUri.LocalPath))
             {
-                SourceDocument document;
+                this.workspace.RemoveDocument(documentUri);
 
-                if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
-                {
-                    SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
+                this.ClearDiagnostics(documentUri);
 
-                    document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
-                }
-                else
-                {
-                    document = existing;
-                }
+                removed = true;
+            }
+            else
+            {
+                SourceSnapshot diskSnapshot = await LoadDiskSnapshot(documentUri, cancellationToken);
 
-                documents.Add(document);
+                document.Close(diskSnapshot);
 
-                this.CancelScheduledAnalysis(document);
+                snapshot = document.CurrentSnapshot;
             }
         }
         finally
@@ -735,9 +788,11 @@ public sealed class WorkspaceOrchestrator
             this.mutationGate.Release();
         }
 
-        foreach (SourceDocument document in documents)
-        {        
-            await this.AnalyzeDocument(document, document.CurrentSnapshot, cancellationToken);
+        if (removed)
+        {
+            return;
         }
+
+        await this.AnalyzeDocument(document, snapshot!, cancellationToken);
     }
 }

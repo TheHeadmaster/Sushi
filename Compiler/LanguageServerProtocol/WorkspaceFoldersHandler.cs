@@ -30,7 +30,7 @@ public sealed class WorkspaceFoldersHandler([NotNull] WorkspaceOrchestrator work
     {
         await workspaceOrchestrator.UpdateWorkspaceFolders(request.Event.Added, request.Event.Removed, cancellationToken);
 
-        return new Unit();
+        return Unit.Value;
     }
 
     /// <summary>
