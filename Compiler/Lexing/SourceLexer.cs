@@ -6,11 +6,11 @@ namespace Sushi.Lexing;
 /// <summary>
 /// Performs lexical analysis of Sushi source text.
 /// </summary>
-public sealed class SourceLexer
+public sealed class SourceLexer : Lexer
 {
     private const string UnterminatedBlockCommentCode = "SUSE001";
 
-    public LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    public override LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 

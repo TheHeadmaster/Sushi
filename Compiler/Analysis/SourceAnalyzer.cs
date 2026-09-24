@@ -20,6 +20,6 @@ public sealed class SourceAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(new AnalysisResult(snapshot, lexerResult.Diagnostics));
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, lexerResult.Diagnostics));
     }
 }

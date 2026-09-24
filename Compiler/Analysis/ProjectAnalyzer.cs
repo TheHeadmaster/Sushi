@@ -13,6 +13,6 @@ public sealed class ProjectAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(new AnalysisResult(snapshot, []));
+        return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, [], new ProjectDefinition()));
     }
 }

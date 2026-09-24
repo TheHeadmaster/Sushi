@@ -13,6 +13,6 @@ public sealed class SolutionAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult(new AnalysisResult(snapshot, []));
+        return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, [], new SolutionDefinition()));
     }
 }
