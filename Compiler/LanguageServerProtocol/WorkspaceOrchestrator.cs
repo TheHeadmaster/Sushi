@@ -351,7 +351,6 @@ public sealed class WorkspaceOrchestrator
         }
     }
 
-
     /// <summary>
     /// Saves the specified document and publishes diagnostics for it.
     /// </summary>
@@ -448,8 +447,6 @@ public sealed class WorkspaceOrchestrator
         {
             this.mutationGate.Release();
         }
-
-
     }
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
