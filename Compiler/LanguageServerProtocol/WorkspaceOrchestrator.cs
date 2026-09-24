@@ -432,6 +432,11 @@ public sealed class WorkspaceOrchestrator
 
         try
         {
+            if (!this.workspace.TryGetDocument(document.Uri, out SourceDocument? currentDocument) || !ReferenceEquals(currentDocument, document))
+            {
+                return;
+            }
+
             if (!document.TryUpdateAnalysis(result))
             {
                 return;
