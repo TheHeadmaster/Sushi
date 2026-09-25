@@ -2,7 +2,7 @@
 root = true
 
 # C# files
-[*.cs]
+[**/*.cs]
 # Sometimes things need to be public for reflection, and this isn't an API so this one can just end up being noise.
 dotnet_diagnostic.CA1515.severity = none
 
