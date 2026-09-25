@@ -1,4 +1,5 @@
 using Sushi.Configuration;
+using Sushi.Diagnostics;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -9,6 +10,7 @@ namespace Sushi.Analysis;
 public sealed class ProjectAnalyzer
 {
     private readonly TomlConfigurationParser parser = new();
+    private readonly ProjectConfigurationBinder binder = new();
 
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
@@ -20,6 +22,20 @@ public sealed class ProjectAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, parseResult.Diagnostics, Project: null));
+        ProjectConfigurationBindResult bindResult = this.binder.Bind(snapshot, parseResult.Syntax, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        SushiDiagnostic[] diagnostics =
+        [
+            .. parseResult.Diagnostics,
+            .. bindResult.Diagnostics
+        ];
+
+        bool hasSyntaxErrors = parseResult.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+
+        ProjectDefinition? project = hasSyntaxErrors ? null : bindResult.Project;
+
+        return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, diagnostics, project));
     }
 }

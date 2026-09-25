@@ -1,3 +1,3 @@
 namespace Sushi.Analysis;
 
-public record ProjectDefinition;
+public sealed record ProjectDefinition(string Name, string Assembly, string LanguageVersion);
