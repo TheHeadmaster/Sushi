@@ -28,7 +28,7 @@ public class ProjectConfigurationBinderTests
 
         result.Project
             .Should()
-            .Be(new ProjectDefinition("Sushi Compiler", "Sushi.Compiler", "1.0"));
+            .BeEquivalentTo(CreateExpectedProject());
     }
 
     [TestCase(TestName = "Bind Should Accept Quoted And Escaped Root Keys")]
@@ -49,7 +49,7 @@ public class ProjectConfigurationBinderTests
 
         result.Project
             .Should()
-            .Be(new ProjectDefinition("Sushi Compiler", "Sushi.Compiler", "1.0"));
+            .BeEquivalentTo(CreateExpectedProject());
     }
 
     [TestCase(TestName = "Bind Should Use Decoded String Values")]
@@ -69,8 +69,7 @@ public class ProjectConfigurationBinderTests
 
         result.Project
             .Should()
-            .Be(
-            new ProjectDefinition("Sushi Compiler", "Sushi.Compiler", "1.0"));
+            .BeEquivalentTo(CreateExpectedProject());
     }
 
     [TestCase(TestName = "Bind Should Reject Non String Project Identity Values")]
@@ -187,7 +186,7 @@ public class ProjectConfigurationBinderTests
 
         result.Project
             .Should()
-            .Be(new ProjectDefinition("Sushi Compiler", "Sushi.Compiler", "1.0"));
+            .BeEquivalentTo(CreateExpectedProject());
     }
 
     [TestCase(TestName = "Bind Should Place Invalid Value Diagnostic On The Value")]
@@ -215,6 +214,188 @@ public class ProjectConfigurationBinderTests
         diagnostic.Span.Length.Should().Be(2);
     }
 
+    [TestCase(TestName = "Bind Should Use Empty Source Definition When Source Table Is Missing")]
+    public void BindShould_9()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(CreateExpectedProject());
+    }
+
+    [TestCase(TestName = "Bind Should Bind Source Default Namespace")]
+    public void BindShould_10()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [source]
+            default-namespace = "Sushi.Compiler"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(
+                CreateExpectedProject(
+                    defaultNamespace: "Sushi.Compiler"));
+    }
+
+    [TestCase(TestName = "Bind Should Bind Source Exclusions")]
+    public void BindShould_11()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [source]
+            exclude = [
+                "Experimental/**",
+                "Generated/Test.sus",
+            ]
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(
+                CreateExpectedProject(
+                    exclude:
+                    [
+                        "Experimental/**",
+                        "Generated/Test.sus"
+                    ]));
+    }
+
+    [TestCase(TestName = "Bind Should Decode Source String Values")]
+    public void BindShould_12()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            ["source"]
+            "default-namespace" = "Sushi\u002eCompiler"
+            "exclude" = ["Generated\u002f**"]
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(
+                CreateExpectedProject(
+                    defaultNamespace: "Sushi.Compiler",
+                    exclude: ["Generated/**"]));
+    }
+
+    [TestCase(TestName = "Bind Should Reject Non Array Source Exclude")]
+    public void BindShould_13()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [source]
+            exclude = "Generated/**"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Project.Should().BeNull();
+
+        result.Diagnostics.Should().ContainSingle();
+
+        result.Diagnostics.Single()
+            .Message
+            .Should()
+            .Contain("source.exclude");
+    }
+
+    [TestCase(TestName = "Bind Should Diagnose Invalid Source Exclude Element On The Element")]
+    public void BindShould_14()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [source]
+            exclude = [
+                "Experimental/**",
+                42,
+                "Generated/**",
+            ]
+            """;
+
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) =
+            Bind(text);
+
+        result.Project.Should().BeNull();
+        result.Diagnostics.Should().ContainSingle();
+
+        SushiDiagnostic diagnostic =
+            result.Diagnostics.Single();
+
+        int valueStart =
+            System.Text.Encoding.UTF8.GetByteCount(
+                text[..text.IndexOf("42", StringComparison.Ordinal)]);
+
+        diagnostic.Span.Snapshot.Should().BeSameAs(snapshot);
+        diagnostic.Span.Start.Should().Be(valueStart);
+        diagnostic.Span.Length.Should().Be(2);
+    }
+
+    [TestCase(TestName = "Bind Should Not Treat Nested Source Table As Source Configuration")]
+    public void BindShould_15()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+    
+            [source.generated]
+            default-namespace = "Wrong.Namespace"
+            """;
+    
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+    
+        result.Diagnostics.Should().BeEmpty();
+    
+        result.Project
+            .Should()
+            .BeEquivalentTo(CreateExpectedProject());
+    }
+
     private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text)
     {
         SourceSnapshot snapshot = CreateSnapshot(text);
@@ -239,4 +420,7 @@ public class ProjectConfigurationBinderTests
             version: null,
             text);
     }
+
+    private static ProjectDefinition CreateExpectedProject(string name = "Sushi Compiler", string assembly = "Sushi.Compiler", string languageVersion = "1.0", string? defaultNamespace = null, IReadOnlyList<string>? exclude = null)
+        => new(name, assembly, languageVersion, new ProjectSourceDefinition(defaultNamespace, exclude ?? []));
 }
