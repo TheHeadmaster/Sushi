@@ -67,6 +67,8 @@ public sealed class ProjectConfigurationBinder
             }
         }
 
+        ProjectSourceDefinition source = BindSource(snapshot, syntax, diagnostics, cancellationToken);
+
         if (!hasName)
         {
             diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "name"));
@@ -89,7 +91,7 @@ public sealed class ProjectConfigurationBinder
             && name is not null
             && assembly is not null
             && languageVersion is not null
-                ? new ProjectDefinition(name, assembly, languageVersion)
+                ? new ProjectDefinition(name, assembly, languageVersion, source)
                 : null;
 
         return new ProjectConfigurationBindResult(project, diagnostics);
@@ -142,12 +144,90 @@ public sealed class ProjectConfigurationBinder
     }
 
     private static SushiDiagnostic CreateError(string code, string message, SourceSnapshot snapshot, TomlSourceSpan span)
+        => new(code, message, DiagnosticSeverity.Error, span.ToSushiSpan(snapshot));
+
+    private static ProjectSourceDefinition BindSource(SourceSnapshot snapshot, DocumentSyntax syntax, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
-        return new SushiDiagnostic(
-            code,
-            message,
-            DiagnosticSeverity.Error,
-            span.ToSushiSpan(snapshot)
-        );
+        TableSyntax? sourceTable = null;
+
+        foreach (TableSyntaxBase table in syntax.Tables)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (table is not TableSyntax ordinaryTable)
+            {
+                continue;
+            }
+
+            string? tableName = GetSimpleKeyName(ordinaryTable.Name);
+
+            if (tableName == "source")
+            {
+                sourceTable = ordinaryTable;
+                break;
+            }
+        }
+
+        if (sourceTable is null)
+        {
+            return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
+        }
+
+        string? defaultNamespace = null;
+        List<string> exclude = [];
+
+        foreach (KeyValueSyntax keyValue in sourceTable.Items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? keyName = GetSimpleKeyName(keyValue.Key);
+
+            switch (keyName)
+            {
+                case "default-namespace":
+                    defaultNamespace = BindStringValue(snapshot, keyValue, "source.default-namespace", diagnostics);
+                    break;
+
+                case "exclude":
+                    exclude.AddRange(BindStringArray(snapshot, keyValue, "source.exclude", diagnostics));
+                    break;
+            }
+        }
+
+        return new ProjectSourceDefinition(defaultNamespace, exclude);
+    }
+
+    private static IReadOnlyList<string> BindStringArray(SourceSnapshot snapshot, KeyValueSyntax keyValue, string keyName, List<SushiDiagnostic> diagnostics)
+    {
+        if (keyValue.Value is null)
+        {
+            return [];
+        }
+
+        if (keyValue.Value is not ArraySyntax array)
+        {
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{keyName}\" must be an array of strings.", snapshot, keyValue.Value.Span));
+
+            return [];
+        }
+
+        List<string> values = [];
+
+        foreach (ArrayItemSyntax item in array.Items)
+        {
+            if (item.Value is StringValueSyntax stringValue)
+            {
+                values.Add(stringValue.Value ?? string.Empty);
+
+                continue;
+            }
+
+            if (item.Value is not null)
+            {
+                diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{keyName}\" must contain only strings.", snapshot, item.Value.Span));
+            }
+        }
+
+        return values;
     }
 }
