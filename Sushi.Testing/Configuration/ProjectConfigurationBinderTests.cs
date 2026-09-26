@@ -460,7 +460,7 @@ public class ProjectConfigurationBinderTests
 
         ProjectConfigurationBinder binder = new();
 
-        ProjectConfigurationBindResult result = binder.Bind(snapshot, parseResult.Syntax, CancellationToken.None);
+        ProjectConfigurationBindResult result = binder.Bind(snapshot, parseResult.Document, CancellationToken.None);
 
         return (snapshot, result);
     }

@@ -61,6 +61,11 @@ public sealed class ProjectConfigurationBinder
 
     private static string? BindStringValue(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics)
     {
+        if (property.Value is TomlConfigurationInvalid)
+        {
+            return null;
+        }
+
         if (property.Value is TomlConfigurationString stringValue)
         {
             return stringValue.Value;
@@ -78,6 +83,13 @@ public sealed class ProjectConfigurationBinder
         if (!document.TryGetProperty("source", out TomlConfigurationProperty sourceProperty))
         {
             return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
+        }
+
+        if (sourceProperty.Value is TomlConfigurationInvalid)
+        {
+            return new ProjectSourceDefinition(
+                DefaultNamespace: null,
+                Exclude: []);
         }
 
         if (sourceProperty.Value is not TomlConfigurationTable sourceTable)
@@ -105,6 +117,11 @@ public sealed class ProjectConfigurationBinder
 
     private static IReadOnlyList<string> BindStringArray(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
+        if (property.Value is TomlConfigurationInvalid)
+        {
+            return [];
+        }
+
         if (property.Value is not TomlConfigurationArray array)
         {
             diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must be an array of strings.", property.Value.Span));
