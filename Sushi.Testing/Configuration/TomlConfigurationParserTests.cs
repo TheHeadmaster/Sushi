@@ -2,6 +2,7 @@
 using FluentAssertions;
 using NUnit.Framework;
 using Sushi.Configuration;
+using Sushi.Configuration.Toml;
 using Sushi.Diagnostics;
 using Sushi.Source;
 
@@ -128,6 +129,94 @@ public class TomlConfigurationParserTests
                 diagnostic.Span.Start >= 0
                 && diagnostic.Span.End >= diagnostic.Span.Start
                 && diagnostic.Span.End <= snapshot.Bytes.Length);
+    }
+
+    [TestCase(TestName = "Parse Should Preserve Recoverable Semantic Document After Syntax Error")]
+    public void ParseShould_4()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            broken = @
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            source.exclude = ["Generated/**"]
+            """;
+
+        SourceSnapshot snapshot = CreateSnapshot(text);
+
+        TomlConfigurationParser parser = new();
+
+        TomlConfigurationParseResult result = parser.Parse(snapshot, CancellationToken.None);
+
+        result.Diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+
+        result.Document
+            .TryGetProperty("assembly", out TomlConfigurationProperty assemblyProperty)
+            .Should()
+            .BeTrue();
+
+        assemblyProperty.Value
+            .Should()
+            .BeOfType<TomlConfigurationString>()
+            .Which.Value
+            .Should()
+            .Be("Sushi.Compiler");
+
+        result.Document
+            .TryGetProperty("source", out TomlConfigurationProperty sourceProperty)
+            .Should()
+            .BeTrue();
+
+        TomlConfigurationTable source =
+            sourceProperty.Value
+                .Should()
+                .BeOfType<TomlConfigurationTable>()
+                .Subject;
+
+        source.TryGetProperty("exclude", out TomlConfigurationProperty excludeProperty)
+            .Should()
+            .BeTrue();
+
+        excludeProperty.Value
+            .Should()
+            .BeOfType<TomlConfigurationArray>();
+    }
+
+    [TestCase(TestName = "Bind Should Not Duplicate Syntax Diagnostic For Invalid Required Value")]
+    public void BindShould_18()
+    {
+        const string text =
+            """
+            name =
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+            """;
+
+        SourceSnapshot snapshot = CreateSnapshot(text);
+
+        TomlConfigurationParser parser = new();
+
+        TomlConfigurationParseResult parseResult = parser.Parse(snapshot, CancellationToken.None);
+
+        parseResult.Diagnostics
+            .Should()
+            .NotBeEmpty();
+
+        ProjectConfigurationBinder binder = new();
+
+        ProjectConfigurationBindResult bindResult = binder.Bind(snapshot, parseResult.Document, CancellationToken.None);
+
+        bindResult.Project
+            .Should()
+            .BeNull();
+
+        bindResult.Diagnostics
+            .Should()
+            .BeEmpty();
     }
 
     private static SourceSnapshot CreateSnapshot(string text) => new(new Uri("file:///TestProject/Test.susproj"), version: null, text);
