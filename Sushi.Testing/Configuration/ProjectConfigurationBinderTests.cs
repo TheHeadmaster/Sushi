@@ -448,6 +448,39 @@ public class ProjectConfigurationBinderTests
                     exclude: ["Generated/**"]));
     }
 
+    [TestCase(TestName = "Bind Should Not Duplicate Syntax Diagnostic For Invalid Required Value")]
+    public void BindShould_18()
+    {
+        const string text =
+            """
+            name =
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+            """;
+
+        SourceSnapshot snapshot = CreateSnapshot(text);
+
+        TomlConfigurationParser parser = new();
+
+        TomlConfigurationParseResult parseResult = parser.Parse(snapshot, CancellationToken.None);
+
+        parseResult.Diagnostics
+            .Should()
+            .NotBeEmpty();
+
+        ProjectConfigurationBinder binder = new();
+
+        ProjectConfigurationBindResult bindResult = binder.Bind(snapshot, parseResult.Document, CancellationToken.None);
+
+        bindResult.Project
+            .Should()
+            .BeNull();
+
+        bindResult.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
     private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text)
     {
         SourceSnapshot snapshot = CreateSnapshot(text);
