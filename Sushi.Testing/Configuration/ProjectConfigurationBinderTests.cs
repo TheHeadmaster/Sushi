@@ -640,9 +640,20 @@ public class ProjectConfigurationBinderTests
     private static ProjectDefinition CreateExpectedProject(string name = "Sushi Compiler", string assembly = "Sushi.Compiler", string languageVersion = "1.0", string? defaultNamespace = null, IReadOnlyList<string>? exclude = null, ProjectBuildDefinition? build = null)
     {
         ProjectSourceDefinition projectSource = new(defaultNamespace, exclude ?? []);
-        ProjectBuildDefinition projectBuild = build ?? new ProjectBuildDefinition(DefaultTarget: null, Sources: [], Targets: new Dictionary<string, ProjectBuildTargetDefinition>(StringComparer.Ordinal));
+        ProjectBuildDefinition projectBuild = build ?? CreateValidBuildDefinition();
 
         return new(name, assembly, languageVersion, projectSource, projectBuild);
+    }
+
+    private static ProjectBuildDefinition CreateValidBuildDefinition()
+    {
+        return new ProjectBuildDefinition(
+            "debug",
+            [],
+            new Dictionary<string, ProjectBuildTargetDefinition>(StringComparer.Ordinal)
+            {
+                ["debug"] = new ProjectBuildTargetDefinition("Sushi.Compiler.Build.DebugTarget")
+            });
     }
 
     private const string ValidBuildConfiguration =
