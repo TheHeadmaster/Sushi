@@ -2,3 +2,6 @@ name: Sushi Solution File
 scopeName: source.susln
 fileTypes:
   - susln
+
+patterns:
+  - include: source.sushi.toml

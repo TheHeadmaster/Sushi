@@ -1,0 +1,408 @@
+﻿name: Sushi TOML
+scopeName: source.sushi.toml
+
+patterns:
+  - include: '#comments'
+  - include: '#tables'
+  - include: '#key-pair'
+  - include: '#invalid'
+
+repository:
+  comments:
+    begin: '(^[ \t]+)?(?=#)'
+    beginCaptures:
+      "1":
+        name: punctuation.whitespace.comment.leading.toml
+    end: '(?!\G)'
+    patterns:
+      - begin: '#'
+        beginCaptures:
+          "0":
+            name: punctuation.definition.comment.toml
+        end: '\n'
+        name: comment.line.number-sign.toml
+
+  tables:
+    patterns:
+      - match: '^\s*(\[)([^\[\]]*)(\])'
+        name: meta.table.toml
+        captures:
+          "1":
+            name: punctuation.definition.table.begin.toml
+          "2":
+            patterns:
+              - include: '#table-name'
+          "3":
+            name: punctuation.definition.table.end.toml
+
+      - match: '^\s*(\[\[)([^\[\]]*)(\]\])'
+        name: meta.table.array.toml
+        captures:
+          "1":
+            name: punctuation.definition.table.begin.toml
+          "2":
+            patterns:
+              - include: '#table-name'
+          "3":
+            name: punctuation.definition.table.end.toml
+
+  table-name:
+    patterns:
+      - match: '\.'
+        name: punctuation.separator.table.toml
+
+      - match: '[A-Za-z0-9_-]+'
+        name: entity.name.section.toml
+
+      - begin: '"'
+        beginCaptures:
+          "0":
+            name: punctuation.definition.string.begin.toml
+        end: '"'
+        endCaptures:
+          "0":
+            name: punctuation.definition.string.end.toml
+        name: entity.name.section.toml
+        patterns:
+          - include: '#basic-string-escapes'
+
+      - begin: "'"
+        beginCaptures:
+          "0":
+            name: punctuation.definition.string.begin.toml
+        end: "'"
+        endCaptures:
+          "0":
+            name: punctuation.definition.string.end.toml
+        name: entity.name.section.toml
+
+  key-pair:
+    patterns:
+      - begin: '([A-Za-z0-9_-]+)\s*(=)\s*'
+        captures:
+          "1":
+            name: variable.other.key.toml
+          "2":
+            name: punctuation.separator.key-value.toml
+        end: '(?<=\S)(?<!=)|$'
+        patterns:
+          - include: '#values'
+
+      - begin: '((")((?:[^"\\]|\\.)*)("))\s*(=)\s*'
+        captures:
+          "1":
+            name: variable.other.key.toml
+          "2":
+            name: punctuation.definition.variable.begin.toml
+          "3":
+            patterns:
+              - include: '#basic-string-escapes'
+          "4":
+            name: punctuation.definition.variable.end.toml
+          "5":
+            name: punctuation.separator.key-value.toml
+        end: '(?<=\S)(?<!=)|$'
+        patterns:
+          - include: '#values'
+
+      - begin: "((')([^']*)('))\\s*(=)\\s*"
+        captures:
+          "1":
+            name: variable.other.key.toml
+          "2":
+            name: punctuation.definition.variable.begin.toml
+          "4":
+            name: punctuation.definition.variable.end.toml
+          "5":
+            name: punctuation.separator.key-value.toml
+        end: '(?<=\S)(?<!=)|$'
+        patterns:
+          - include: '#values'
+
+      - begin: |-
+          (?x)
+          (
+            (
+              (?:
+                [A-Za-z0-9_-]+
+                |
+                " (?:[^"\\]|\\.)* "
+                |
+                ' [^']* '
+              )
+              (?:
+                \s* \. \s*
+                |
+                (?= \s* =)
+              )
+            ){2,}
+          )
+          \s*(=)\s*
+        comment: Dotted key
+        captures:
+          "1":
+            name: variable.other.key.toml
+            patterns:
+              - match: '\.'
+                name: punctuation.separator.variable.toml
+
+              - match: '(")((?:[^"\\]|\\.)*)(")'
+                captures:
+                  "1":
+                    name: punctuation.definition.variable.begin.toml
+                  "2":
+                    patterns:
+                      - include: '#basic-string-escapes'
+                  "3":
+                    name: punctuation.definition.variable.end.toml
+
+              - match: "(')[^']*(')"
+                captures:
+                  "1":
+                    name: punctuation.definition.variable.begin.toml
+                  "2":
+                    name: punctuation.definition.variable.end.toml
+
+          "3":
+            name: punctuation.separator.key-value.toml
+
+        end: '(?<=\S)(?<!=)|$'
+        patterns:
+          - include: '#values'
+
+  values:
+    patterns:
+      - include: '#multiline-basic-string'
+      - include: '#basic-string'
+      - include: '#multiline-literal-string'
+      - include: '#literal-string'
+      - include: '#date-time'
+      - include: '#boolean'
+      - include: '#number'
+      - include: '#array'
+      - include: '#inline-table'
+      - include: '#comments'
+
+  multiline-basic-string:
+    begin: '\G"""'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.string.begin.toml
+    end: '"{3,5}'
+    endCaptures:
+      "0":
+        name: punctuation.definition.string.end.toml
+    name: string.quoted.triple.double.toml
+    patterns:
+      - include: '#basic-string-escapes'
+
+      - match: '\\[ \t]*\n[ \t\r\n]*'
+        name: constant.character.escape.toml
+
+  basic-string:
+    begin: '\G"'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.string.begin.toml
+    end: '"'
+    endCaptures:
+      "0":
+        name: punctuation.definition.string.end.toml
+    name: string.quoted.double.toml
+    patterns:
+      - include: '#basic-string-escapes'
+
+  basic-string-escapes:
+    patterns:
+      - match: '\\([btnfr"\\]|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})'
+        name: constant.character.escape.toml
+
+      - match: '\\[^btnfr"\\]'
+        name: invalid.illegal.escape.toml
+
+  multiline-literal-string:
+    begin: "\\G'''"
+    beginCaptures:
+      "0":
+        name: punctuation.definition.string.begin.toml
+    end: "'{3,5}"
+    endCaptures:
+      "0":
+        name: punctuation.definition.string.end.toml
+    name: string.quoted.triple.single.toml
+
+  literal-string:
+    begin: "\\G'"
+    beginCaptures:
+      "0":
+        name: punctuation.definition.string.begin.toml
+    end: "'"
+    endCaptures:
+      "0":
+        name: punctuation.definition.string.end.toml
+    name: string.quoted.single.toml
+
+  date-time:
+    patterns:
+      - match: |-
+          \G(?x)
+          [0-9]{4}
+          -
+          (0[1-9]|1[0-2])
+          -
+          (?!00|3[2-9])[0-3][0-9]
+          [Tt ]
+          (?!2[5-9])[0-2][0-9]
+          :
+          [0-5][0-9]
+          :
+          (?!6[1-9])[0-6][0-9]
+          (\.[0-9]+)?
+          (
+            [Zz]
+            |
+            [+-](?!2[5-9])[0-2][0-9]:[0-5][0-9]
+          )
+        name: constant.other.datetime.offset.toml
+
+      - match: |-
+          \G(?x)
+          [0-9]{4}
+          -
+          (0[1-9]|1[0-2])
+          -
+          (?!00|3[2-9])[0-3][0-9]
+          [Tt ]
+          (?!2[5-9])[0-2][0-9]
+          :
+          [0-5][0-9]
+          :
+          (?!6[1-9])[0-6][0-9]
+          (\.[0-9]+)?
+        name: constant.other.datetime.local.toml
+
+      - match: |-
+          \G(?x)
+          [0-9]{4}
+          -
+          (0[1-9]|1[0-2])
+          -
+          (?!00|3[2-9])[0-3][0-9]
+        name: constant.other.date.toml
+
+      - match: |-
+          \G(?x)
+          (?!2[5-9])[0-2][0-9]
+          :
+          [0-5][0-9]
+          :
+          (?!6[1-9])[0-6][0-9]
+          (\.[0-9]+)?
+        name: constant.other.time.toml
+
+  boolean:
+    match: '\G(true|false)'
+    name: constant.language.boolean.toml
+
+  number:
+    patterns:
+      - match: '\G0x[0-9A-Fa-f]([0-9A-Fa-f]|_[0-9A-Fa-f])*'
+        name: constant.numeric.hex.toml
+
+      - match: '\G0o[0-7]([0-7]|_[0-7])*'
+        name: constant.numeric.octal.toml
+
+      - match: '\G0b[01]([01]|_[01])*'
+        name: constant.numeric.binary.toml
+
+      - match: '\G[+-]?(inf|nan)'
+        name: constant.numeric.float.toml
+
+      - match: |-
+          \G(?x)
+          [+-]?
+          (
+            0
+            |
+            [1-9]([0-9]|_[0-9])*
+          )
+          (
+            \.
+            [0-9]([0-9]|_[0-9])*
+          )
+          (
+            [eE]
+            [+-]?
+            [0-9]([0-9]|_[0-9])*
+          )?
+        name: constant.numeric.float.toml
+
+      - match: |-
+          \G(?x)
+          [+-]?
+          (
+            0
+            |
+            [1-9]([0-9]|_[0-9])*
+          )
+          [eE]
+          [+-]?
+          [0-9]([0-9]|_[0-9])*
+        name: constant.numeric.float.toml
+
+      - match: |-
+          \G(?x)
+          [+-]?
+          (
+            0
+            |
+            [1-9]([0-9]|_[0-9])*
+          )
+        name: constant.numeric.integer.toml
+
+  array:
+    begin: '\G\['
+    beginCaptures:
+      "0":
+        name: punctuation.definition.array.begin.toml
+    end: '\]'
+    endCaptures:
+      "0":
+        name: punctuation.definition.array.end.toml
+    name: meta.array.toml
+    patterns:
+      - include: '#comments'
+
+      - begin: '(?=\S)'
+        end: ',|(?=\])'
+        endCaptures:
+          "0":
+            name: punctuation.separator.array.toml
+        patterns:
+          - include: '#values'
+          - include: '#invalid'
+
+  inline-table:
+    begin: '\G\{'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.inline-table.begin.toml
+    end: '\}'
+    endCaptures:
+      "0":
+        name: punctuation.definition.inline-table.end.toml
+    name: meta.inline-table.toml
+    patterns:
+      - begin: '(?=\S)'
+        end: ',|(?=\})'
+        endCaptures:
+          "0":
+            name: punctuation.separator.inline-table.toml
+        patterns:
+          - include: '#key-pair'
+          - include: '#comments'
+          - include: '#invalid'
+
+  invalid:
+    match: '\S+(\s*(?=\S))?'
+    name: invalid.illegal.not-allowed-here.toml

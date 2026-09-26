@@ -2,3 +2,6 @@ name: Sushi Project File
 scopeName: source.susproj
 fileTypes:
   - susproj
+  
+patterns:
+  - include: source.sushi.toml

@@ -1,3 +1,4 @@
+using Sushi.Configuration;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -7,12 +8,18 @@ namespace Sushi.Analysis;
 /// </summary>
 public sealed class SolutionAnalyzer
 {
+    private readonly TomlConfigurationParser parser = new();
+
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, [], new SolutionDefinition()));
+        TomlConfigurationParseResult parseResult = this.parser.Parse(snapshot, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, parseResult.Diagnostics, new SolutionDefinition()));
     }
 }
