@@ -19,9 +19,11 @@ dotnet_diagnostic.CA1711.severity = none
 # byte[] is a defensible property value.
 dotnet_diagnostic.CA1819.severity = none
 
+# Performance is a concern in a compiler, but sometimes lists are supposed to be immutable over performance optimization.
+dotnet_diagnostic.CA1859.severity = none
+
 # In a program where most everything is async, slapping async on every method name is noise.
 dotnet_diagnostic.VSTHRD200.severity = none
-
 
 # This warning is intended for libraries, where the code may be executed in arbitrary environments and where code
 # shouldn't make assumptions about the environment or how the caller of the method may be invoking or waiting on it.
