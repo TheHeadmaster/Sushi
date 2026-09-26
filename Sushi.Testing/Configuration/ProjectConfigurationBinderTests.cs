@@ -453,6 +453,12 @@ public class ProjectConfigurationBinderTests
             name =
             assembly = "Sushi.Compiler"
             language-version = "1.0"
+
+            [build]
+            default = "debug"
+
+            [build.targets.debug]
+            type = "Sushi.Compiler.Build.DebugTarget"
             """;
 
         SourceSnapshot snapshot = CreateSnapshot(text);
@@ -478,8 +484,136 @@ public class ProjectConfigurationBinderTests
             .BeEmpty();
     }
 
-    private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text)
+    [TestCase(TestName = "Bind Should Require Build Configuration")]
+    public void BindShould_19()
     {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+
+        result.Project
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Message.Contains("\"build\"", StringComparison.Ordinal));
+    }
+
+    [TestCase(TestName = "Bind Should Require At Least One Build Target")]
+    public void BindShould_20()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [build]
+            default = "debug"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+
+        result.Project
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.Message.Contains("at least one build target", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestCase(TestName = "Bind Should Reject Unknown Default Build Target")]
+    public void BindShould_21()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [build]
+            default = "release"
+
+            [build.targets.debug]
+            type = "Sushi.Compiler.Build.DebugTarget"
+            """;
+
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+
+        result.Project
+            .Should()
+            .BeNull();
+
+        SushiDiagnostic diagnostic = result.Diagnostics
+            .Should()
+            .ContainSingle()
+            .Subject;
+
+        diagnostic.Message
+            .Should()
+            .Contain("release");
+
+        int valueStart = System.Text.Encoding.UTF8.GetByteCount(text[ ..text.IndexOf("\"release\"", StringComparison.Ordinal)]);
+
+        diagnostic.Span.Snapshot
+            .Should()
+            .BeSameAs(snapshot);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(valueStart);
+
+        diagnostic.Span.Length
+            .Should()
+            .Be("\"release\"".Length);
+    }
+
+    [TestCase(TestName = "Bind Should Match Default Build Target Case Sensitively")]
+    public void BindShould_22()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [build]
+            default = "Debug"
+
+            [build.targets.debug]
+            type = "Sushi.Compiler.Build.DebugTarget"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+
+        result.Project
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Message.Contains("Debug", StringComparison.Ordinal));
+    }
+
+    private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text, bool addValidBuild = true)
+    {
+        if (addValidBuild)
+        {
+            text =
+            $"""
+            {text}
+
+            {ValidBuildConfiguration}
+            """;
+        }
+
         SourceSnapshot snapshot = CreateSnapshot(text);
 
         TomlConfigurationParser parser = new();
@@ -510,4 +644,13 @@ public class ProjectConfigurationBinderTests
 
         return new(name, assembly, languageVersion, projectSource, projectBuild);
     }
+
+    private const string ValidBuildConfiguration =
+    """
+    [build]
+    default = "debug"
+
+    [build.targets.debug]
+    type = "Sushi.Compiler.Build.DebugTarget"
+    """;
 }

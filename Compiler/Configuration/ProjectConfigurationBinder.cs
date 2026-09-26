@@ -12,6 +12,9 @@ public sealed class ProjectConfigurationBinder
     private const string InvalidValueTypeDiagnosticCode = "SUSE1002";
     private const string EmptyProjectNameDiagnosticCode = "SUSE1003";
 
+    private const string MissingBuildTargetsDiagnosticCode = "SUSE1004";
+    private const string UnknownDefaultBuildTargetDiagnosticCode = "SUSE1005";
+
     public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, TomlConfigurationTable document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
@@ -123,6 +126,8 @@ public sealed class ProjectConfigurationBinder
 
         if (!document.TryGetProperty("build", out TomlConfigurationProperty buildProperty))
         {
+            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "build"));
+
             return CreateEmptyBuild();
         }
 
@@ -139,13 +144,17 @@ public sealed class ProjectConfigurationBinder
         }
 
         string? defaultTarget = null;
+        TomlConfigurationProperty? defaultProperty = null;
         List<string> sources = [];
 
         Dictionary<string, ProjectBuildTargetDefinition> targets = [with(StringComparer.Ordinal)];
+        HashSet<string> declaredTargetNames = [with(StringComparer.Ordinal)];
 
-        if (buildTable.TryGetProperty("default", out TomlConfigurationProperty defaultProperty))
+        if (buildTable.TryGetProperty("default", out TomlConfigurationProperty foundDefaultProperty))
         {
-            defaultTarget = BindStringValue(defaultProperty, "build.default", diagnostics);
+            defaultProperty = foundDefaultProperty;
+
+            defaultTarget = BindStringValue(foundDefaultProperty, "build.default", diagnostics);
         }
         else
         {
@@ -159,13 +168,23 @@ public sealed class ProjectConfigurationBinder
 
         if (buildTable.TryGetProperty("targets", out TomlConfigurationProperty targetsProperty))
         {
-            BindBuildTargets(snapshot, targetsProperty, targets, diagnostics, cancellationToken);
+            BindBuildTargets(snapshot, targetsProperty, targets, declaredTargetNames, diagnostics, cancellationToken);
+        }
+
+        if (declaredTargetNames.Count == 0)
+        {
+            diagnostics.Add(CreateError(MissingBuildTargetsDiagnosticCode, "Project configuration must define at least one build target.", buildTable.Span));
+        }
+
+        if (defaultTarget is not null && defaultProperty is not null && !declaredTargetNames.Contains(defaultTarget))
+        {
+            diagnostics.Add(CreateError(UnknownDefaultBuildTargetDiagnosticCode, $"Default build target \"{defaultTarget}\" is not declared in \"build.targets\".", defaultProperty.Value.Span));
         }
 
         return new ProjectBuildDefinition(defaultTarget, sources, targets);
     }
 
-    private static void BindBuildTargets(SourceSnapshot snapshot, TomlConfigurationProperty targetsProperty, Dictionary<string, ProjectBuildTargetDefinition> targets, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static void BindBuildTargets(SourceSnapshot snapshot, TomlConfigurationProperty targetsProperty, Dictionary<string, ProjectBuildTargetDefinition> targets, HashSet<string> declaredTargetNames, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -184,6 +203,8 @@ public sealed class ProjectConfigurationBinder
         foreach (TomlConfigurationProperty targetProperty in targetsTable.Properties.Values)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            declaredTargetNames.Add(targetProperty.Name);
 
             if (targetProperty.Value is TomlConfigurationInvalid)
             {
