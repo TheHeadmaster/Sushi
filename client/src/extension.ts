@@ -1,6 +1,9 @@
 import * as net from 'net';
 import * as path from 'path';
-import { ExtensionContext } from 'vscode';
+import {
+	ExtensionContext,
+	ExtensionMode
+} from 'vscode';
 
 import {
 	Executable,
@@ -42,16 +45,10 @@ export function deactivate(): Thenable<void> | undefined {
 }
 
 function createServerOptions(context: ExtensionContext): ServerOptions {
-	const debugPortText = process.env.SUSHI_LSP_DEBUG_PORT;
+	const debugPort = getDebugLspPort(context);
 
-	if (debugPortText && debugPortText.trim().length > 0) {
-		const debugPort = Number(debugPortText);
-
-		if (!Number.isInteger(debugPort) || debugPort <= 0 || debugPort > 65535) {
-			throw new Error(`Invalid SUSHI_LSP_DEBUG_PORT value: "${debugPortText}"`);
-		}
-
-		return () => connectWithRetry('127.0.0.1', debugPort, 40, 250);
+	if (debugPort !== undefined) {
+		return () => connectToServer('127.0.0.1', debugPort);
 	}
 
 	const command = getBundledServerCommand(context);
@@ -77,35 +74,50 @@ function getBundledServerCommand(context: ExtensionContext): string {
 	return context.asAbsolutePath(path.join('server', "Sushi"));
 }
 
-function connectWithRetry(host: string, port: number, maxAttempts: number, delayMilliseconds: number): Promise<StreamInfo> {
+const developmentLspPort = 5057;
+
+function getDebugLspPort(context: ExtensionContext
+): number | undefined {
+	const configuredPort = process.env.SUSHI_LSP_DEBUG_PORT;
+
+	if (configuredPort && configuredPort.trim().length > 0) {
+		const port = Number(configuredPort);
+
+		if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+			throw new Error(`Invalid SUSHI_LSP_DEBUG_PORT value: "${configuredPort}"`);
+		}
+
+		return port;
+	}
+
+	if (context.extensionMode === ExtensionMode.Development) {
+		return developmentLspPort;
+	}
+
+	return undefined;
+}
+
+function connectToServer(host: string, port: number): Promise<StreamInfo> {
 	return new Promise<StreamInfo>((resolve, reject) => {
-		let attempt = 0;
+		const socket = new net.Socket();
 
-		const tryConnect = () => {
-			attempt++;
+		const onError = (error: Error) => {
+			socket.destroy();
 
-			const socket = net.connect(port, host);
-
-			const onError = (error: Error) => {
-				socket.removeAllListeners();
-
-				if (attempt >= maxAttempts) {
-					reject(new Error(`Could not connect to Sushi LSP at ${host}:${port} after ${attempt} attempts. Last error: ${error.message}`));
-					return;
-				}
-
-				setTimeout(tryConnect, delayMilliseconds);
-			};
-
-			socket.once('connect', () => {
-				socket.removeListener('error', onError);
-
-				resolve({ reader: socket, writer: socket });
-			});
-
-			socket.once('error', onError);
+			reject(new Error(`Could not connect to Sushi LSP at ${host}:${port}: ${error.message}`));
 		};
 
-		tryConnect();
+		socket.once('error', onError);
+
+		socket.once('connect', () => {
+			socket.removeListener('error', onError);
+
+			resolve({
+				reader: socket,
+				writer: socket
+			});
+		});
+
+		socket.connect(port, host);
 	});
 }

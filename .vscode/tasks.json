@@ -18,6 +18,17 @@
             }
         },
         {
+            "label": "build: extension",
+            "type": "shell",
+            "command": "npm run compile",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": "$tsc",
+            "dependsOn": "generate: syntax",
+            "dependsOrder": "sequence"
+        },
+        {
             "label": "generate: syntax",
             "type": "shell",
             "command": "npm run generate:syntax",
@@ -36,6 +47,28 @@
             "isBackground": true,
             "problemMatcher": "$tsc-watch",
             "dependsOn": "generate: syntax",
+            "dependsOrder": "sequence",
+            "presentation": {
+                "reveal": "silent",
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "launch: extension host",
+            "type": "shell",
+            "command": "start \"\" \"${execPath}\" --new-window \"${workspaceFolder}\" --extensionDevelopmentPath=\"${workspaceFolder}\" --inspect-brk-extensions=5870",
+            "options": {
+                "cwd": "${workspaceFolder}",
+                "shell": {
+                    "executable": "cmd.exe",
+                    "args": [
+                        "/d",
+                        "/c"
+                    ]
+                }
+            },
+            "problemMatcher": [],
+            "dependsOn": "build: extension",
             "dependsOrder": "sequence",
             "presentation": {
                 "reveal": "silent",

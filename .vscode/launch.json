@@ -17,30 +17,37 @@
             "stopAtEntry": false
         },
         {
-            "name":"Sushi: VS Code Extension",
-            "type": "extensionHost",
+            "name": "Sushi: Extension and LSP",
+            "type": "coreclr",
             "request": "launch",
-            "runtimeExecutable": "${execPath}",
+            "preLaunchTask": "build: compiler",
+            "program": "${workspaceFolder}/Compiler/bin/Debug/net10.0/Sushi.dll",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}"
+                "-lsp",
+                "--tcp",
+                "127.0.0.1:5057"
             ],
+            "cwd": "${workspaceFolder}/Compiler",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "serverReadyAction": {
+                "pattern": "Listening for LSP client",
+                "action": "startDebugging",
+                "name": "Sushi: VS Code Extension"
+            }
+        },
+        {
+            "name": "Sushi: VS Code Extension",
+            "type": "node",
+            "request": "attach",
+            "address": "127.0.0.1",
+            "port": 5870,
+            "continueOnAttach": true,
+            "timeout": 30000,
             "outFiles": [
                 "${workspaceFolder}/client/out/**/*.js"
             ],
-            "env": {
-                "SUSHI_LSP_DEBUG_PORT": "5057"
-            },
-            "preLaunchTask": "watch: extension"
-        }
-    ],
-    "compounds": [
-        {
-            "name": "Sushi: Extension and LSP",
-            "configurations": [
-                "Sushi: LSP Server",
-                "Sushi: VS Code Extension"
-            ],
-            "stopAll": true
+            "preLaunchTask": "launch: extension host"
         }
     ]
 }
