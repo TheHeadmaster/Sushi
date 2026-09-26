@@ -19,7 +19,7 @@ namespace Sushi.LanguageServerProtocol;
 /// <summary>
 /// Orchestrates updates and changes tracking for the current open workspace.
 /// </summary>
-public sealed class WorkspaceOrchestrator
+public sealed class WorkspaceOrchestrator : IDisposable
 {
     /// <summary>
     /// Represents the current open workspace.
@@ -38,6 +38,8 @@ public sealed class WorkspaceOrchestrator
     private readonly SemaphoreSlim mutationGate = new(1, 1);
 
     private sealed record AnalysisRequest(SourceDocument Document, SourceSnapshot Snapshot);
+
+    private bool disposed;
 
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
@@ -533,6 +535,7 @@ public sealed class WorkspaceOrchestrator
             if (this.scheduledAnalyses.Remove(document, out CancellationTokenSource? cancellation))
             {
                 cancellation.Cancel();
+                cancellation.Dispose();
             }
         }
     }
@@ -796,5 +799,17 @@ public sealed class WorkspaceOrchestrator
         }
 
         await this.AnalyzeDocument(document, snapshot!, cancellationToken);
+    }
+
+    public void Dispose()
+    {
+        if (this.disposed)
+        {
+            return;
+        }
+
+        this.mutationGate.Dispose();
+
+        this.disposed = true;
     }
 }

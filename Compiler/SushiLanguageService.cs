@@ -11,7 +11,9 @@ namespace Sushi;
 /// <summary>
 /// Service that handles the coordination of lexing, parsing, updating, and compiling of Sushi code bases.
 /// </summary>
+#pragma warning disable CA1001 // Types that own disposable fields should be disposable
 public sealed class SushiLanguageService
+#pragma warning restore CA1001 // Types that own disposable fields should be disposable
 {
     /// <summary>
     /// Handles the orchestration and plumbing of diagnostics publishing and source document tracking.
@@ -80,6 +82,8 @@ public sealed class SushiLanguageService
         );
 
         await server.WaitForExit;
+
+        this.workspace.Dispose();
     }
 
     /// <summary>
@@ -130,4 +134,6 @@ public sealed class SushiLanguageService
     {
         // Stub
     }
+
+    internal void Dispose() => throw new NotImplementedException();
 }
