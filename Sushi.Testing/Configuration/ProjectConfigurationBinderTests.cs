@@ -602,6 +602,51 @@ public class ProjectConfigurationBinderTests
             .ContainSingle(diagnostic => diagnostic.Message.Contains("Debug", StringComparison.Ordinal));
     }
 
+    [TestCase(TestName = "Bind Should Bind Build Configuration")]
+    public void BindShould_23()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [build]
+            default = "debug"
+            sources = [
+                "Build/Targets.sus",
+                "Build/**/*.sus",
+            ]
+
+            [build.targets.debug]
+            type = "Sushi.Compiler.Build.DebugTarget"
+
+            [build.targets.release]
+            type = "Sushi.Compiler.Build.ReleaseTarget"
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(CreateExpectedProject(build:
+                new ProjectBuildDefinition(
+                    "debug",
+                    [
+                        "Build/Targets.sus",
+                        "Build/**/*.sus"
+                    ],
+                    new Dictionary<string, ProjectBuildTargetDefinition>(StringComparer.Ordinal)
+                    {
+                        ["debug"] = new("Sushi.Compiler.Build.DebugTarget"),
+                        ["release"] = new("Sushi.Compiler.Build.ReleaseTarget")
+                    })));
+    }
+
     private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text, bool addValidBuild = true)
     {
         if (addValidBuild)
