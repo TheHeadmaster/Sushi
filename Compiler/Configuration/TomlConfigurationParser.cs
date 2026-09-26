@@ -1,10 +1,9 @@
-﻿using System.Text;
+﻿using Sushi.Configuration.Toml;
 using Sushi.Diagnostics;
 using Sushi.Source;
+using Tomlyn;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
-using SushiSourceSpan = Sushi.Source.SourceSpan;
-using TomlSourceSpan = Tomlyn.Syntax.SourceSpan;
 
 namespace Sushi.Configuration;
 
@@ -23,9 +22,32 @@ public sealed class TomlConfigurationParser
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        TomlParser parser = TomlParser.Create(snapshot.Text,
+            new TomlParserOptions
+            {
+                Mode = TomlParserMode.Tolerant,
+                DecodeScalars = true
+            },
+            new TomlSerializerOptions
+            {
+                SourceName = snapshot.Uri.LocalPath
+            });
+
+        TomlConfigurationTable document = BuildDocument(snapshot, parser, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         SushiDiagnostic[] diagnostics = [.. syntax.Diagnostics.Select(diagnostic => ConvertDiagnostic(snapshot, diagnostic))];
 
-        return new TomlConfigurationParseResult(snapshot, syntax, diagnostics);
+        return new TomlConfigurationParseResult(snapshot, syntax, document, diagnostics);
+    }
+
+    private static TomlConfigurationTable BuildDocument(SourceSnapshot snapshot, TomlParser parser, CancellationToken cancellationToken)
+    {
+        // Placeholder until this gets fleshed out
+        return new(
+            new Source.SourceSpan()
+        );
     }
 
     private static SushiDiagnostic ConvertDiagnostic(SourceSnapshot snapshot, DiagnosticMessage diagnostic)

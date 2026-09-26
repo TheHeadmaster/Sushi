@@ -396,6 +396,58 @@ public class ProjectConfigurationBinderTests
             .BeEquivalentTo(CreateExpectedProject());
     }
 
+    [TestCase(TestName = "Bind Should Accept Dotted Source Configuration")]
+    public void BindShould_16()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            source.default-namespace = "Sushi.Compiler"
+            source.exclude = ["Generated/**"]
+            """;
+
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+
+        result.Diagnostics.Should().BeEmpty();
+
+        result.Project
+            .Should()
+            .BeEquivalentTo(
+                CreateExpectedProject(
+                    defaultNamespace: "Sushi.Compiler",
+                    exclude: ["Generated/**"]));
+    }
+
+    [TestCase(TestName = "Bind Should Accept Inline Source Configuration")]
+    public void BindShould_17()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+    
+            source = {
+                default-namespace = "Sushi.Compiler",
+                exclude = ["Generated/**"],
+            }
+            """;
+    
+        (_, ProjectConfigurationBindResult result) = Bind(text);
+    
+        result.Diagnostics.Should().BeEmpty();
+    
+        result.Project
+            .Should()
+            .BeEquivalentTo(
+                CreateExpectedProject(
+                    defaultNamespace: "Sushi.Compiler",
+                    exclude: ["Generated/**"]));
+    }
+
     private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text)
     {
         SourceSnapshot snapshot = CreateSnapshot(text);

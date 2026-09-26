@@ -22,7 +22,7 @@ public sealed class ProjectAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ProjectConfigurationBindResult bindResult = this.binder.Bind(snapshot, parseResult.Syntax, cancellationToken);
+        ProjectConfigurationBindResult bindResult = this.binder.Bind(snapshot, parseResult.Document, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 

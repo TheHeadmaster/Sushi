@@ -27,7 +27,7 @@ public sealed class WatchedFilesHandler([NotNull] WorkspaceOrchestrator workspac
     /// <returns>
     /// An awaitable <see cref="Task"/>.
     /// </returns>
-    public override async Task<Unit> Handle(DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
+    public override async Task<Unit> Handle([NotNull] DidChangeWatchedFilesParams request, CancellationToken cancellationToken)
     {
         await workspaceOrchestrator.ApplyFileChanges(request.Changes, cancellationToken);
 

@@ -1,9 +1,7 @@
 ﻿using Sushi.Analysis;
+using Sushi.Configuration.Toml;
 using Sushi.Diagnostics;
 using Sushi.Source;
-using Tomlyn.Syntax;
-using SushiSourceSpan = Sushi.Source.SourceSpan;
-using TomlSourceSpan = Tomlyn.Syntax.SourceSpan;
 
 namespace Sushi.Configuration;
 
@@ -14,75 +12,26 @@ public sealed class ProjectConfigurationBinder
     private const string InvalidValueTypeDiagnosticCode = "SUSE1002";
     private const string EmptyProjectNameDiagnosticCode = "SUSE1003";
 
-    public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, DocumentSyntax syntax, CancellationToken cancellationToken)
+    public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, TomlConfigurationTable document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        ArgumentNullException.ThrowIfNull(syntax);
+        ArgumentNullException.ThrowIfNull(document);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         List<SushiDiagnostic> diagnostics = [];
 
-        string? name = null;
-        string? assembly = null;
-        string? languageVersion = null;
+        string? name = BindRequiredString(snapshot, document, "name", "name", diagnostics);
+        string? assembly = BindRequiredString(snapshot, document, "assembly", "assembly", diagnostics);
 
-        bool hasName = false;
-        bool hasAssembly = false;
-        bool hasLanguageVersion = false;
+        string? languageVersion = BindRequiredString(snapshot, document, "language-version", "language-version", diagnostics);
 
-        foreach (KeyValueSyntax keyValue in syntax.KeyValues)
+        if (name is { Length: 0 } && document.TryGetProperty("name", out TomlConfigurationProperty nameProperty))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            string? keyName = GetSimpleKeyName(keyValue.Key);
-
-            switch (keyName)
-            {
-                case "name":
-                    hasName = true;
-
-                    name = BindStringValue(snapshot, keyValue, "name", diagnostics);
-
-                    if (name is { Length: 0 })
-                    {
-                        diagnostics.Add(CreateError(EmptyProjectNameDiagnosticCode, "Project name cannot be empty.", snapshot, keyValue.Value!.Span));
-                    }
-
-                    break;
-
-                case "assembly":
-                    hasAssembly = true;
-
-                    assembly = BindStringValue(snapshot, keyValue, "assembly", diagnostics);
-
-                    break;
-
-                case "language-version":
-                    hasLanguageVersion = true;
-
-                    languageVersion = BindStringValue(snapshot, keyValue, "language-version", diagnostics);
-
-                    break;
-            }
+            diagnostics.Add(CreateError(EmptyProjectNameDiagnosticCode, "Project name cannot be empty.", nameProperty.Value.Span));
         }
 
-        ProjectSourceDefinition source = BindSource(snapshot, syntax, diagnostics, cancellationToken);
-
-        if (!hasName)
-        {
-            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "name"));
-        }
-
-        if (!hasAssembly)
-        {
-            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "assembly"));
-        }
-
-        if (!hasLanguageVersion)
-        {
-            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "language-version"));
-        }
+        ProjectSourceDefinition source = BindSource(document, diagnostics, cancellationToken);
 
         bool hasErrors = diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
@@ -97,137 +46,97 @@ public sealed class ProjectConfigurationBinder
         return new ProjectConfigurationBindResult(project, diagnostics);
     }
 
-    private static string? GetSimpleKeyName(KeySyntax? key)
+    private static string? BindRequiredString(SourceSnapshot snapshot, TomlConfigurationTable table, string propertyName, string diagnosticName, List<SushiDiagnostic> diagnostics)
     {
-        if (key is null || key.DotKeys.ChildrenCount != 0)
+        if (!table.TryGetProperty(propertyName, out TomlConfigurationProperty property))
         {
+            diagnostics.Add(
+                CreateMissingKeyDiagnostic(snapshot, diagnosticName));
+
             return null;
         }
 
-        return key.Key switch
-        {
-            BareKeySyntax bareKey => bareKey.Key?.Text,
-            StringValueSyntax stringKey => stringKey.Value,
-            _ => null
-        };
+        return BindStringValue(property, diagnosticName, diagnostics);
     }
 
-    private static string? BindStringValue(SourceSnapshot snapshot, KeyValueSyntax keyValue, string keyName, List<SushiDiagnostic> diagnostics)
+    private static string? BindStringValue(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics)
     {
-        if (keyValue.Value is null)
-        {
-            // Tomlyn already owns the syntax diagnostic for a
-            // syntactically missing value. Do not duplicate it.
-            return null;
-        }
-
-        if (keyValue.Value is StringValueSyntax stringValue)
+        if (property.Value is TomlConfigurationString stringValue)
         {
             return stringValue.Value;
         }
 
-        diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{keyName}\" must be a string.", snapshot, keyValue.Value.Span));
+        diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must be a string.", property.Value.Span));
 
         return null;
     }
 
-    private static SushiDiagnostic CreateMissingKeyDiagnostic(SourceSnapshot snapshot, string keyName)
+    private static ProjectSourceDefinition BindSource(TomlConfigurationTable document, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
-        int eof = snapshot.Bytes.Length;
+        cancellationToken.ThrowIfCancellationRequested();
 
-        return new SushiDiagnostic(
-            MissingRequiredKeyDiagnosticCode,
-            $"Required project configuration key \"{keyName}\" is missing.",
-            DiagnosticSeverity.Error,
-            new SushiSourceSpan(snapshot, eof, eof)
-        );
-    }
-
-    private static SushiDiagnostic CreateError(string code, string message, SourceSnapshot snapshot, TomlSourceSpan span)
-        => new(code, message, DiagnosticSeverity.Error, span.ToSushiSpan(snapshot));
-
-    private static ProjectSourceDefinition BindSource(SourceSnapshot snapshot, DocumentSyntax syntax, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
-    {
-        TableSyntax? sourceTable = null;
-
-        foreach (TableSyntaxBase table in syntax.Tables)
+        if (!document.TryGetProperty("source", out TomlConfigurationProperty sourceProperty))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (table is not TableSyntax ordinaryTable)
-            {
-                continue;
-            }
-
-            string? tableName = GetSimpleKeyName(ordinaryTable.Name);
-
-            if (tableName == "source")
-            {
-                sourceTable = ordinaryTable;
-                break;
-            }
+            return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
         }
 
-        if (sourceTable is null)
+        if (sourceProperty.Value is not TomlConfigurationTable sourceTable)
         {
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"source\" must be a table.", sourceProperty.Value.Span));
+
             return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
         }
 
         string? defaultNamespace = null;
         List<string> exclude = [];
 
-        foreach (KeyValueSyntax keyValue in sourceTable.Items)
+        if (sourceTable.TryGetProperty("default-namespace", out TomlConfigurationProperty defaultNamespaceProperty))
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            defaultNamespace = BindStringValue(defaultNamespaceProperty, "source.default-namespace", diagnostics);
+        }
 
-            string? keyName = GetSimpleKeyName(keyValue.Key);
-
-            switch (keyName)
-            {
-                case "default-namespace":
-                    defaultNamespace = BindStringValue(snapshot, keyValue, "source.default-namespace", diagnostics);
-                    break;
-
-                case "exclude":
-                    exclude.AddRange(BindStringArray(snapshot, keyValue, "source.exclude", diagnostics));
-                    break;
-            }
+        if (sourceTable.TryGetProperty("exclude", out TomlConfigurationProperty excludeProperty))
+        {
+            exclude.AddRange(BindStringArray(excludeProperty, "source.exclude", diagnostics, cancellationToken));
         }
 
         return new ProjectSourceDefinition(defaultNamespace, exclude);
     }
 
-    private static IReadOnlyList<string> BindStringArray(SourceSnapshot snapshot, KeyValueSyntax keyValue, string keyName, List<SushiDiagnostic> diagnostics)
+    private static IReadOnlyList<string> BindStringArray(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
-        if (keyValue.Value is null)
+        if (property.Value is not TomlConfigurationArray array)
         {
-            return [];
-        }
-
-        if (keyValue.Value is not ArraySyntax array)
-        {
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{keyName}\" must be an array of strings.", snapshot, keyValue.Value.Span));
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must be an array of strings.", property.Value.Span));
 
             return [];
         }
 
         List<string> values = [];
 
-        foreach (ArrayItemSyntax item in array.Items)
+        foreach (TomlConfigurationValue item in array.Items)
         {
-            if (item.Value is StringValueSyntax stringValue)
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (item is TomlConfigurationString stringValue)
             {
-                values.Add(stringValue.Value ?? string.Empty);
+                values.Add(stringValue.Value);
 
                 continue;
             }
 
-            if (item.Value is not null)
-            {
-                diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{keyName}\" must contain only strings.", snapshot, item.Value.Span));
-            }
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must contain only strings.", item.Span));
         }
 
         return values;
     }
+
+    private static SushiDiagnostic CreateMissingKeyDiagnostic(SourceSnapshot snapshot, string keyName)
+    {
+        int eof = snapshot.Bytes.Length;
+
+        return new SushiDiagnostic(MissingRequiredKeyDiagnosticCode, $"Required project configuration key \"{keyName}\" is missing.", DiagnosticSeverity.Error, new SourceSpan(snapshot, eof, eof));
+    }
+
+    private static SushiDiagnostic CreateError(string code, string message, SourceSpan span) => new(code, message, DiagnosticSeverity.Error, span);
 }
