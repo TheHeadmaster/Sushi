@@ -33,6 +33,8 @@ public sealed class ProjectConfigurationBinder
 
         ProjectSourceDefinition source = BindSource(document, diagnostics, cancellationToken);
 
+        ProjectBuildDefinition build = BindBuild(snapshot, document, diagnostics, cancellationToken);
+
         bool hasErrors = diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
         ProjectDefinition? project =
@@ -40,7 +42,7 @@ public sealed class ProjectConfigurationBinder
             && name is not null
             && assembly is not null
             && languageVersion is not null
-                ? new ProjectDefinition(name, assembly, languageVersion, source)
+                ? new ProjectDefinition(name, assembly, languageVersion, source, build)
                 : null;
 
         return new ProjectConfigurationBindResult(project, diagnostics);
@@ -115,6 +117,97 @@ public sealed class ProjectConfigurationBinder
         return new ProjectSourceDefinition(defaultNamespace, exclude);
     }
 
+    private static ProjectBuildDefinition BindBuild(SourceSnapshot snapshot, TomlConfigurationTable document, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!document.TryGetProperty("build", out TomlConfigurationProperty buildProperty))
+        {
+            return CreateEmptyBuild();
+        }
+
+        if (buildProperty.Value is TomlConfigurationInvalid)
+        {
+            return CreateEmptyBuild();
+        }
+
+        if (buildProperty.Value is not TomlConfigurationTable buildTable)
+        {
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"build\" must be a table.", buildProperty.Value.Span));
+
+            return CreateEmptyBuild();
+        }
+
+        string? defaultTarget = null;
+        List<string> sources = [];
+
+        Dictionary<string, ProjectBuildTargetDefinition> targets = [with(StringComparer.Ordinal)];
+
+        if (buildTable.TryGetProperty("default", out TomlConfigurationProperty defaultProperty))
+        {
+            defaultTarget = BindStringValue(defaultProperty, "build.default", diagnostics);
+        }
+        else
+        {
+            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "build.default"));
+        }
+
+        if (buildTable.TryGetProperty("sources", out TomlConfigurationProperty sourcesProperty))
+        {
+            sources.AddRange(BindStringArray(sourcesProperty, "build.sources", diagnostics, cancellationToken));
+        }
+
+        if (buildTable.TryGetProperty("targets", out TomlConfigurationProperty targetsProperty))
+        {
+            BindBuildTargets(snapshot, targetsProperty, targets, diagnostics, cancellationToken);
+        }
+
+        return new ProjectBuildDefinition(defaultTarget, sources, targets);
+    }
+
+    private static void BindBuildTargets(SourceSnapshot snapshot, TomlConfigurationProperty targetsProperty, Dictionary<string, ProjectBuildTargetDefinition> targets, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (targetsProperty.Value is TomlConfigurationInvalid)
+        {
+            return;
+        }
+
+        if (targetsProperty.Value is not TomlConfigurationTable targetsTable)
+        {
+            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"build.targets\" must be a table.", targetsProperty.Value.Span));
+
+            return;
+        }
+
+        foreach (TomlConfigurationProperty targetProperty in targetsTable.Properties.Values)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (targetProperty.Value is TomlConfigurationInvalid)
+            {
+                continue;
+            }
+
+            if (targetProperty.Value is not TomlConfigurationTable targetTable)
+            {
+                diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Build target \"{targetProperty.Name}\" must be a table.", targetProperty.Value.Span));
+
+                continue;
+            }
+
+            string? type = BindRequiredString(snapshot, targetTable, "type", $"build.targets.{targetProperty.Name}.type", diagnostics);
+
+            if (type is null)
+            {
+                continue;
+            }
+
+            targets.TryAdd(targetProperty.Name, new ProjectBuildTargetDefinition(type));
+        }
+    }
+
     private static IReadOnlyList<string> BindStringArray(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
     {
         if (property.Value is TomlConfigurationInvalid)
@@ -147,6 +240,8 @@ public sealed class ProjectConfigurationBinder
 
         return values;
     }
+
+    private static ProjectBuildDefinition CreateEmptyBuild() => new(DefaultTarget: null, Sources: [], Targets: new Dictionary<string, ProjectBuildTargetDefinition>(StringComparer.Ordinal));
 
     private static SushiDiagnostic CreateMissingKeyDiagnostic(SourceSnapshot snapshot, string keyName)
     {
