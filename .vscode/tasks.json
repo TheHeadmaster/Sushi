@@ -56,7 +56,7 @@
         {
             "label": "launch: extension host",
             "type": "shell",
-            "command": "start \"\" \"${execPath}\" --new-window \"${workspaceFolder}\" --extensionDevelopmentPath=\"${workspaceFolder}\" --inspect-brk-extensions=5870",
+            "command": "start \"\" \"${execPath}\" --new-window \"${workspaceFolder}/TestProject\" --extensionDevelopmentPath=\"${workspaceFolder}\" --inspect-brk-extensions=5870",
             "options": {
                 "cwd": "${workspaceFolder}",
                 "shell": {
