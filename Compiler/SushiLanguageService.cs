@@ -134,6 +134,4 @@ public sealed class SushiLanguageService
     {
         // Stub
     }
-
-    internal void Dispose() => throw new NotImplementedException();
 }
