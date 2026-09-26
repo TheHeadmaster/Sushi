@@ -173,12 +173,6 @@ public class ProjectConfigurationBinderTests
 
             some-future-key = "ignored for now"
 
-            [build]
-            default = "debug"
-
-            [build.targets.debug]
-            type = "Sushi.Compiler.Build.DebugTarget"
-
             [future]
             value = "ignored for now"
             """;
