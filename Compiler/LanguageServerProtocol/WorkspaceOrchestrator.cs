@@ -396,6 +396,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
     {
         ArgumentNullException.ThrowIfNull(documentUri);
 
+        // TODO: Throws when vs code opens git changes on a file
         if (!documentUri.IsFile)
         {
             throw new ArgumentException("Only file URIs can be loaded from disk.", nameof(documentUri));
