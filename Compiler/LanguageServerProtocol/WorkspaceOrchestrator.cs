@@ -409,14 +409,21 @@ public sealed class WorkspaceOrchestrator : IDisposable
         ReadOnlySpan<byte> sourceBytes = bytes;
 
         // An initial UTF-8 BOM has no semantic or observable effect in Sushi.
+        sourceBytes = NormalizeBOM(sourceBytes);
+
+        string text = strictUtf8.GetString(sourceBytes);
+
+        return new SourceSnapshot(documentUri, version: null, text);
+    }
+
+    private static ReadOnlySpan<byte> NormalizeBOM(ReadOnlySpan<byte> sourceBytes)
+    {
         if (sourceBytes.Length >= 3 && sourceBytes[0] == 0xEF && sourceBytes[1] == 0xBB && sourceBytes[2] == 0xBF)
         {
             sourceBytes = sourceBytes[3..];
         }
 
-        string text = strictUtf8.GetString(sourceBytes);
-
-        return new SourceSnapshot(documentUri, version: null, text);
+        return sourceBytes;
     }
 
     private async Task AnalyzeDocument(SourceDocument document, SourceSnapshot snapshot, CancellationToken cancellationToken)
