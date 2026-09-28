@@ -127,10 +127,10 @@ public sealed class SourceLexer : Lexer
     /// The diagnostic collection receiving diagnostics associated with the recognized lexical element.
     /// </param>
     /// <param name="encodingIssueIndex">
-    /// THe index of the next uncommitted encoding issue.
+    /// The index of the next uncommitted encoding issue.
     /// </param>
     /// <returns>
-    /// The canonical byte position at whcih lexical analysis should continue.
+    /// The canonical byte position at which lexical analysis should continue.
     /// </returns>
     private static int CommitMatch(SourceSnapshot snapshot, int position, LexTokenMatch match, List<LexToken> tokens, List<SushiDiagnostic> diagnostics, ref int encodingIssueIndex)
     {

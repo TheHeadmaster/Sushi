@@ -1,6 +1,5 @@
 using FluentAssertions;
 using NUnit.Framework;
-using OmniSharp.Extensions.LanguageServer.Server.Messages;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Lexing.Tokenization;
@@ -252,7 +251,7 @@ public class SourceLexerTests
         [
             .. "abc"u8,
             0xFF,
-            .. "def"u8
+            .. "def "u8
         ];
 
         LexerResult result = Lex(source);
