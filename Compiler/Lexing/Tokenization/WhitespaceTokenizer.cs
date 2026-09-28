@@ -8,14 +8,7 @@ namespace Sushi.Lexing.Tokenization;
 public sealed class WhitespaceTokenizer : ILexTokenizer
 {
     /// <inheritdoc />
-    public bool CanStart(byte firstByte)
-    {
-        return firstByte is
-            (byte)' '
-            or (byte)'\t'
-            or (byte)'\r'
-            or (byte)'\n';
-    }
+    public bool CanStart(byte firstByte) => firstByte is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n';
 
     /// <inheritdoc />
     public bool TryRecognize(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match)
