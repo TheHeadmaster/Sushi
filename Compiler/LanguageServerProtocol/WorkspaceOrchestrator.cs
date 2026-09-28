@@ -396,7 +396,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
     {
         ArgumentNullException.ThrowIfNull(documentUri);
 
-        // TODO: Throws when vs code opens git changes on a file
         if (!documentUri.IsFile)
         {
             throw new ArgumentException("Only file URIs can be loaded from disk.", nameof(documentUri));
@@ -408,7 +407,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         ReadOnlySpan<byte> sourceBytes = bytes;
 
-        // An initial UTF-8 BOM has no semantic or observable effect in Sushi.
         sourceBytes = NormalizeBOM(sourceBytes);
 
         string text = strictUtf8.GetString(sourceBytes);
@@ -416,6 +414,16 @@ public sealed class WorkspaceOrchestrator : IDisposable
         return new SourceSnapshot(documentUri, version: null, text);
     }
 
+    /// <summary>
+    /// Normalizes the Byte Order Mark by stripping it if it is there. Per Sushi Specification, an
+    /// initial UTF-8 BOM has no semantic or observable effect on Sushi source files.
+    /// </summary>
+    /// <param name="sourceBytes">
+    /// The source bytes to normalize.
+    /// </param>
+    /// <returns>
+    /// The normalized source bytes.
+    /// </returns>
     private static ReadOnlySpan<byte> NormalizeBOM(ReadOnlySpan<byte> sourceBytes)
     {
         if (sourceBytes.Length >= 3 && sourceBytes[0] == 0xEF && sourceBytes[1] == 0xBB && sourceBytes[2] == 0xBF)

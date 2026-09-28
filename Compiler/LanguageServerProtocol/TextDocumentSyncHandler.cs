@@ -27,14 +27,21 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     /// </returns>
     public override TextDocumentAttributes GetTextDocumentAttributes([NotNull] DocumentUri uri)
     {
-        string extension = Path.GetExtension(uri.Path);
+        Uri documentUri = uri.ToUri();
 
-        return extension switch
+        if (!documentUri.IsFile)
+        {
+            throw new InvalidOperationException($"Unsupported Sushi document URI scheme \"{documentUri.Scheme}\".");
+        }
+
+        string extension = Path.GetExtension(documentUri.LocalPath);
+
+        return extension.ToLowerInvariant() switch
         {
             ".susproj" => new(uri, "susproj"),
             ".susln" => new(uri, "susln"),
             ".sus" => new(uri, "sushi"),
-            _ => throw new InvalidOperationException("Unrecognized text document source file")
+            _ => throw new InvalidOperationException($"Unrecognized Sushi document type \"{extension}\".")
         };
     }
 
@@ -137,9 +144,9 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
         return new TextDocumentSyncRegistrationOptions()
         {
             DocumentSelector = new TextDocumentSelector(
-                new TextDocumentFilter() { Pattern = "**/*.sus" },
-                new TextDocumentFilter() { Pattern = "**/*.susproj" },
-                new TextDocumentFilter() { Pattern = "**/*.susln" }),
+                new TextDocumentFilter() { Scheme = "file", Pattern = "**/*.sus" },
+                new TextDocumentFilter() { Scheme = "file", Pattern = "**/*.susproj" },
+                new TextDocumentFilter() { Scheme = "file", Pattern = "**/*.susln" }),
             Change = TextDocumentSyncKind.Full,
             Save = true
         };
