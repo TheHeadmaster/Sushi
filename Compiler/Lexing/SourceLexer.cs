@@ -31,26 +31,17 @@ public sealed class SourceLexer : Lexer
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            LexTokenMatch? bestMatch = null;
-
-            foreach (ILexTokenizer tokenizer in tokenizers)
+            if (TryGetBestMatch(snapshot, position, cancellationToken, out LexTokenMatch match))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (TryGetBestMatch(snapshot, position, cancellationToken, out LexTokenMatch match))
-                {
-                    CommitMatch(snapshot, position, match, tokens, diagnostics);
-                    position += match.Length;
-                    continue;
-                }
-
-                int unknownEnd = FindUnknownEnd(snapshot, position, cancellationToken);
-
-                tokens.Add(new LexToken(LexTokenType.Unknown, new SourceSpan(snapshot, position, unknownEnd)));
-                position = unknownEnd;
+                CommitMatch(snapshot, position, match, tokens, diagnostics);
+                position += match.Length;
+                continue;
             }
 
-            position++;
+            int unknownEnd = FindUnknownEnd(snapshot, position, cancellationToken);
+
+            tokens.Add(new LexToken(LexTokenType.Unknown, new SourceSpan(snapshot, position, unknownEnd)));
+            position = unknownEnd;
         }
 
         return new LexerResult(snapshot, [.. tokens], [.. diagnostics]);
