@@ -9,28 +9,25 @@ namespace Sushi.Lexing;
 /// </summary>
 public sealed class SourceLexer : Lexer
 {
-    private const string UnterminatedBlockCommentCode = "SUSE001";
-
     private static readonly ILexTokenizer[] tokenizers =
     [
         new CommentTokenizer(),
         new WhitespaceTokenizer()
     ];
 
+    /// <inheritdoc />
     public override LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
-
-        List<SushiDiagnostic> diagnostics = [];
         List<LexToken> tokens = [];
+        List<SushiDiagnostic> diagnostics = [];
 
         int position = 0;
 
-        while (position < bytes.Length)
+        while (position < snapshot.SourceLength)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -38,110 +35,141 @@ public sealed class SourceLexer : Lexer
 
             foreach (ILexTokenizer tokenizer in tokenizers)
             {
-                if (!tokenizer.CanStart(bytes[position]))
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (TryGetBestMatch(snapshot, position, cancellationToken, out LexTokenMatch match))
                 {
+                    CommitMatch(snapshot, position, match, tokens, diagnostics);
+                    position += match.Length;
                     continue;
                 }
-        
-                if (!tokenizer.TryRecognize(snapshot, position, cancellationToken, out LexTokenMatch candidate))
-                {
-                    continue;
-                }
-        
-                if (bestMatch is null || candidate.Length > bestMatch.Value.Length)
-                {
-                    bestMatch = candidate;
-                    continue;
-                }
-        
-                if (candidate.Length == bestMatch.Value.Length && candidate.Type != bestMatch.Value.Type)
-                {
-                    throw new InvalidOperationException("Ambiguous lexical tokenization.");
-                }
+
+                int unknownEnd = FindUnknownEnd(snapshot, position, cancellationToken);
+
+                tokens.Add(new LexToken(LexTokenType.Unknown, new SourceSpan(snapshot, position, unknownEnd)));
+                position = unknownEnd;
             }
 
             position++;
         }
 
-        return new LexerResult(snapshot, [.. tokens], diagnostics);
+        return new LexerResult(snapshot, [.. tokens], [.. diagnostics]);
     }
 
-    private static bool IsLineCommentStart(ReadOnlySpan<byte> bytes, int position)
-        => position + 1 < bytes.Length
-        && bytes[position] == (byte)'/'
-        && bytes[position + 1] == (byte)'/';
-
-    private static bool IsBlockCommentStart(ReadOnlySpan<byte> bytes, int position)
-        => position + 1 < bytes.Length
-        && bytes[position] == (byte)'/'
-        && bytes[position + 1] == (byte)'*';
-
-    private static bool IsBlockCommentEnd(ReadOnlySpan<byte> bytes, int position)
-        => position + 1 < bytes.Length
-        && bytes[position] == (byte)'*'
-        && bytes[position + 1] == (byte)'/';
-
-    private static int SkipLineComment(ReadOnlySpan<byte> bytes, int position)
+    /// <summary>
+    /// Finds the longest lexical match beginning at the specified source position.
+    /// </summary>
+    /// <param name="snapshot">
+    /// The source snapshot being tokenized.
+    /// </param>
+    /// <param name="position">
+    /// The canonical byte position at which recognition begins.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token used to cancel lexical analysis.
+    /// </param>
+    /// <param name="match">
+    /// The longest recognized lexical match when recognition succeeds.
+    /// </param>
+    /// <returns>
+    /// True if a tokenizer recognizes a lexical element at the specified position. False otherwise.
+    /// </returns>
+    private static bool TryGetBestMatch(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match)
     {
-        position += 2;
+        ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
 
-        while (position < bytes.Length)
+        bool found = false;
+        match = default;
+
+        foreach (ILexTokenizer tokenizer in tokenizers)
         {
-            if (bytes[position] is (byte)'\r' or (byte)'\n')
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!tokenizer.CanStart(bytes[position]) || !tokenizer.TryRecognize(snapshot, position, cancellationToken, out LexTokenMatch candidate))
+            {
+                continue;
+            }
+
+            if (candidate.Length <= 0 || candidate.Length > snapshot.SourceLength - position)
+            {
+                throw new InvalidOperationException($"{tokenizer.GetType().Name} produced an invalid lexical match length of {candidate.Length} at byte position {position}.");
+            }
+
+            if (!found || candidate.Length > match.Length)
+            {
+                match = candidate;
+                found = true;
+                continue;
+            }
+
+            if (candidate.Length == match.Length && candidate.Type != match.Type)
+            {
+                throw new InvalidOperationException($"Ambiguous lexical tokenization at byte position {position}: {match.Type} and {candidate.Type} both consume {candidate.Length} bytes.");
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Commits a recognized lexical match to the token and diagnostic streams.
+    /// </summary>
+    /// <param name="snapshot">
+    /// The source snapshot containing the matched lexical element.
+    /// </param>
+    /// <param name="position">
+    /// The starting byte position of the match.
+    /// </param>
+    /// <param name="match">
+    /// The lexical match to commit.
+    /// </param>
+    /// <param name="tokens">
+    /// The token stream receiving the recognized lexical element.
+    /// </param>
+    /// <param name="diagnostics">
+    /// The diagnostic collection receiving diagnostics associated with the recognized lexical element.
+    /// </param>
+    private static void CommitMatch(SourceSnapshot snapshot, int position, LexTokenMatch match, List<LexToken> tokens, List<SushiDiagnostic> diagnostics)
+    {
+        tokens.Add(new LexToken(match.Type, new SourceSpan(snapshot, position, position + match.Length)));
+
+        if (match.Diagnostics is not null)
+        {
+            diagnostics.AddRange(match.Diagnostics);
+        }
+    }
+
+    /// <summary>
+    /// Finds the end of a contiguous unrecognized source run.
+    /// </summary>
+    /// <param name="snapshot">
+    /// The source snapshot being tokenized.
+    /// </param>
+    /// <param name="position">
+    /// The byte position at which the unrecognized run begins.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token used to cancel lexical analysis.
+    /// </param>
+    /// <returns>
+    /// The exclusive byte position at which normal lexical recognition can resume, or the end of the source.
+    /// </returns>
+    private static int FindUnknownEnd(SourceSnapshot snapshot, int position, CancellationToken cancellationToken)
+    {
+        int end = position + 1;
+
+        while (end < snapshot.SourceLength)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (TryGetBestMatch(snapshot, end, cancellationToken, out _))
             {
                 break;
             }
 
-            position++;
+            end++;
         }
 
-        return position;
-    }
-
-    private static int ScanBlockComment(SourceSnapshot snapshot, ReadOnlySpan<byte> bytes, int position, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
-    {
-        int commentStart = position;
-        int depth = 1;
-
-        position += 2;
-
-        while (position < bytes.Length)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (IsBlockCommentStart(bytes, position))
-            {
-                depth++;
-                position += 2;
-
-                continue;
-            }
-
-            if (IsBlockCommentEnd(bytes, position))
-            {
-                depth --;
-                position += 2;
-
-                if (depth == 0)
-                {
-                    return position;
-                }
-
-                continue;
-            }
-
-            position++;
-        }
-
-        diagnostics.Add(
-            new SushiDiagnostic(
-                UnterminatedBlockCommentCode,
-                "Unterminated block comment.",
-                DiagnosticSeverity.Error,
-                new SourceSpan(snapshot, commentStart, commentStart + 2)
-            )
-        );
-
-        return position;
+        return end;
     }
 }
