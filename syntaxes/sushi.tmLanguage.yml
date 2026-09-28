@@ -18,14 +18,14 @@ repository:
     beginCaptures:
       "0":
         name: punctuation.definition.comment.sus
-        end: '(?=\r\n|\r|\n|\z)'
+    end: '(?=\r\n|\r|\n|\z)'
     name: comment.line.documentation.sus
   line-comment:
     begin: '//'
     beginCaptures:
       "0":
         name: punctuation.definition.comment.sus
-        end: '(?=\r\n|\r|\n|\z)'
+    end: '(?=\r\n|\r|\n|\z)'
     name: comment.line.double-slash.sus
   block-comment:
     begin: '/\*'
