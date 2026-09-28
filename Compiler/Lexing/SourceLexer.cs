@@ -12,7 +12,8 @@ public sealed class SourceLexer : Lexer
     private static readonly ILexTokenizer[] tokenizers =
     [
         new CommentTokenizer(),
-        new WhitespaceTokenizer()
+        new WhitespaceTokenizer(),
+        new WordTokenizer(),
     ];
 
     /// <inheritdoc />

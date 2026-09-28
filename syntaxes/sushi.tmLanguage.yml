@@ -5,6 +5,7 @@ fileTypes:
 
 patterns:
   - include: '#comments'
+  - include: '#words'
 
 repository:
   comments:
@@ -18,14 +19,14 @@ repository:
     beginCaptures:
       "0":
         name: punctuation.definition.comment.sus
-    end: '(?=\r\n|\r|\n|\z)'
+    end: '$'
     name: comment.line.documentation.sus
   line-comment:
     begin: '//'
     beginCaptures:
       "0":
         name: punctuation.definition.comment.sus
-    end: '(?=\r\n|\r|\n|\z)'
+    end: '$'
     name: comment.line.double-slash.sus
   block-comment:
     begin: '/\*'
@@ -39,3 +40,48 @@ repository:
     name: comment.block.sus
     patterns:
       - include: '#block-comment'
+  words:
+    patterns:
+      - include: '#escaped-identifier'
+      - include: '#boolean-literal'
+      - include: '#keyword'
+      - include: '#identifier'
+  escaped-identifier:
+    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|dor|for|foreach|in|break|continue|return|propagage|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+    name: variable.other.sus
+    captures:
+      "0":
+        name: variable.other.sus
+  boolean-literal:
+    - match: '(?<![A-Za-z0-9_])true(?![A-Za-z0-9_])'
+      name: constant.language.boolean.true.sus
+    - match: '(?<![A-Za-z0-9_])false(?![A-Za-z0-9_])'
+      name: constant.language.boolean.false.sus
+  keyword:
+    patterns:
+      - match: |-
+          (?x)
+          (?<![A-Za-z0-9_])
+          (?:
+            not|and|or
+            propagate|panic|
+            namespace|package|using|alias|except|global|
+            typeof|is|exactly|inherits|implements|extends|leaf|of|
+            noop|void
+          )
+          (?![A-Za-z0-9_])
+        name: keyword.other.sus
+  identifier:
+    match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+    name: variable.other.readwrite.sus
+  control-keyword:
+    patterns:
+      - match: '(?<![A-Za-z0-9_])(?:if|else|switch|case|default)(?![A-Za-z0-9_])'
+        name: keyword.control.conditional.sus
+      - match: '(?<![A-Za-z0-9_])(?:while|do|for|foreach|in)(?![A-Za-z0-9_])'
+        name: keyword.control.loop.sus
+      - match: '(?<![A-Za-z0-9_])(?:break|continue|return|exit)(?![A-Za-z0-9_])'
+        name: keyword.control.flow.sus
+  modifier-keyword:
+    match: '(?<![A-Za-z0-9_])(?:public|internal|protected|private|static)(?![A-Za-z0-9_])'
+    name: storage.modifier.sus
