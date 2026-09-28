@@ -3,12 +3,11 @@ root = true
 
 # C# files
 [**/*.cs]
+# We genuinely want lowercase conversions for certain things.
+dotnet_diagnostic.CA1308.severity = none
+
 # Sometimes things need to be public for reflection, and this isn't an API so this one can just end up being noise.
 dotnet_diagnostic.CA1515.severity = none
-
-# The amount of objects that return a value that's not really used (such as in method chaining) is just too high.
-# This can often just be noise and I don't want to sprinkle underscores everywhere.
-dotnet_diagnostic.IDE0058.severity = none
 
 # In rare occasions such as testing, I will use underscores in my method names.
 dotnet_diagnostic.CA1707.severity = none
@@ -22,15 +21,19 @@ dotnet_diagnostic.CA1819.severity = none
 # Performance is a concern in a compiler, but sometimes lists are supposed to be immutable over performance optimization.
 dotnet_diagnostic.CA1859.severity = none
 
-# In a program where most everything is async, slapping async on every method name is noise.
-dotnet_diagnostic.VSTHRD200.severity = none
-
 # This warning is intended for libraries, where the code may be executed in arbitrary environments and where code
 # shouldn't make assumptions about the environment or how the caller of the method may be invoking or waiting on it.
 # It is generally appropriate to suppress the warning entirely for projects that represent application code rather
 # than library code; in fact, running this analyzer on application code (for example, button click event handlers in
 # a WinForms or WPF project) is likely to lead to the wrong actions being taken.
 dotnet_diagnostic.CA2007.severity = none
+
+# The amount of objects that return a value that's not really used (such as in method chaining) is just too high.
+# This can often just be noise and I don't want to sprinkle underscores everywhere.
+dotnet_diagnostic.IDE0058.severity = none
+
+# In a program where most everything is async, slapping async on every method name is noise.
+dotnet_diagnostic.VSTHRD200.severity = none
 
 # Indentation and spacing
 indent_size = 4
@@ -273,3 +276,6 @@ dotnet_naming_style.begins_with_i.capitalization = pascal_case
 
 # CA1707: Identifiers should not contain underscores
 dotnet_diagnostic.CA1707.severity = none
+
+# CA1308: Normalize strings to uppercase
+dotnet_diagnostic.CA1308.severity = none
