@@ -186,5 +186,5 @@ public class TomlConfigurationParserTests
             .BeOfType<TomlConfigurationArray>();
     }
 
-    private static SourceSnapshot CreateSnapshot(string text) => new(new Uri("file:///TestProject/Test.susproj"), version: null, text);
+    private static SourceSnapshot CreateSnapshot(string text) => SourceSnapshot.FromText(new Uri("file:///TestProject/Test.susproj"), version: null, text);
 }
