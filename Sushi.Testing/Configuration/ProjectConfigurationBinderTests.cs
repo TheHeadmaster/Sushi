@@ -676,7 +676,7 @@ public class ProjectConfigurationBinderTests
 
     private static SourceSnapshot CreateSnapshot(string text)
     {
-        return new SourceSnapshot(
+        return SourceSnapshot.FromText(
             new Uri("file:///TestProject/Test.susproj"),
             version: null,
             text);

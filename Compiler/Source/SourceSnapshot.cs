@@ -56,7 +56,7 @@ public sealed class SourceSnapshot
     /// </summary>
     public bool IsValidUtf8 => this.encodingIssues.Length == 0;
  
-    public SourceSnapshot(Uri uri, int? version, byte[] bytes)
+    private SourceSnapshot(Uri uri, int? version, byte[] bytes)
     {
         ArgumentNullException.ThrowIfNull(uri);
         ArgumentNullException.ThrowIfNull(bytes);
