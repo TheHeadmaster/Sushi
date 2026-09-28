@@ -1,4 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using NUnit.Framework;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
@@ -272,6 +274,130 @@ public class SourceLexerTests
             .BeEmpty();
     }
 
+    [TestCase("foo", LexTokenType.Identifier, TestName = "Lex Should Recognize Ordinary Identifier")]
+    [TestCase("foo123", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Containing Digits")]
+    [TestCase("_value", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Beginning With Underscore")]
+    [TestCase("__internalThing", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Beginning With Multiple Underscores")]
+    [TestCase("value_", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Ending With underscore")]
+    [TestCase("int32", LexTokenType.Identifier, TestName = "Lex Should Classify Built-In Integer Type Name As Identifier")]
+    [TestCase("returnValue", LexTokenType.Identifier, TestName = "Lex Should Not Shorten Identifier To Keyword Prefix")]
+    [TestCase("Return", LexTokenType.Identifier, TestName = "Lex Should Recognize Keywords Case Sensitively")]
+    [TestCase("True", LexTokenType.Identifier, TestName = "Lex Should Recognize Boolean Literals CaseSensitively")]
+    public void LexShould_14([NotNull] string source, LexTokenType expectedType)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (expectedType, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("true", TestName = "Lex Should Recognize True Boolean Literal")]
+    [TestCase("false", TestName = "Lex Should Recognize False Boolean Literal")]
+    public void LexShould_15([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.BooleanLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("@return", TestName = "Lex Should Recognize Escaped Keyword Identifier")]
+    [TestCase("@true", TestName = "Lex Should Recognize Escaped Boolean Identifier")]
+    [TestCase("@int32", TestName = "Lex Shoudl Recognize Escaped Built-In Type Identifier")]
+    public void LexShould_16([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.EscapedIdentifier, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Not Recognize Escape For Unreserved Identifier")]
+    public void LexShould_17()
+    {
+        LexerResult result = Lex("@foo");
+
+        AssertTokens(result, (LexTokenType.Unknown, 0, 1), (LexTokenType.Identifier, 1, 4));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Not Repair Invalid Identifier With Escape Prefix")]
+    public void LexShould_18()
+    {
+        LexerResult result = Lex("@123abc");
+
+        AssertTokens(result, (LexTokenType.Unknown, 0, 4), (LexTokenType.Identifier, 4, 7));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("_", TestName = "Lex Should not Recognize Single Underscore As Identifier")]
+    [TestCase("__", TestName = "Lex Should Not Recognize Multiple Underscores As Identifier")]
+    [TestCase("___", TestName = "Lex Should not Recognize All Underscore Sequence As Identifier")]
+    public void LexShould_19([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.Unknown, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCaseSource(nameof(KeywordCases))]
+    public void LexShould_20([NotNull] string keyword)
+    {
+        LexerResult result = Lex(keyword);
+
+        AssertTokens(result, (LexTokenType.Keyword, 0, keyword.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCaseSource(nameof(ClassifyBuiltInIntegerTypeCases))]
+    public void LexShould_21([NotNull] string typeName)
+    {
+        LexerResult result = Lex(typeName);
+
+        AssertTokens(result, (LexTokenType.Identifier, 0, typeName.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+        
+    }
+
+    [TestCaseSource(nameof(EscapeBuiltInIntegerTypeCases))]
+    public void LexShould_22([NotNull] string typeName)
+    {
+        string source = $"@{typeName}";
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.EscapedIdentifier, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
     private static LexerResult Lex(string source)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
@@ -345,4 +471,89 @@ public class SourceLexerTests
             .Should()
             .Be(result.Snapshot.SourceLength);
     }
+
+    private static IEnumerable<TestCaseData> KeywordCases()
+    {
+        foreach (string keyword in keywords)
+        {
+            yield return new TestCaseData(keyword)
+                .SetName($"Lex Should Recognize Reserved Keyword \"{keyword}\"");
+        }
+    }
+
+    private static IEnumerable<TestCaseData> ClassifyBuiltInIntegerTypeCases()
+    {
+        foreach (string typeName in builtInIntegerTypeNames)
+        {
+            yield return new TestCaseData(typeName)
+                .SetName($"Lex Should Classify Built-In Integer Type \"{typeName}\" As Identifier");
+        }
+    }
+
+    private static IEnumerable<TestCaseData> EscapeBuiltInIntegerTypeCases()
+    {
+        foreach (string typeName in builtInIntegerTypeNames)
+        {
+            yield return new TestCaseData(typeName)
+                .SetName($"Lex Should Recognize Escaped Built-In Integer Type \"{typeName}\"");
+        }
+    }
+
+    private static readonly string[] keywords =
+    [
+        "not",
+        "and",
+        "or",
+        "if",
+        "else",
+        "switch",
+        "case",
+        "default",
+        "noop",
+        "while",
+        "do",
+        "for",
+        "foreach",
+        "in",
+        "break",
+        "continue",
+        "return",
+        "propagate",
+        "panic",
+        "exit",
+        "namespace",
+        "package",
+        "using",
+        "alias",
+        "except",
+        "global",
+        "typeof",
+        "is",
+        "exactly",
+        "inherits",
+        "implements",
+        "extends",
+        "leaf",
+        "of",
+        "public",
+        "internal",
+        "protected",
+        "private",
+        "static",
+        "void"
+    ];
+
+    private static readonly string[] builtInIntegerTypeNames =
+    [
+        "int8",
+        "uint18",
+        "int16",
+        "uint16",
+        "int32",
+        "uint32",
+        "int64",
+        "uint64",
+        "int128",
+        "uint128"
+    ];
 }
