@@ -21,7 +21,7 @@ public sealed class SolutionAnalyzer
 
         if (!snapshot.IsValidUtf8)
         {
-            return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, encodingDiagnostics, null));
+            return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, encodingDiagnostics, null));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
