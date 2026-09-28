@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using OmniSharp.Extensions.LanguageServer.Server.Messages;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Lexing.Tokenization;
@@ -193,9 +194,95 @@ public class SourceLexerTests
             .BeEmpty();
     }
 
+    [TestCase(TestName = "Lex Should Carve Malformed UTF-8 Out Of Line Comment")]
+    public void LexShould_11()
+    {
+        byte[] source =
+        [
+            .. "// abc "u8,
+            0xFF,
+            .. " def\r\n"u8
+        ];
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result,
+            (LexTokenType.LineComment, 0, 7),
+            (LexTokenType.Unknown, 7, 8),
+            (LexTokenType.LineComment, 8, 12),
+            (LexTokenType.LineTerminator, 12, 14)
+        );
+
+        AssertTokensPartitionSource(result);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Carve Malformed UTF-8 Out Of Block Comment")]
+    public void LexShould_12()
+    {
+        byte[] source =
+        [
+            .. "/* abc "u8,
+            0xFF,
+            .. " def */"u8
+        ];
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result,
+            (LexTokenType.BlockComment, 0, 7),
+            (LexTokenType.Unknown, 7, 8),
+            (LexTokenType.BlockComment, 8, 15)
+        );
+
+        AssertTokensPartitionSource(result);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Keep Malformed UTF-8 Separate From Adjacent Unknown Source")]
+    public void LexShould_13()
+    {
+        byte[] source =
+        [
+            .. "abc"u8,
+            0xFF,
+            .. "def"u8
+        ];
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result,
+            (LexTokenType.Unknown, 0, 3),
+            (LexTokenType.Unknown, 3, 4),
+            (LexTokenType.Unknown, 4, 7),
+            (LexTokenType.Whitespace, 7, 8)
+        );
+
+        AssertTokensPartitionSource(result);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
     private static LexerResult Lex(string source)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
+
+        SourceLexer lexer = new();
+
+        return lexer.Lex(snapshot, CancellationToken.None);
+    }
+
+    private static LexerResult Lex(ReadOnlySpan<byte> source)
+    {
+        SourceSnapshot snapshot = SourceSnapshot.FromUtf8(testUri, version: null, source);
 
         SourceLexer lexer = new();
 
