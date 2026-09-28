@@ -161,9 +161,9 @@ public class SourceLexerTests
             (LexTokenType.Unknown, 0, 7),
             (LexTokenType.Whitespace, 7, 8));
 
-            result.Diagnostics
-                .Should()
-                .BeEmpty();
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Lex Should Partition Entire Source Without Gaps Or Overlaps")]
@@ -208,7 +208,7 @@ public class SourceLexerTests
             .Should()
             .HaveCount(expected.Length);
 
-            for (int i = 0; i < expected.Length; i++)
+        for (int i = 0; i < expected.Length; i++)
         {
             LexToken token = result.Tokens[i];
 
