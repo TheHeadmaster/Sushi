@@ -18,6 +18,15 @@ public sealed class ProjectAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        IReadOnlyList<SushiDiagnostic> encodingDiagnostics = SourceEncodingDiagnostics.Create(snapshot);
+
+        if (!snapshot.IsValidUtf8)
+        {
+            return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, encodingDiagnostics, null));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         TomlConfigurationParseResult parseResult = this.parser.Parse(snapshot, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();

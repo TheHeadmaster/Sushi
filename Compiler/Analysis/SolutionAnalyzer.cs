@@ -1,4 +1,5 @@
 using Sushi.Configuration;
+using Sushi.Diagnostics;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -13,6 +14,15 @@ public sealed class SolutionAnalyzer
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        IReadOnlyList<SushiDiagnostic> encodingDiagnostics = SourceEncodingDiagnostics.Create(snapshot);
+
+        if (!snapshot.IsValidUtf8)
+        {
+            return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, encodingDiagnostics, null));
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 

@@ -302,7 +302,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 document = existing;
             }
 
-            editorSnapshot = new SourceSnapshot(documentUri, version, text);
+            editorSnapshot = SourceSnapshot.FromText(documentUri, version, text);
 
             document.UpdateEditor(editorSnapshot);
             
@@ -337,7 +337,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
     public async Task ChangeDocument([NotNull] Uri documentUri, int? version, string text, CancellationToken cancellationToken)
     {
         SourceDocument document;
-        SourceSnapshot snapshot = new(documentUri, version, text);
+        SourceSnapshot snapshot = SourceSnapshot.FromText(documentUri, version, text);
 
         await this.mutationGate.WaitAsync(cancellationToken);
 
@@ -390,8 +390,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
         await this.AnalyzeDocument(document, snapshot, cancellationToken);
     }
 
-    private static readonly UTF8Encoding strictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
-
     private static async Task<SourceSnapshot> LoadDiskSnapshot(Uri documentUri, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(documentUri);
@@ -405,33 +403,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         byte[] bytes = await File.ReadAllBytesAsync(documentUri.LocalPath, cancellationToken);
 
-        ReadOnlySpan<byte> sourceBytes = bytes;
-
-        sourceBytes = NormalizeBOM(sourceBytes);
-
-        string text = strictUtf8.GetString(sourceBytes);
-
-        return new SourceSnapshot(documentUri, version: null, text);
-    }
-
-    /// <summary>
-    /// Normalizes the Byte Order Mark by stripping it if it is there. Per Sushi Specification, an
-    /// initial UTF-8 BOM has no semantic or observable effect on Sushi source files.
-    /// </summary>
-    /// <param name="sourceBytes">
-    /// The source bytes to normalize.
-    /// </param>
-    /// <returns>
-    /// The normalized source bytes.
-    /// </returns>
-    private static ReadOnlySpan<byte> NormalizeBOM(ReadOnlySpan<byte> sourceBytes)
-    {
-        if (sourceBytes.Length >= 3 && sourceBytes[0] == 0xEF && sourceBytes[1] == 0xBB && sourceBytes[2] == 0xBF)
-        {
-            sourceBytes = sourceBytes[3..];
-        }
-
-        return sourceBytes;
+        return SourceSnapshot.FromUtf8(documentUri, version: null, bytes);
     }
 
     private async Task AnalyzeDocument(SourceDocument document, SourceSnapshot snapshot, CancellationToken cancellationToken)
@@ -590,8 +562,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
             throw new InvalidOperationException("Diagnostic belongs to a different source snapshot.");
         }
 
-        (int startLine, int startCharacter) = ToLSPPosition(span.Snapshot, span.Start);
-        (int endLine, int endCharacter) = ToLSPPosition(span.Snapshot, span.End);
+        (int startLine, int startCharacter) = span.Snapshot.GetUtf16Position(span.Start);
+        (int endLine, int endCharacter) = span.Snapshot.GetUtf16Position(span.End);
 
         return new Diagnostic
         {
@@ -601,45 +573,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
             Range = new LSPRange(startLine, startCharacter, endLine, endCharacter),
             Source = "Sushi Compiler"
         };
-    }
-
-    private static (int Line, int Character) ToLSPPosition(SourceSnapshot snapshot, int byteOffset)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-
-        if (byteOffset < 0 || byteOffset > snapshot.Bytes.Length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(byteOffset));
-        }
-
-        IReadOnlyList<int> lineStarts = snapshot.LineStarts;
-        
-        int low = 0;
-        int high = lineStarts.Count - 1;
-        int line = 0;
-
-        while (low <= high)
-        {
-            int middle = low + ((high - low) / 2);
-
-            if (lineStarts[middle] <= byteOffset)
-            {
-                line = middle;
-                low = middle + 1;
-            }
-            else
-            {
-                high = middle - 1;
-            }
-        }
-
-        int lineStart = lineStarts[line];
-
-        ReadOnlySpan<byte> prefixBytes = snapshot.Bytes.Span[lineStart..byteOffset];
-
-        string prefix = strictUtf8.GetString(prefixBytes);
-
-        return (line, prefix.Length);
     }
 
     private void PublishDiagnosticsForAllDocuments(CancellationToken cancellationToken)

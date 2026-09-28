@@ -1,3 +1,4 @@
+using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Source;
 
@@ -20,6 +21,12 @@ public sealed class SourceAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, lexerResult.Diagnostics));
+            SushiDiagnostic[] diagnostics =
+            [
+                .. SourceEncodingDiagnostics.Create(snapshot),
+                .. lexerResult.Diagnostics
+            ];
+
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics));
     }
 }
