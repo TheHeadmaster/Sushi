@@ -44,26 +44,26 @@ repository:
     patterns:
       - include: '#escaped-identifier'
       - include: '#boolean-literal'
+      - include: '#control-keyword'
+      - include: '#modifier-keyword'
       - include: '#keyword'
       - include: '#identifier'
   escaped-identifier:
-    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|dor|for|foreach|in|break|continue|return|propagage|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
-    name: variable.other.sus
-    captures:
-      "0":
-        name: variable.other.sus
+    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+    name: variable.other.readwrite.sus
   boolean-literal:
-    - match: '(?<![A-Za-z0-9_])true(?![A-Za-z0-9_])'
-      name: constant.language.boolean.true.sus
-    - match: '(?<![A-Za-z0-9_])false(?![A-Za-z0-9_])'
-      name: constant.language.boolean.false.sus
+    patterns:
+      - match: '(?<![A-Za-z0-9_])true(?![A-Za-z0-9_])'
+        name: constant.language.boolean.true.sus
+      - match: '(?<![A-Za-z0-9_])false(?![A-Za-z0-9_])'
+        name: constant.language.boolean.false.sus
   keyword:
     patterns:
       - match: |-
           (?x)
           (?<![A-Za-z0-9_])
           (?:
-            not|and|or
+            not|and|or|
             propagate|panic|
             namespace|package|using|alias|except|global|
             typeof|is|exactly|inherits|implements|extends|leaf|of|

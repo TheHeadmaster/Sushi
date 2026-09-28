@@ -244,7 +244,7 @@ public sealed class WordTokenizer : ILexTokenizer
     /// <returns>
     /// True when the source byte is a valid part for an ordinary identifier. False otherwise.
     /// </returns>
-    private static bool IsIdentifierPart(byte value) => IsIdentifierStart(value) || value is >= (byte)'0' and (byte)'9';
+    private static bool IsIdentifierPart(byte value) => IsIdentifierStart(value) || value is >= (byte)'0' and <= (byte)'9';
 
     /// <summary>
     /// Determines whether a source byte is an ASCII letter.

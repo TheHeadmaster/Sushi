@@ -140,12 +140,12 @@ public class SourceLexerTests
     [TestCase(TestName = "Lex Should Group Contiguous Unrecognized Source Into Unknown Token")]
     public void LexShould_8()
     {
-        LexerResult result = Lex("abc   def");
+        LexerResult result = Lex("ня   foo");
 
         AssertTokens(result, 
-            (LexTokenType.Unknown, 0, 3),
-            (LexTokenType.Whitespace, 3, 6),
-            (LexTokenType.Unknown, 6, 9));
+            (LexTokenType.Unknown, 0, 4),
+            (LexTokenType.Whitespace, 4, 7),
+            (LexTokenType.Identifier, 7, 10));
 
         result.Diagnostics
             .Should()
@@ -158,7 +158,9 @@ public class SourceLexerTests
         LexerResult result = Lex("abc/def ");
 
         AssertTokens(result, 
-            (LexTokenType.Unknown, 0, 7),
+            (LexTokenType.Identifier, 0, 3),
+            (LexTokenType.Unknown, 3, 4),
+            (LexTokenType.Identifier, 4, 7),
             (LexTokenType.Whitespace, 7, 8));
 
         result.Diagnostics
@@ -177,13 +179,13 @@ public class SourceLexerTests
             .Select(token => token.Type)
             .Should()
             .Equal(
-                LexTokenType.Unknown,
+                LexTokenType.Identifier,
                 LexTokenType.Whitespace,
                 LexTokenType.LineComment,
                 LexTokenType.LineTerminator,
                 LexTokenType.BlockComment,
                 LexTokenType.Whitespace,
-                LexTokenType.Unknown
+                LexTokenType.Identifier
             );
             
         AssertTokensPartitionSource(result);
@@ -257,9 +259,9 @@ public class SourceLexerTests
         LexerResult result = Lex(source);
 
         AssertTokens(result,
-            (LexTokenType.Unknown, 0, 3),
+            (LexTokenType.Identifier, 0, 3),
             (LexTokenType.Unknown, 3, 4),
-            (LexTokenType.Unknown, 4, 7),
+            (LexTokenType.Identifier, 4, 7),
             (LexTokenType.Whitespace, 7, 8)
         );
 
