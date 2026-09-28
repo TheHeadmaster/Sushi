@@ -2,3 +2,40 @@ name: Sushi
 scopeName: source.sus
 fileTypes:
   - sus
+
+patterns:
+  - include: '#comments'
+
+repository:
+  comments:
+    patterns:
+      - include: '#documentation-line-comment'
+      - include: '#line-comment'
+      - include: '#block-comment'
+  
+  documentation-line-comment:
+    begin: '///'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.comment.sus
+        end: '(?=\r\n|\r|\n|\z)'
+    name: comment.line.documentation.sus
+  line-comment:
+    begin: '//'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.comment.sus
+        end: '(?=\r\n|\r|\n|\z)'
+    name: comment.line.double-slash.sus
+  block-comment:
+    begin: '/\*'
+    beginCaptures:
+      "0":
+        name: punctuation.definition.comment.begin.sus
+    end: '\*/'
+    endCaptures:
+      "0":
+        name: punctuation.definition.comment.end.sus
+    name: comment.block.sus
+    patterns:
+      - include: '#block-comment'
