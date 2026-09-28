@@ -1,4 +1,5 @@
 using Sushi.Diagnostics;
+using Sushi.Lexing.Tokenization;
 using Sushi.Source;
 
 namespace Sushi.Lexing;
@@ -9,6 +10,12 @@ namespace Sushi.Lexing;
 public sealed class SourceLexer : Lexer
 {
     private const string UnterminatedBlockCommentCode = "SUSE001";
+
+    private static readonly ILexTokenizer[] tokenizers =
+    [
+        new CommentTokenizer(),
+        new WhitespaceTokenizer()
+    ];
 
     public override LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken)
     {
@@ -26,22 +33,36 @@ public sealed class SourceLexer : Lexer
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (IsLineCommentStart(bytes, position))
-            {
-                position = SkipLineComment(bytes, position);
-                continue;
-            }
+            LexTokenMatch? bestMatch = null;
 
-            if (IsBlockCommentStart(bytes, position))
+            foreach (ILexTokenizer tokenizer in tokenizers)
             {
-                position = ScanBlockComment(snapshot, bytes, position, diagnostics, cancellationToken);
-                continue;
+                if (!tokenizer.CanStart(bytes[position]))
+                {
+                    continue;
+                }
+        
+                if (!tokenizer.TryRecognize(snapshot, position, cancellationToken, out LexTokenMatch candidate))
+                {
+                    continue;
+                }
+        
+                if (bestMatch is null || candidate.Length > bestMatch.Value.Length)
+                {
+                    bestMatch = candidate;
+                    continue;
+                }
+        
+                if (candidate.Length == bestMatch.Value.Length && candidate.Type != bestMatch.Value.Type)
+                {
+                    throw new InvalidOperationException("Ambiguous lexical tokenization.");
+                }
             }
 
             position++;
         }
 
-        return new LexerResult(snapshot, diagnostics);
+        return new LexerResult(snapshot, tokens, diagnostics);
     }
 
     private static bool IsLineCommentStart(ReadOnlySpan<byte> bytes, int position)
