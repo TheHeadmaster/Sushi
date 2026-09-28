@@ -1,4 +1,5 @@
 using Sushi.Diagnostics;
+using Sushi.Lexing.Tokenization;
 using Sushi.Source;
 
 namespace Sushi.Lexing;

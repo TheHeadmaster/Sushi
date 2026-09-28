@@ -26,6 +26,7 @@ public sealed class SourceLexer : Lexer
         ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
 
         List<SushiDiagnostic> diagnostics = [];
+        List<LexToken> tokens = [];
 
         int position = 0;
 
@@ -62,7 +63,7 @@ public sealed class SourceLexer : Lexer
             position++;
         }
 
-        return new LexerResult(snapshot, tokens, diagnostics);
+        return new LexerResult(snapshot, [.. tokens], diagnostics);
     }
 
     private static bool IsLineCommentStart(ReadOnlySpan<byte> bytes, int position)

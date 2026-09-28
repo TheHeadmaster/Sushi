@@ -6,5 +6,5 @@ public interface ILexTokenizer
 {
     public bool CanStart(byte firstByte);
 
-    public bool TryRecognize(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match)
+    public bool TryRecognize(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match);
 }
