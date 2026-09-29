@@ -732,6 +732,19 @@ public class SourceLexerTests
             .NotContain(diagnostic => diagnostic.Span.Length == 0);
     }
 
+    [TestCase(".", TestName = "Lex Should Recognize Dot Punctuation")]
+    [TestCase(";", TestName = "Lex Should Recognize Semicolon Punctuation")]
+    public void LexShould_36([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.Punctuation, 0, 1));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
     private static LexerResult Lex(string source)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);

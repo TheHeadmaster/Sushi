@@ -8,6 +8,7 @@ public enum LexTokenType
     LineComment,
     DocumentationLineComment,
     BlockComment,
+    Punctuation,
     Identifier,
     EscapedIdentifier,
     Keyword,
