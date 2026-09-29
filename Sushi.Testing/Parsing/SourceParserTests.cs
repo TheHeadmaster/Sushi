@@ -59,8 +59,20 @@ public class SourceParserTests
         declaration.SemicolonToken.IsMissing
             .Should()
             .BeFalse();
-    }
 
+        declaration.Span.Snapshot
+            .Should()
+            .BeSameAs(result.Tree.Snapshot);
+
+        declaration.Span.Start
+            .Should()
+            .Be(0);
+
+        declaration.Span.End
+            .Should()
+            .Be("package Sushi.StandardLibrary.Text;".Length);
+    }
+    
     private static ParserResult Parse(string source)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);

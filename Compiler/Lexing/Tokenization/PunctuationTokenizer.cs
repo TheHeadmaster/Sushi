@@ -3,7 +3,7 @@ using Sushi.Source;
 namespace Sushi.Lexing.Tokenization;
 
 /// <summary>
-/// Recognizes punctuation that has a lexical meaning in Sushi, such as operators or prefixes.
+/// Recognizes punctuation whose lexical meaning is established by supported Sushi syntax.
 /// </summary>
 public sealed class PunctuationTokenizer : ILexTokenizer
 {

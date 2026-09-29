@@ -1,7 +1,7 @@
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
-/// Identifiers the grammatical role of syntax nodes and tokens in a Sushi concrete syntax tree.
+/// Identifies the grammatical role of syntax nodes and tokens in a Sushi concrete syntax tree.
 /// </summary>
 public enum SyntaxType
 {

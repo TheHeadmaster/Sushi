@@ -11,7 +11,7 @@ public sealed class PackageDeclarationSyntax : SyntaxNode
     public override SyntaxType Type => SyntaxType.PackageDeclaration;
 
     /// <inheritdoc />
-    public override SourceSpan Span => new(this.PackageKeyword.Span.Snapshot, this.PackageKeyword.Span.Start, this.PackageKeyword.Span.End);
+    public override SourceSpan Span => new(this.PackageKeyword.Span.Snapshot, this.PackageKeyword.Span.Start, this.SemicolonToken.Span.End);
 
     /// <summary>
     /// Gets the keyword introducing the declaration.

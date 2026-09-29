@@ -38,21 +38,15 @@ public sealed class SourceParser
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration), [.. state.Diagnostics]);
     }
 
-    private sealed class ParserState
+    private sealed class ParserState(LexerResult lexerResult, CancellationToken cancellationToken)
     {
-        private readonly LexerResult lexerResult;
+        private readonly LexerResult lexerResult = lexerResult;
 
-        private readonly CancellationToken cancellationToken;
+        private readonly CancellationToken cancellationToken = cancellationToken;
 
         private readonly List<SushiDiagnostic> diagnostics = [];
 
         private int position;
-
-        public ParserState(LexerResult lexerResult, CancellationToken cancellationToken)
-        {
-            this.lexerResult = lexerResult;
-            this.cancellationToken = cancellationToken;
-        }
 
         public IReadOnlyList<SushiDiagnostic> Diagnostics => this.diagnostics;
 
@@ -140,6 +134,8 @@ public sealed class SourceParser
 
         private bool TryGetCurrent(out LexToken token)
         {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
             this.MovePastTrivia();
 
             if (this.position >= this.lexerResult.Tokens.Count)
