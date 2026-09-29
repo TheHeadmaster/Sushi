@@ -282,6 +282,8 @@ public class SourceLexerTests
     [TestCase("returnValue", LexTokenType.Identifier, TestName = "Lex Should Not Shorten Identifier To Keyword Prefix")]
     [TestCase("Return", LexTokenType.Identifier, TestName = "Lex Should Recognize Keywords Case Sensitively")]
     [TestCase("True", LexTokenType.Identifier, TestName = "Lex Should Recognize Boolean Literals Case Sensitively")]
+    [TestCase("ifelse", LexTokenType.Identifier, TestName = "Lex Should Preserve Maximal Munch Across Keyword Shaped Identifier")]
+    [TestCase("true42", LexTokenType.Identifier, TestName = "Lex Should Preserve Maximal Munch Across Boolean Shaped Identifier")]
     public void LexShould_14([NotNull] string source, LexTokenType expectedType)
     {
         LexerResult result = Lex(source);
@@ -344,7 +346,21 @@ public class SourceLexerTests
 
         result.Diagnostics
             .Should()
-            .BeEmpty();
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(4);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(4);
     }
 
     [TestCase("_", TestName = "Lex Should Not Recognize Single Underscore As Identifier")]
@@ -454,8 +470,6 @@ public class SourceLexerTests
     [TestCase("b#102", 4, TestName = "Lex Should Reject Binary Literal With Non Binary Digit In Any Position")]
     [TestCase("o#8", 2, TestName = "Lex Should Reject Octal Literal With Non Octal Digit")]
     [TestCase("o#758", 4, TestName = "Lex Should Reject Octal Literal With Non Octal Digit In Any Position")]
-    [TestCase("x#g", 2, TestName = "Lex Should Reject Hexadecimal Literal Prefix Non Hexadecimal Digit")]
-    [TestCase("x#9fg", 4, TestName = "Lex Should Reject Hexadecimal Literal Prefix Non Hexadecimal Digit In Any Position")]
     public void LexShould_25([NotNull] string source, int invalidDigitPosition)
     {
         LexerResult result = Lex(source);
@@ -531,21 +545,33 @@ public class SourceLexerTests
             .Equal((6, 7), (7, 8));
     }
 
-    [TestCase(TestName = "Lex Should Stop Hexadecimal Literal Before Non Hexadecimal Identifier Character")]
+    [TestCase(TestName = "Lex Should Diagnose Adjacent Hexadecimal Literal And Identifier")]
     public void LexShould_28()
     {
         LexerResult result = Lex("x#12g");
 
-        AssertTokens(result,
-            (LexTokenType.IntegerLiteral, 0, 4),
-            (LexTokenType.Identifier, 4, 5));
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, 4), (LexTokenType.Identifier, 4, 5));
 
         result.Diagnostics
             .Should()
-            .BeEmpty();
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(4);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(4);
     }
 
-    [TestCase(TestName = "Lex Should Stop Binary Literal Before Following Identifier Text")]
+    [TestCase(TestName = "Lex Should Diagnose Adjacent Binary Literal And Identifier")]
     public void LexShould_29()
     {
         LexerResult result = Lex("b#10cat");
@@ -556,36 +582,154 @@ public class SourceLexerTests
 
         result.Diagnostics
             .Should()
-            .BeEmpty();
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(4);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(4);
     }
 
     [TestCase(TestName = "Lex Should Not Recognize C Style Binary Prefix")]
     public void LexShould_30()
     {
         LexerResult result = Lex("0b101");
-    
+
         AssertTokens(result,
             (LexTokenType.IntegerLiteral, 0, 1),
             (LexTokenType.Identifier, 1, 5));
-    
+
         result.Diagnostics
             .Should()
-            .BeEmpty();
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(1);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(1);
     }
-    
+
     [TestCase(TestName = "Lex Should Recognize Radix Prefixes Case Sensitively")]
     public void LexShould_31()
     {
         LexerResult result = Lex("B#101");
-    
+
         AssertTokens(result,
             (LexTokenType.Identifier, 0, 1),
             (LexTokenType.Unknown, 1, 2),
             (LexTokenType.IntegerLiteral, 2, 5));
-    
+
         result.Diagnostics
             .Should()
             .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Suppress Adjacency Diagnostic When Missing Radix Digit Explains Boundary")]
+    public void LexShould_32()
+    {
+        LexerResult result = Lex("b#foo");
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, 2), (LexTokenType.Identifier, 2, 5));
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(0);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(2);
+    }
+
+    [TestCase(TestName = "Lex Should Preserve Adjacency Diagnostic When Existing Error Does Not Explain Boundary")]
+    public void LexShould_33()
+    {
+        LexerResult result = Lex("b#102foo");
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, 5), (LexTokenType.Identifier, 5, 8));
+
+        result.Diagnostics
+            .Should()
+            .HaveCount(2);
+
+        result.Diagnostics
+            .Select(diagnostic => (diagnostic.Span.Start, diagnostic.Span.End))
+            .Should()
+            .Equal(
+                (4, 5),
+                (5, 5));
+    }
+
+    [TestCase("42foo", 2, TestName = "Lex Should Reject Adjacent Integer Literal And Identifier")]
+    [TestCase("42true", 2, TestName = "Lex Should Reject Adjacent Integer Literal And Boolean Literal")]
+    [TestCase("42@return", 2, TestName = "Lex Should Reject Adjacent Integer Literal And Escaped Identifier")]
+    [TestCase("b#10x#20", 4, TestName = "Lex Should Reject Adjacent Integer Literals")]
+    [TestCase("foo@return", 3, TestName = "Lex Should Reject Adjacent Identifier And Escaped Identifier")]
+    [TestCase("return@public", 6, TestName = "Lex Should Reject Adjacent Keyword And Escaped Identifier")]
+    [TestCase("true@false", 4, TestName = "Lex Should Reject Adjacent Boolean Literal And Escaped Identifier")]
+    [TestCase("42i32", 2, TestName = "Lex Should Reject Integer Suffix Like Adjacency")]
+    public void LexShould_34([NotNull] string source, int boundary)
+    {
+        LexerResult result = Lex(source);
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(boundary);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(boundary);
+    }
+
+    [TestCase("42 foo", TestName = "Lex Should Allow Whitespace Between Separation Required Elements")]
+    [TestCase("42\nfoo", TestName = "Lex Should Allow Line Terminator Between Separation Required Elements")]
+    [TestCase("42/* comment */foo", TestName = "Lex Should Allow Comment Between Separation Required Elements")]
+    [TestCase("42$foo", TestName = "Lex Should Allow Unknown Recovery Element Between Separation Required Elements")]
+    [TestCase("42+foo", TestName = "Lex Should Allow Other Source Element Between Separation Required Elements")]
+    public void LexShould_35([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        result.Diagnostics
+            .Should()
+            .NotContain(diagnostic => diagnostic.Span.Length == 0);
     }
 
     private static LexerResult Lex(string source)

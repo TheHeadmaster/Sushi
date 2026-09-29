@@ -164,7 +164,9 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
                 new SourceSpan(snapshot, position, position + 2)));
         }
 
-        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnostics.Count == 0 ? null : diagnostics);
+        bool diagnosesFollowingBoundary = end == bodyStart;
+
+        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnostics.Count == 0 ? null : diagnostics, diagnosesFollowingBoundary);
     }
 
     /// <summary>
@@ -177,7 +179,7 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
     /// The position to check for the radix prefix.
     /// </param>
     /// <param name="radix">
-    /// The radix prefix if found. Defaults to <see cref="IntegerRafix.Binary"/> if it wasn't found.
+    /// When the return value is true, this contains the recognized radix. When the return value is false, this contains the default value (0).
     /// </param>
     /// <returns>
     /// True if the radix prefix was found. False otherwise.
@@ -211,7 +213,7 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
     /// The radix to check against.
     /// </param>
     /// <returns>
-    /// True if the byte is a legal byte for the specified radix. False otherwise.
+    /// True when the byte belongs to the recoverable numeric-looking body of a literal using the specified radix. False otherwise.
     /// </returns>
     private static bool IsRadixBodyByte(byte value, IntegerRadix radix)
         => IsAsciiDecimalDigit(value) || value == (byte)'_' || (radix == IntegerRadix.Hexadecimal && IsAsciiHexadecimalLetter(value));

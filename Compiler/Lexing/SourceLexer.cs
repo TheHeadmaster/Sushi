@@ -9,6 +9,9 @@ namespace Sushi.Lexing;
 /// </summary>
 public sealed class SourceLexer : Lexer
 {
+    // Placeholder until diagnostic numbering is settled.
+    private const string MissingLexicalSeparationCode = "SUSE005";
+
     private static readonly ILexTokenizer[] tokenizers =
     [
         new CommentTokenizer(),
@@ -26,6 +29,7 @@ public sealed class SourceLexer : Lexer
 
         List<LexToken> tokens = [];
         List<SushiDiagnostic> diagnostics = [];
+        HashSet<int> specificallyDiagnosedBoundaries = [];
 
         int position = 0;
         int encodingIssueIndex = 0;
@@ -42,7 +46,15 @@ public sealed class SourceLexer : Lexer
 
             if (TryGetBestMatch(snapshot, position, cancellationToken, out LexTokenMatch match))
             {
+                int matchEnd = position + match.Length;
+
                 position = CommitMatch(snapshot, position, match, tokens, diagnostics, ref encodingIssueIndex);
+
+                if (match.DiagnosesFollowingBoundary)
+                {
+                    specificallyDiagnosedBoundaries.Add(matchEnd);
+                }
+
                 continue;
             }
 
@@ -51,6 +63,8 @@ public sealed class SourceLexer : Lexer
             tokens.Add(new LexToken(LexTokenType.Unknown, new SourceSpan(snapshot, position, unknownEnd)));
             position = unknownEnd;
         }
+
+        AddLexicalAdjacencyDiagnostics(snapshot, tokens, diagnostics, specificallyDiagnosedBoundaries);
 
         return new LexerResult(snapshot, [.. tokens], [.. diagnostics]);
     }
@@ -262,4 +276,58 @@ public sealed class SourceLexer : Lexer
         end = issue.End;
         return true;
     }
+
+    /// <summary>
+    /// Adds diagnostics for directly adjacent lexical elements whose classifications require source separation.
+    /// </summary>
+    /// <param name="snapshot">
+    /// The source snapshot containing the lexical elements.
+    /// </param>
+    /// <param name="tokens">
+    /// The completed top-level lexical and recovery stream in source order.
+    /// </param>
+    /// <param name="diagnostics">
+    /// The diagnostic collection receiving lexical-adjacency errors.
+    /// </param>
+    /// <param name="specificallyDiagnosedBoundaries">
+    /// Source positions whose lexical failure is already semantically explained by a more specific diagnostic.
+    /// </param>
+    private static void AddLexicalAdjacencyDiagnostics(SourceSnapshot snapshot, IReadOnlyList<LexToken> tokens, List<SushiDiagnostic> diagnostics, HashSet<int> specificallyDiagnosedBoundaries)
+    {
+        for (int index = 1; index < tokens.Count; index++)
+        {
+            LexToken previous = tokens[index - 1];
+            LexToken current = tokens[index];
+
+            if (previous.Span.End != current.Span.Start || !IsSeparationRequired(previous.Type) || !IsSeparationRequired(current.Type))
+            {
+                continue;
+            }
+
+            int boundary = previous.Span.End;
+
+            if (specificallyDiagnosedBoundaries.Contains(boundary))
+            {
+                continue;
+            }
+
+            diagnostics.Add(new SushiDiagnostic(MissingLexicalSeparationCode, "Separation is required between adjacent lexical elements.", DiagnosticSeverity.Error, new SourceSpan(snapshot, boundary, boundary)));
+        }
+    }
+
+    /// <summary>
+    /// Determines whether a lexical classification requires separation from another separation-required lexical element.
+    /// </summary>
+    /// <param name="type">
+    /// The lexical classification to inspect.
+    /// </param>
+    /// <returns>
+    /// True when an element of the specified type requires separation from another separation-required element. False otherwise.
+    /// </returns>
+    private static bool IsSeparationRequired(LexTokenType type)
+        => type is LexTokenType.Identifier
+            or LexTokenType.EscapedIdentifier
+            or LexTokenType.Keyword
+            or LexTokenType.IntegerLiteral
+            or LexTokenType.BooleanLiteral;
 }
