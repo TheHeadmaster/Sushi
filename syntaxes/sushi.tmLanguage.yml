@@ -5,6 +5,7 @@ fileTypes:
 
 patterns:
   - include: '#comments'
+  - include: '#integer-literals'
   - include: '#words'
 
 repository:
@@ -85,3 +86,13 @@ repository:
   modifier-keyword:
     match: '(?<![A-Za-z0-9_])(?:public|internal|protected|private|static)(?![A-Za-z0-9_])'
     name: storage.modifier.sus
+  integer-literals:
+    patterns:
+      - match: '(?<![A-Za-z0-9_])b#[0-9_]*'
+        name: constant.numeric.integer.binary.sus
+      - match: '(?<![A-Za-z0-9_])o#[0-9_]*'
+        name: constant.numeric.integer.octal.sus
+      - match: '(?<![A-Za-z0-9_])x#[0-9A-Fa-f_]*'
+        name: constant.numeric.integer.hexadecimal.sus
+      - match: '(?<![A-Za-z0-9_])[0-9](?:[0-9]|_(?=[0-9]))*'
+        name: constant.numeric.integer.decimal.sus

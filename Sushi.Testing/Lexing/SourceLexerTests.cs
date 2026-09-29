@@ -337,7 +337,10 @@ public class SourceLexerTests
     {
         LexerResult result = Lex("@123abc");
 
-        AssertTokens(result, (LexTokenType.Unknown, 0, 4), (LexTokenType.Identifier, 4, 7));
+        AssertTokens(result,
+            (LexTokenType.Unknown, 0, 1),
+            (LexTokenType.IntegerLiteral, 1, 4),
+            (LexTokenType.Identifier, 4, 7));
 
         result.Diagnostics
             .Should()
@@ -392,6 +395,194 @@ public class SourceLexerTests
 
         AssertTokens(result, (LexTokenType.EscapedIdentifier, 0, source.Length));
 
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("0", TestName = "Lex Should Recognize Single Character Integer Literal")]
+    [TestCase("42", TestName = "Lex Should Recognize Multiple Character Integer Literal")]
+    [TestCase("00042", TestName = "Lex Should Recognize Integer Literal With Leading Zeroes")]
+    [TestCase("000_042", TestName = "Lex Should Recognize Integer Literal With Single Separator")]
+    [TestCase("1_000_000", TestName = "Lex Should Recognize Integer Literal With Multiple Separators")]
+    [TestCase("b#0", TestName = "Lex Should Recognize Radix Prefixed Binary Literal")]
+    [TestCase("b#1111_0000", TestName = "Lex Should Recognize Radix Prefixed Binary Literal With Single Separator")]
+    [TestCase("o#755_644", TestName = "Lex Should Recognize Radix Prefixed Octal Literal")]
+    [TestCase("x#dead_beef", TestName = "Lex Should Recognize Radix Prefixed Hexadecimal Literal")]
+    [TestCase("x#DEAD_BEEF", TestName = "Lex Should Recognize Radix Prefixed Hexadecimal Literal With Uppercase")]
+    [TestCase("x#DeAd_BeEf", TestName = "Lex Should Recognize Radix Prefixed Hexadecimal Literal Case Insensitively")]
+    public void LexShould_23([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("b#", TestName = "Lex Should Reject Binary Literal Prefix With No Numeric Component")]
+    [TestCase("o#", TestName = "Lex Should Reject Octal Literal Prefix With No Numeric Component")]
+    [TestCase("x#", TestName = "Lex Should Reject Hexadecimal Literal Prefix With No Numeric Component")]
+    public void LexShould_24([NotNull] string source)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(0);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(2);
+    }
+
+    [TestCase("b#2", 2, TestName = "Lex Should Reject Binary Literal With Non Binary Digit")]
+    [TestCase("b#102", 4, TestName = "Lex Should Reject Binary Literal With Non Binary Digit In Any Position")]
+    [TestCase("o#8", 2, TestName = "Lex Should Reject Octal Literal With Non Octal Digit")]
+    [TestCase("o#758", 4, TestName = "Lex Should Reject Octal Literal With Non Octal Digit In Any Position")]
+    [TestCase("x#g", 2, TestName = "Lex Should Reject Hexadecimal Literal Prefix Non Hexadecimal Digit")]
+    [TestCase("x#9fg", 4, TestName = "Lex Should Reject Hexadecimal Literal Prefix Non Hexadecimal Digit In Any Position")]
+    public void LexShould_25([NotNull] string source, int invalidDigitPosition)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(invalidDigitPosition);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(invalidDigitPosition + 1);
+    }
+
+    [TestCase("b#_1010", 2, TestName = "Lex Should Reject Binary Literal With Primal Separator")]
+    [TestCase("b#1010_", 6, TestName = "Lex Should Reject Binary Literal With Terminal Separator")]
+    [TestCase("o#_755", 2, TestName = "Lex Should Reject Octal Literal With Primal Separator")]
+    [TestCase("o#755_", 5, TestName = "Lex Should Reject Octal Literal With Terminal Separator")]
+    [TestCase("x#_9f", 2, TestName = "Lex Should Reject Hexadecimal Literal With Primal Separator")]
+    [TestCase("x#9f_", 4, TestName = "Lex Should Reject Hexadecimal Literal With Terminal Separator")]
+    public void LexShould_26([NotNull] string source, int invalidSeparatorPosition)
+    {
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle();
+
+        SushiDiagnostic diagnostic = result.Diagnostics.Single();
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(invalidSeparatorPosition);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(invalidSeparatorPosition + 1);
+    }
+
+    [TestCase(TestName = "Lex Should Preserve Consecutive Invalid Radix Separators Inside Integer Literal")]
+    public void LexShould_27()
+    {
+        const string source = "x#dead__beef";
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result, (LexTokenType.IntegerLiteral, 0, source.Length));
+
+        result.Diagnostics
+            .Should()
+            .HaveCount(2);
+
+        result.Diagnostics
+            .Select(diagnostic => (diagnostic.Span.Start, diagnostic.Span.End))
+            .Should()
+            .Equal((6, 7), (7, 8));
+    }
+
+    [TestCase(TestName = "Lex Should Stop Hexadecimal Literal Before Non Hexadecimal Identifier Character")]
+    public void LexShould_28()
+    {
+        LexerResult result = Lex("x#12g");
+
+        AssertTokens(result,
+            (LexTokenType.IntegerLiteral, 0, 4),
+            (LexTokenType.Identifier, 4, 5));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Stop Binary Literal Before Following Identifier Text")]
+    public void LexShould_29()
+    {
+        LexerResult result = Lex("b#10cat");
+
+        AssertTokens(result,
+            (LexTokenType.IntegerLiteral, 0, 4),
+            (LexTokenType.Identifier, 4, 7));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Not Recognize C Style Binary Prefix")]
+    public void LexShould_30()
+    {
+        LexerResult result = Lex("0b101");
+    
+        AssertTokens(result,
+            (LexTokenType.IntegerLiteral, 0, 1),
+            (LexTokenType.Identifier, 1, 5));
+    
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+    
+    [TestCase(TestName = "Lex Should Recognize Radix Prefixes Case Sensitively")]
+    public void LexShould_31()
+    {
+        LexerResult result = Lex("B#101");
+    
+        AssertTokens(result,
+            (LexTokenType.Identifier, 0, 1),
+            (LexTokenType.Unknown, 1, 2),
+            (LexTokenType.IntegerLiteral, 2, 5));
+    
         result.Diagnostics
             .Should()
             .BeEmpty();
