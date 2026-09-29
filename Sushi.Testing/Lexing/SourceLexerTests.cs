@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
-using Microsoft.VisualStudio.TestPlatform.ObjectModel;
 using NUnit.Framework;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
@@ -278,11 +277,11 @@ public class SourceLexerTests
     [TestCase("foo123", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Containing Digits")]
     [TestCase("_value", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Beginning With Underscore")]
     [TestCase("__internalThing", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Beginning With Multiple Underscores")]
-    [TestCase("value_", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Ending With underscore")]
+    [TestCase("value_", LexTokenType.Identifier, TestName = "Lex Should Recognize Identifier Ending With Underscore")]
     [TestCase("int32", LexTokenType.Identifier, TestName = "Lex Should Classify Built-In Integer Type Name As Identifier")]
     [TestCase("returnValue", LexTokenType.Identifier, TestName = "Lex Should Not Shorten Identifier To Keyword Prefix")]
     [TestCase("Return", LexTokenType.Identifier, TestName = "Lex Should Recognize Keywords Case Sensitively")]
-    [TestCase("True", LexTokenType.Identifier, TestName = "Lex Should Recognize Boolean Literals CaseSensitively")]
+    [TestCase("True", LexTokenType.Identifier, TestName = "Lex Should Recognize Boolean Literals Case Sensitively")]
     public void LexShould_14([NotNull] string source, LexTokenType expectedType)
     {
         LexerResult result = Lex(source);
@@ -309,7 +308,7 @@ public class SourceLexerTests
 
     [TestCase("@return", TestName = "Lex Should Recognize Escaped Keyword Identifier")]
     [TestCase("@true", TestName = "Lex Should Recognize Escaped Boolean Identifier")]
-    [TestCase("@int32", TestName = "Lex Shoudl Recognize Escaped Built-In Type Identifier")]
+    [TestCase("@int32", TestName = "Lex Should Recognize Escaped Built-In Type Identifier")]
     public void LexShould_16([NotNull] string source)
     {
         LexerResult result = Lex(source);
@@ -345,9 +344,9 @@ public class SourceLexerTests
             .BeEmpty();
     }
 
-    [TestCase("_", TestName = "Lex Should not Recognize Single Underscore As Identifier")]
+    [TestCase("_", TestName = "Lex Should Not Recognize Single Underscore As Identifier")]
     [TestCase("__", TestName = "Lex Should Not Recognize Multiple Underscores As Identifier")]
-    [TestCase("___", TestName = "Lex Should not Recognize All Underscore Sequence As Identifier")]
+    [TestCase("___", TestName = "Lex Should Not Recognize All Underscore Sequence As Identifier")]
     public void LexShould_19([NotNull] string source)
     {
         LexerResult result = Lex(source);
@@ -546,7 +545,7 @@ public class SourceLexerTests
     private static readonly string[] builtInIntegerTypeNames =
     [
         "int8",
-        "uint18",
+        "uint8",
         "int16",
         "uint16",
         "int32",
