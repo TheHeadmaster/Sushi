@@ -3,7 +3,8 @@ using Sushi.Source;
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
-/// Represents a dotted sequence of identifier components.
+/// Represents a dotted sequence of identifier components, including missing
+/// components synthesized during recovery from malformed qualified names.
 /// </summary>
 public sealed class QualifiedNameSyntax : SyntaxNode
 {
@@ -11,26 +12,40 @@ public sealed class QualifiedNameSyntax : SyntaxNode
     public override SyntaxType Type => SyntaxType.QualifiedName;
 
     /// <inheritdoc />
-    public override SourceSpan Span => new(this.Segments[0].Span.Snapshot, this.Segments[0].Span.Start, this.Segments[^1].Span.End);
+    public override SourceSpan Span
+    {
+        get
+        {
+            SourceSpan first = this.Segments[0].Span;
+            int end = this.Segments[^1].Span.End;
+
+            if (this.Separators.Count > 0)
+            {
+                end = Math.Max(end, this.Separators[^1].Span.End);
+            }
+
+            return new SourceSpan(first.Snapshot, first.Start, end);
+        }
+    }
 
     /// <summary>
-    /// Gets the identifier components of the name.
+    /// Gets the identifier components of the name, including synthetic missing components.
     /// </summary>
     public IReadOnlyList<SyntaxToken> Segments { get; }
 
     /// <summary>
-    /// Gets the dot tokens separating adjacent components.
+    /// Gets the source-backed dots separating adjacent components.
     /// </summary>
     public IReadOnlyList<SyntaxToken> Separators { get; }
 
     /// <summary>
-    /// Creates a qualified name from its identifier components and separating dot tokens.
+    /// Creates a qualified name from its identifier components and separating dots.
     /// </summary>
     /// <param name="segments">
-    /// The identifier components of the qualified name.
+    /// The components in source order, including any missing components.
     /// </param>
     /// <param name="separators">
-    /// The dot tokens separating adjacent components.
+    /// The dots separating neighboring components.
     /// </param>
     public QualifiedNameSyntax(IReadOnlyList<SyntaxToken> segments, IReadOnlyList<SyntaxToken> separators)
     {

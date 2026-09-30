@@ -7,24 +7,26 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses Sushi lexical elements into structured concrete syntax.
+/// Parses Sushi lexical elements into structured concrete syntax while retaining
+/// source boundaries needed by adjacency-sensitive grammar productions.
 /// </summary>
 public sealed class SourceParser
 {
     // Placeholder until diagnostic numbering is settled.
     private const string ExpectedSyntaxCode = "SUSE006";
+    private const string RequiredSyntacticAdjacencyCode = "SUSE007";
 
     /// <summary>
     /// Parses a package declaration beginning at the first significant lexical element.
     /// </summary>
     /// <param name="lexerResult">
-    /// The lexical result containing the source elements to parse.
+    /// The complete lexical result, including trivia and recovery elements.
     /// </param>
     /// <param name="cancellationToken">
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// The parsed package-declaration syntax and any parser diagnostics produced during recovery.
+    /// The parsed declaration and diagnostics generated during syntactic recovery.
     /// </returns>
     public ParserResult ParsePackageDeclaration(LexerResult lexerResult, CancellationToken cancellationToken)
     {
@@ -63,11 +65,11 @@ public sealed class SourceParser
 
         private SyntaxToken ParsePackageKeyword()
         {
-            if (this.TryGetCurrent(out LexToken token)
-                && token.Type is LexTokenType.Keyword
-                && this.TokenTextEquals(token, "package"u8))
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "package"u8))
             {
-                return new SyntaxToken(SyntaxType.PackageKeyword, this.ConsumeCurrent());
+                this.position = index + 1;
+
+                return new SyntaxToken(SyntaxType.PackageKeyword, token);
             }
 
             int position = this.GetCurrentPosition();
@@ -79,24 +81,29 @@ public sealed class SourceParser
 
         private QualifiedNameSyntax ParseQualifiedName()
         {
-            List<SyntaxToken> segments = [];
+            List<SyntaxToken> segments = [this.ParseNameComponent("Expected package name.", skipUnknown: false)];
             List<SyntaxToken> separators = [];
 
-            segments.Add(this.ParseNameComponent("Expected package name."));
-
-            while (this.CurrentIsPunctuation((byte)'.'))
+            while (this.TryConsumePunctuation((byte)'.', SyntaxType.DotToken, skipUnknown: true, out SyntaxToken separator))
             {
-                separators.Add(new SyntaxToken(SyntaxType.DotToken, this.ConsumeCurrent()));
+                // A source-backed name and dot may be separated only by a diagnosed recovery gap.
 
-                segments.Add(this.ParseNameComponent("Expected identifier after \".\" in package name."));
+                this.RequireSyntacticAdjacency(segments[^1], separator, "\".\" must immediately follow the preceding package-name component.");
+
+                SyntaxToken segment = this.ParseNameComponent("Expected identifier after \".\" in package name.", skipUnknown: true);
+
+                this.RequireSyntacticAdjacency(separator, segment, "A package-name component must immediately follow \".\".");
+
+                separators.Add(separator);
+                segments.Add(segment);
             }
 
             return new QualifiedNameSyntax(segments, separators);
         }
 
-        private SyntaxToken ParseNameComponent(string diagnosticMessage)
+        private SyntaxToken ParseNameComponent(string diagnosticMessage, bool skipUnknown)
         {
-            if (this.TryGetCurrent(out LexToken token))
+            if (this.TryPeekToken(skipUnknown, out LexToken token, out int index))
             {
                 SyntaxType type = token.Type switch
                 {
@@ -107,7 +114,9 @@ public sealed class SourceParser
 
                 if (type != default)
                 {
-                    return new SyntaxToken(type, this.ConsumeCurrent());
+                    this.position = index + 1;
+
+                    return new SyntaxToken(type, token);
                 }
             }
 
@@ -120,11 +129,11 @@ public sealed class SourceParser
 
         private SyntaxToken ParseSemicolon()
         {
-            if (this.CurrentIsPunctuation((byte)';'))
+            if (this.TryConsumePunctuation((byte)';', SyntaxType.SemicolonToken, skipUnknown: false, out SyntaxToken semicolon))
             {
-                return new SyntaxToken(SyntaxType.SemicolonToken, this.ConsumeCurrent());
+                return semicolon;
             }
-
+            
             int position = this.GetCurrentPosition();
 
             this.AddExpectedDiagnostic("Expected \";\" after package declaration.", position);
@@ -132,64 +141,99 @@ public sealed class SourceParser
             return SyntaxToken.Missing(SyntaxType.SemicolonToken, this.lexerResult.Snapshot, position);
         }
 
-        private bool TryGetCurrent(out LexToken token)
+        /// <summary>
+        /// Looks ahead without advancing the parser. Unknown elements are skipped only
+        /// when the calling grammar production is attempting a supported recovery.
+        /// </summary>
+        /// <param name="skipUnknown">
+        /// Whether to skip unknown elements.
+        /// </param>
+        /// <param name="token">
+        /// If true is returned, this contains the token found from the lookahead. Otherwise, default.
+        /// </param>
+        /// <param name="index">
+        /// If true is returned, this contains the index that the token was found at. Otherwise, 0.
+        /// </param>
+        /// <returns>
+        /// True if the token was found. False otherwise.
+        /// </returns>
+        private bool TryPeekToken(bool skipUnknown, out LexToken token, out int index)
         {
-            this.cancellationToken.ThrowIfCancellationRequested();
-
-            this.MovePastTrivia();
-
-            if (this.position >= this.lexerResult.Tokens.Count)
-            {
-                token = default;
-                return false;
-            }
-
-            token = this.lexerResult.Tokens[this.position];
-
-            return true;
-        }
-
-        private LexToken ConsumeCurrent()
-        {
-            if (!this.TryGetCurrent(out LexToken token))
-            {
-                throw new InvalidOperationException("Cannot consume syntax beyond the end of the lexical stream.");
-            }
-
-            this.position++;
-            return token;
-        }
-
-        private bool CurrentIsPunctuation(byte punctuation)
-        {
-            if (!this.TryGetCurrent(out LexToken token) || token.Type is not LexTokenType.Punctuation || token.Span.Length != 1)
-            {
-                return false;
-            }
-
-            return this.lexerResult.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
-        }
-
-        private bool TokenTextEquals(LexToken token, ReadOnlySpan<byte> expected)
-        {
-            if (token.Span.Length != expected.Length)
-            {
-                return false;
-            }
-
-            return this.lexerResult.Snapshot.Bytes.Span[token.Span.Start..token.Span.End].SequenceEqual(expected);
-        }
-
-        private int GetCurrentPosition() => this.TryGetCurrent(out LexToken token) ? token.Span.Start : this.lexerResult.Snapshot.SourceLength;
-
-        private void MovePastTrivia()
-        {
-            while (this.position < this.lexerResult.Tokens.Count && IsTrivia(this.lexerResult.Tokens[this.position].Type))
+            for (index = this.position; index < this.lexerResult.Tokens.Count; index++)
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-                this.position++;
+
+                LexToken candidate = this.lexerResult.Tokens[index];
+
+                if (IsTrivia(candidate.Type) || (skipUnknown && candidate.Type is LexTokenType.Unknown))
+                {
+                    continue;
+                }
+
+                token = candidate;
+                return true;
             }
+
+            token = default;
+            return false;
         }
+
+        private bool TryConsumePunctuation(byte punctuation, SyntaxType type, bool skipUnknown, out SyntaxToken syntaxToken)
+        {
+            if (this.TryPeekToken(skipUnknown, out LexToken token, out int index)
+                && token.Type is LexTokenType.Punctuation
+                && token.Span.Length == 1
+                && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start] == punctuation)
+            {
+                this.position = index + 1;
+
+                syntaxToken = new SyntaxToken(type, token);
+                return true;
+            }
+
+            syntaxToken = default;
+            return false;
+        }
+
+        /// <summary>
+        /// Diagnoses source-backed material separating two components whose grammar requires direct adjacency.
+        /// Synthetic missing components receive their own structural diagnostics and cannot cause adjacency errors.
+        /// </summary>
+        /// <param name="left">
+        /// The token on the left-hand side.
+        /// </param>
+        /// <param name="right">
+        /// The token on the right-hand side.
+        /// </param>
+        /// <param name="message">
+        /// The message to show if the adjacency rules are violated.
+        /// </param>
+        private void RequireSyntacticAdjacency(SyntaxToken left, SyntaxToken right, string message)
+        {
+            if (!left.IsSourceBacked || !right.IsSourceBacked)
+            {
+                return;
+            }
+
+            SourceSpan leftSpan = left.Span;
+            SourceSpan rightSpan = right.Span;
+
+            if (leftSpan.End == rightSpan.Start)
+            {
+                return;
+            }
+
+            if (leftSpan.End > rightSpan.Start)
+            {
+                throw new InvalidOperationException("Adjacency participants must occur in source order without overlapping.");
+            }
+
+            this.diagnostics.Add(new SushiDiagnostic(RequiredSyntacticAdjacencyCode, message, DiagnosticSeverity.Error, new SourceSpan(this.lexerResult.Snapshot, leftSpan.End, rightSpan.Start)));
+        }
+
+        private bool TokenTextEquals(LexToken token, ReadOnlySpan<byte> expected) => token.Span.Length == expected.Length && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start..token.Span.End].SequenceEqual(expected);
+
+        private int GetCurrentPosition() => this.TryPeekToken(skipUnknown: false, out LexToken token, out _) ? token.Span.Start : this.lexerResult.Snapshot.SourceLength;
 
         private void AddExpectedDiagnostic(string message, int position)
         {
