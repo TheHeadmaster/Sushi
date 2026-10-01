@@ -11,5 +11,6 @@ public enum SyntaxType
     IdentifierToken,
     EscapedIdentifierToken,
     DotToken,
-    SemicolonToken
+    SemicolonToken,
+    SourceFile
 }
