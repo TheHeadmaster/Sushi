@@ -33,10 +33,10 @@ public sealed class SourceFileSyntax : SyntaxNode
     public SourceSpan? UnparsedContentSpan { get; }
 
     /// <summary>
-    /// Creates the root of a partial or completely parsed source file.
+    /// Creates the root of a partially or completely parsed source file.
     /// </summary>
     /// <param name="snapshot">
-    /// The authoritative source snapshot represented by the compilation unit.
+    /// The authoritative source snapshot represented by the source file.
     /// </param>
     /// <param name="packageDeclaration">
     /// The package declaration recognized by the current parser, if present.
