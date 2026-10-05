@@ -81,7 +81,7 @@ public sealed class SourceParser
         /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
         /// </summary>
         /// <returns>
-        /// A source file containing any recognized package declarationa nd its unparsed remainder.
+        /// A source file containing any recognized package declaration and its unparsed remainder.
         /// </returns>
         public SourceFileSyntax ParseSourceFile()
         {
