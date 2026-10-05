@@ -49,16 +49,16 @@ public sealed class SourceFileSyntax : SyntaxNode
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(packageDeclarations);
 
-        PackageDeclarationSyntax[] delcarations = [.. packageDeclarations];
+        PackageDeclarationSyntax[] declarations = [.. packageDeclarations];
 
-        if (delcarations.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
+        if (declarations.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
         {
             throw new ArgumentException("All package declarations must belong to the source file's source snapshot.", nameof(packageDeclarations));
         }
 
-        for (int i = 1; i < delcarations.Length; i++)
+        for (int i = 1; i < declarations.Length; i++)
         {
-            if (delcarations[i - 1].Span.End > delcarations[i].Span.Start)
+            if (declarations[i - 1].Span.End > declarations[i].Span.Start)
             {
                 throw new ArgumentException("Package declarations must occur in source order without overlapping.", nameof(packageDeclarations));
             }
@@ -66,7 +66,7 @@ public sealed class SourceFileSyntax : SyntaxNode
 
         if (unparsedContentSpan is SourceSpan remainder)
         {
-            int parsedEnd = delcarations.Length > 0 ? delcarations[^1].Span.End : 0;
+            int parsedEnd = declarations.Length > 0 ? declarations[^1].Span.End : 0;
 
             if (!ReferenceEquals(remainder.Snapshot, snapshot)
                 || remainder.Start < parsedEnd
@@ -78,7 +78,7 @@ public sealed class SourceFileSyntax : SyntaxNode
         }
 
         this.Snapshot = snapshot;
-        this.PackageDeclarations = packageDeclarations;
+        this.PackageDeclarations = declarations;
         this.UnparsedContentSpan = unparsedContentSpan;
     }
 }

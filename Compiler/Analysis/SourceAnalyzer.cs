@@ -20,7 +20,7 @@ public sealed class SourceAnalyzer
 
     /// <summary>
     /// Analyzes a Sushi source snapshot and produces its concrete syntax tree
-    /// together with source-encoding lexical, syntactic, and initial semantic diagnostics.
+    /// together with source-encoding, lexical, syntactic, and initial semantic diagnostics.
     /// </summary>
     /// <param name="snapshot">
     /// The authoritative source snapshot to analyze.

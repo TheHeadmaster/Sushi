@@ -26,7 +26,7 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// A source file syntax containing any recognized package declaration and its unparsed remainder.
+    /// A source file syntax containing recognized leading package declarations and its unparsed remainder.
     /// </returns>
     public ParserResult ParseSourceFile(LexerResult lexerResult, CancellationToken cancellationToken)
     {
