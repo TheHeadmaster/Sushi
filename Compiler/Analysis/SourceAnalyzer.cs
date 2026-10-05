@@ -1,6 +1,8 @@
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Parsing;
+using Sushi.Parsing.Syntax;
+using Sushi.Semantics;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -13,6 +15,8 @@ public sealed class SourceAnalyzer
     private readonly SourceLexer lexer = new();
 
     private readonly SourceParser parser = new();
+
+    private readonly PackageDeclarationBinder packageBinder = new();
 
     /// <summary>
     /// Analyzes a Sushi source snapshot and produces its concrete syntax tree
@@ -41,6 +45,12 @@ public sealed class SourceAnalyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
+
+        PackageIdentity? package = sourceFile.PackageDeclaration is null ? null : this.packageBinder.Bind(sourceFile.PackageDeclaration, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         SushiDiagnostic[] diagnostics =
         [
             .. SourceEncodingDiagnostics.Create(snapshot),
@@ -48,6 +58,6 @@ public sealed class SourceAnalyzer
             .. parserResult.Diagnostics
         ];
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree));
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, package));
     }
 }
