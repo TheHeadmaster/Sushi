@@ -8,7 +8,7 @@ using Sushi.Source;
 namespace Sushi.Analysis;
 
 /// <summary>
-/// Coordinates lexical and syntactic analysis for a Sushi source snapshot.
+/// Coordinates lexical, syntactic, and initial semantic analysis for a Sushi source snapshot.
 /// </summary>
 public sealed class SourceAnalyzer
 {
@@ -16,11 +16,11 @@ public sealed class SourceAnalyzer
 
     private readonly SourceParser parser = new();
 
-    private readonly PackageDeclarationBinder packageBinder = new();
+    private readonly SourceFileBinder sourceFileBinder = new();
 
     /// <summary>
     /// Analyzes a Sushi source snapshot and produces its concrete syntax tree
-    /// together with source-encoding, lexical, and syntactic diagnostics.
+    /// together with source-encoding lexical, syntactic, and initial semantic diagnostics.
     /// </summary>
     /// <param name="snapshot">
     /// The authoritative source snapshot to analyze.
@@ -47,7 +47,7 @@ public sealed class SourceAnalyzer
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
 
-        PackageIdentity? package = sourceFile.PackageDeclaration is null ? null : this.packageBinder.Bind(sourceFile.PackageDeclaration, cancellationToken);
+        SourceFileBindResult bindResult = this.sourceFileBinder.Bind(sourceFile, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -55,9 +55,10 @@ public sealed class SourceAnalyzer
         [
             .. SourceEncodingDiagnostics.Create(snapshot),
             .. lexerResult.Diagnostics,
-            .. parserResult.Diagnostics
+            .. parserResult.Diagnostics,
+            .. bindResult.Diagnostics
         ];
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, package));
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, bindResult.Package));
     }
 }

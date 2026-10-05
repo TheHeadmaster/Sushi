@@ -81,24 +81,26 @@ public sealed class SourceParser
         /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
         /// </summary>
         /// <returns>
-        /// A source file containing any recognized package declaration and its unparsed remainder.
+        /// A source file containing recognized leading package declarations and its unparsed remainder.
         /// </returns>
         public SourceFileSyntax ParseSourceFile()
         {
             this.cancellationToken.ThrowIfCancellationRequested();
 
-            PackageDeclarationSyntax? packageDeclaration = null;
+            List<PackageDeclarationSyntax> packageDeclarations = [];
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out _) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "package"u8))
+            while (this.IsPackageDeclarationAhead())
             {
-                packageDeclaration = this.ParsePackageDeclaration();
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                packageDeclarations.Add(this.ParsePackageDeclaration());
             }
 
             SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
                 ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
                 : null;
 
-            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclaration, unparsedContentSpan);
+            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, unparsedContentSpan);
         }
 
         public PackageDeclarationSyntax ParsePackageDeclaration()
@@ -295,6 +297,11 @@ public sealed class SourceParser
                 )
             );
         }
+
+        private bool IsPackageDeclarationAhead()
+            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
+                && token.Type is LexTokenType.Keyword
+                && this.TokenTextEquals(token, "package"u8);
 
         private static bool IsTrivia(LexTokenType type) =>
             type is LexTokenType.Whitespace

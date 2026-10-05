@@ -20,10 +20,10 @@ public sealed class SourceFileSyntax : SyntaxNode
     public SourceSnapshot Snapshot { get; }
 
     /// <summary>
-    /// Gets the parsed package declaration, or null when the current parser did
-    /// not recognize a package declaration at the beginning of the file.
+    /// Gets the leading package declarations recognized by the parser. Valid source contains
+    /// exactly one, but additional declarations are retained for recovery and diagnostics.
     /// </summary>
-    public PackageDeclarationSyntax? PackageDeclaration { get; }
+    public IReadOnlyList<PackageDeclarationSyntax> PackageDeclarations { get; }
 
     /// <summary>
     /// Gets the source range beginning at the first unparsed significant lexical element
@@ -38,24 +38,35 @@ public sealed class SourceFileSyntax : SyntaxNode
     /// <param name="snapshot">
     /// The authoritative source snapshot represented by the source file.
     /// </param>
-    /// <param name="packageDeclaration">
-    /// The package declaration recognized by the current parser, if present.
+    /// <param name="packageDeclarations">
+    /// The leading package declarations recognized by the current parser, including duplicates.
     /// </param>
     /// <param name="unparsedContentSpan">
     /// The remaining source range, beginning at its first unparsed significant element.
     /// </param>
-    public SourceFileSyntax(SourceSnapshot snapshot, PackageDeclarationSyntax? packageDeclaration, SourceSpan? unparsedContentSpan)
+    public SourceFileSyntax(SourceSnapshot snapshot, IReadOnlyList<PackageDeclarationSyntax> packageDeclarations, SourceSpan? unparsedContentSpan)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(packageDeclarations);
 
-        if (packageDeclaration is not null && !ReferenceEquals(packageDeclaration.Span.Snapshot, snapshot))
+        PackageDeclarationSyntax[] delcarations = [.. packageDeclarations];
+
+        if (delcarations.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
         {
-            throw new ArgumentException("The package declaration must belong to the source file's source snapshot.", nameof(packageDeclaration));
+            throw new ArgumentException("All package declarations must belong to the source file's source snapshot.", nameof(packageDeclarations));
+        }
+
+        for (int i = 1; i < delcarations.Length; i++)
+        {
+            if (delcarations[i - 1].Span.End > delcarations[i].Span.Start)
+            {
+                throw new ArgumentException("Package declarations must occur in source order without overlapping.", nameof(packageDeclarations));
+            }
         }
 
         if (unparsedContentSpan is SourceSpan remainder)
         {
-            int parsedEnd = packageDeclaration?.Span.End ?? 0;
+            int parsedEnd = delcarations.Length > 0 ? delcarations[^1].Span.End : 0;
 
             if (!ReferenceEquals(remainder.Snapshot, snapshot)
                 || remainder.Start < parsedEnd
@@ -67,7 +78,7 @@ public sealed class SourceFileSyntax : SyntaxNode
         }
 
         this.Snapshot = snapshot;
-        this.PackageDeclaration = packageDeclaration;
+        this.PackageDeclarations = packageDeclarations;
         this.UnparsedContentSpan = unparsedContentSpan;
     }
 }

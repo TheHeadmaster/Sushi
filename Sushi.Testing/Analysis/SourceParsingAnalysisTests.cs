@@ -27,15 +27,17 @@ public class SourceParsingAnalysisTests
 
         SourceFileSyntax sourceFile = GetSourceFile(result);
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
 
-        sourceFile.PackageDeclaration!.Name.Segments
+        PackageDeclarationSyntax declaration = sourceFile.PackageDeclarations[0];
+
+        declaration.Name.Segments
             .Should()
             .HaveCount(3);
 
-        sourceFile.PackageDeclaration!.Name.Separators
+        declaration.Name.Separators
             .Should()
             .HaveCount(2);
 
@@ -69,9 +71,9 @@ public class SourceParsingAnalysisTests
             .Should()
             .BeEmpty();
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
 
         sourceFile.UnparsedContentSpan
             .Should()
@@ -100,9 +102,9 @@ public class SourceParsingAnalysisTests
             .Should()
             .BeEmpty();
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
 
         sourceFile.UnparsedContentSpan
             .Should()
@@ -146,11 +148,13 @@ public class SourceParsingAnalysisTests
             .Should()
             .HaveCount(3);
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
 
-        sourceFile.PackageDeclaration.Name.Segments
+        PackageDeclarationSyntax declaration = sourceFile.PackageDeclarations[0];
+
+        declaration.Name.Segments
             .Should()
             .HaveCount(2);
 
@@ -168,11 +172,13 @@ public class SourceParsingAnalysisTests
 
         SourceFileSyntax sourceFile = GetSourceFile(result);
 
-        PackageDeclarationSyntax? declaration = sourceFile.PackageDeclaration;
+        IReadOnlyList<PackageDeclarationSyntax> declarations = sourceFile.PackageDeclarations;
 
-        declaration
+        declarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
+
+        PackageDeclarationSyntax declaration = declarations[0];
 
         declaration.Name.Segments
             .Should()
@@ -206,9 +212,9 @@ public class SourceParsingAnalysisTests
 
         SourceFileSyntax sourceFile = GetSourceFile(result);
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .BeNull();
+            .BeEmpty();
 
         sourceFile.UnparsedContentSpan
             .Should()
@@ -220,7 +226,7 @@ public class SourceParsingAnalysisTests
 
         result.Diagnostics
             .Should()
-            .BeEmpty();
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
     }
 
     [TestCase(TestName = "Source Analyzer Should Aggregate Encoding Diagnostics And Preserve The Source Tree")]
@@ -248,13 +254,90 @@ public class SourceParsingAnalysisTests
                 && diagnostic.Span.Start == source.Length - 1
                 && diagnostic.Span.End == source.Length);
 
-        sourceFile.PackageDeclaration
+        sourceFile.PackageDeclarations
             .Should()
-            .NotBeNull();
+            .ContainSingle();
 
         sourceFile.UnparsedContentSpan
             .Should()
             .NotBeNull();
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Missing Package Declaration")]
+    public async Task SourceAnalyzerShould_7()
+    {
+        SourceAnalysisResult result = await Analyze("namespace Sushi.Text;");
+
+        result.Package
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Duplicate Package Declaration")]
+    public async Task SourceAnalyzerShould_8()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Sushi.Text;
+            package Sushi.Other;
+            """
+        );
+
+        result.Package
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE009");
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Each Package Declaration Beyond The First")]
+    public async Task SourceAnalyzerShould_9()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Sushi.One;
+            package Sushi.Two;
+            Package Sushi.Three;
+            """
+        );
+
+        result.Package
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Count(diagnostic => diagnostic.Code == "SUSE009")
+            .Should()
+            .Be(2);
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Missing Package At End of Empty Source")]
+    public async Task SourceAnalyzerShould_10()
+    {
+        SourceAnalysisResult result = await Analyze(string.Empty);
+
+        result.Package
+            .Should()
+            .BeNull();
+
+        SushiDiagnostic diagnostic = result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008")
+            .Which;
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(0);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(0);
     }
 
     private static SourceFileSyntax GetSourceFile(SourceAnalysisResult result)
