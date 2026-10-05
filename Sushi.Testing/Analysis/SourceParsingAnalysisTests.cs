@@ -159,7 +159,7 @@ public class SourceParsingAnalysisTests
             .Be(source.IndexOf("42foo", StringComparison.Ordinal));
     }
 
-    [TestCase(TestName = "Source Aalyzer Should Preserve Structural Recovery In Source File")]
+    [TestCase(TestName = "Source Analyzer Should Preserve Structural Recovery In Source File")]
     public async Task SourceAnalyzerShould_4()
     {
         const string source = "package Sushi..Text;";
