@@ -20,4 +20,7 @@ namespace Sushi.Analysis;
 /// <param name="Package">
 /// The semantic identity of the declared package when the declaration can be bound reliably.
 /// </param>
-public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package) : AnalysisResult(Snapshot, Diagnostics);
+/// <param name="Namespace">
+/// The semantic identity of the declared namespace when the declaration can be bound reliably.
+/// </param>
+public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace) : AnalysisResult(Snapshot, Diagnostics);

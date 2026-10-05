@@ -17,7 +17,10 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Produce Source File For Valid Package Declaration")]
     public async Task SourceAnalyzerShould_0()
     {
-        const string source = "package Sushi.StandardLibrary.Text;";
+        const string source = """
+         package Sushi.StandardLibrary.Text;
+         namespace Sushi.Text;
+         """;
 
         SourceAnalysisResult result = await Analyze(source);
 

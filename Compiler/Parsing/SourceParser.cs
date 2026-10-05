@@ -65,6 +65,31 @@ public sealed class SourceParser
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration), [.. state.Diagnostics]);
     }
 
+    
+    /// <summary>
+    /// Parses a namespace declaration beginning at the first significant lexical element.
+    /// </summary>
+    /// <param name="lexerResult">
+    /// The complete lexical result, including trivia and recovery elements.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token used to cancel parsing.
+    /// </param>
+    /// <returns>
+    /// The parsed declaration and diagnostics generated during syntactic recovery.
+    /// </returns>
+    public ParserResult ParseNamespaceDeclaration(LexerResult lexerResult, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lexerResult);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ParserState state = new(lexerResult, cancellationToken);
+        NamespaceDeclarationSyntax declaration = state.ParseNamespaceDeclaration();
+
+        return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration), [.. state.Diagnostics]);
+    }
+
     private sealed class ParserState(LexerResult lexerResult, CancellationToken cancellationToken)
     {
         private readonly LexerResult lexerResult = lexerResult;
@@ -96,11 +121,31 @@ public sealed class SourceParser
                 packageDeclarations.Add(this.ParsePackageDeclaration());
             }
 
+            List<NamespaceDeclarationSyntax> namespaceDeclarations = [];
+
+            while (this.IsNamespaceDeclarationAhead())
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                namespaceDeclarations.Add(this.ParseNamespaceDeclaration());
+            }
+
             SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
                 ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
                 : null;
 
-            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, unparsedContentSpan);
+            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, namespaceDeclarations, unparsedContentSpan);
+        }
+
+        public NamespaceDeclarationSyntax ParseNamespaceDeclaration()
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            SyntaxToken namespaceKeyword = this.ParseNamespaceKeyword();
+            QualifiedNameSyntax name = this.ParseQualifiedName("namespace");
+            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after namespace declaration.");
+
+            return new NamespaceDeclarationSyntax(namespaceKeyword, name, semicolonToken);
         }
 
         public PackageDeclarationSyntax ParsePackageDeclaration()
@@ -108,10 +153,26 @@ public sealed class SourceParser
             this.cancellationToken.ThrowIfCancellationRequested();
 
             SyntaxToken packageKeyword = this.ParsePackageKeyword();
-            QualifiedNameSyntax name = this.ParseQualifiedName();
-            SyntaxToken semicolonToken = this.ParseSemicolon();
+            QualifiedNameSyntax name = this.ParseQualifiedName("package");
+            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after package declaration.");
 
             return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
+        }
+
+        private SyntaxToken ParseNamespaceKeyword()
+        {
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "namespace"u8))
+            {
+                this.position = index + 1;
+
+                return new SyntaxToken(SyntaxType.PackageKeyword, token);
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic("Expected \"namespace\" keyword.", position);
+
+            return SyntaxToken.Missing(SyntaxType.NamespaceKeyword, this.lexerResult.Snapshot, position);
         }
 
         private SyntaxToken ParsePackageKeyword()
@@ -130,20 +191,20 @@ public sealed class SourceParser
             return SyntaxToken.Missing(SyntaxType.PackageKeyword, this.lexerResult.Snapshot, position);
         }
 
-        private QualifiedNameSyntax ParseQualifiedName()
+        private QualifiedNameSyntax ParseQualifiedName(string declarationKind)
         {
-            List<SyntaxToken> segments = [this.ParseNameComponent("Expected package name.", skipUnknown: false)];
+            List<SyntaxToken> segments = [this.ParseNameComponent($"Expected {declarationKind} name.", skipUnknown: false)];
             List<SyntaxToken> separators = [];
 
             while (this.TryConsumePunctuation((byte)'.', SyntaxType.DotToken, skipUnknown: true, out SyntaxToken separator))
             {
                 // A source-backed name and dot may be separated only by a diagnosed recovery gap.
 
-                this.RequireSyntacticAdjacency(segments[^1], separator, "\".\" must immediately follow the preceding package-name component.");
+                this.RequireSyntacticAdjacency(segments[^1], separator, $"\".\" must immediately follow the preceding {declarationKind}-name component.");
 
-                SyntaxToken segment = this.ParseNameComponent("Expected identifier after \".\" in package name.", skipUnknown: true);
+                SyntaxToken segment = this.ParseNameComponent($"Expected identifier after \".\" in {declarationKind} name.", skipUnknown: true);
 
-                this.RequireSyntacticAdjacency(separator, segment, "A package-name component must immediately follow \".\".");
+                this.RequireSyntacticAdjacency(separator, segment, $"A {declarationKind}-name component must immediately follow \".\".");
 
                 separators.Add(separator);
                 segments.Add(segment);
@@ -178,7 +239,7 @@ public sealed class SourceParser
             return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParseSemicolon()
+        private SyntaxToken ParseSemicolon(string diagnosticMessage)
         {
             if (this.TryConsumePunctuation((byte)';', SyntaxType.SemicolonToken, skipUnknown: false, out SyntaxToken semicolon))
             {
@@ -187,7 +248,7 @@ public sealed class SourceParser
             
             int position = this.GetCurrentPosition();
 
-            this.AddExpectedDiagnostic("Expected \";\" after package declaration.", position);
+            this.AddExpectedDiagnostic(diagnosticMessage, position);
 
             return SyntaxToken.Missing(SyntaxType.SemicolonToken, this.lexerResult.Snapshot, position);
         }
@@ -297,6 +358,11 @@ public sealed class SourceParser
                 )
             );
         }
+
+        private bool IsNamespaceDeclarationAhead()
+            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
+                && token.Type is LexTokenType.Keyword
+                && this.TokenTextEquals(token, "namespace"u8);
 
         private bool IsPackageDeclarationAhead()
             => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)

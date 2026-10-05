@@ -26,6 +26,12 @@ public sealed class SourceFileSyntax : SyntaxNode
     public IReadOnlyList<PackageDeclarationSyntax> PackageDeclarations { get; }
 
     /// <summary>
+    /// Gets the leading file-scoped namespace declarations recognized by the parser.
+    /// Valid source contains exactly one, but additional declarations are retained for diagnostics.
+    /// </summary>
+    public IReadOnlyList<NamespaceDeclarationSyntax> NamespaceDeclarations { get; }
+
+    /// <summary>
     /// Gets the source range beginning at the first unparsed significant lexical element
     /// and continuing through the end of the file. Null indicates that no significant
     /// lexical elements remain unparsed.
@@ -41,32 +47,59 @@ public sealed class SourceFileSyntax : SyntaxNode
     /// <param name="packageDeclarations">
     /// The leading package declarations recognized by the current parser, including duplicates.
     /// </param>
+    /// <param name="namespaceDeclarations">
+    /// The leading namespace declarations recognized by the current parser, including duplicates.
+    /// </param>
     /// <param name="unparsedContentSpan">
     /// The remaining source range, beginning at its first unparsed significant element.
     /// </param>
-    public SourceFileSyntax(SourceSnapshot snapshot, IReadOnlyList<PackageDeclarationSyntax> packageDeclarations, SourceSpan? unparsedContentSpan)
+    public SourceFileSyntax(SourceSnapshot snapshot, IReadOnlyList<PackageDeclarationSyntax> packageDeclarations, IReadOnlyList<NamespaceDeclarationSyntax> namespaceDeclarations, SourceSpan? unparsedContentSpan)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(packageDeclarations);
+        ArgumentNullException.ThrowIfNull(namespaceDeclarations);
 
-        PackageDeclarationSyntax[] declarations = [.. packageDeclarations];
+        PackageDeclarationSyntax[] packages = [.. packageDeclarations];
+        NamespaceDeclarationSyntax[] namespaces = [.. namespaceDeclarations];
 
-        if (declarations.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
+        if (packages.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
         {
             throw new ArgumentException("All package declarations must belong to the source file's source snapshot.", nameof(packageDeclarations));
         }
 
-        for (int i = 1; i < declarations.Length; i++)
+        if (namespaces.Any(declaration => !ReferenceEquals(declaration.Span.Snapshot, snapshot)))
         {
-            if (declarations[i - 1].Span.End > declarations[i].Span.Start)
+            throw new ArgumentException("All namespace declarations must belong to the source file's source snapshot.", nameof(namespaceDeclarations));
+        }
+
+        for (int i = 1; i < packages.Length; i++)
+        {
+            if (packages[i - 1].Span.End > packages[i].Span.Start)
             {
                 throw new ArgumentException("Package declarations must occur in source order without overlapping.", nameof(packageDeclarations));
             }
         }
 
+        for (int i = 1; i < namespaces.Length; i++)
+        {
+            if (namespaces[i - 1].Span.End > packages[i].Span.Start)
+            {
+                throw new ArgumentException("Namespace declarations must occur in source order without overlapping.", nameof(namespaceDeclarations));
+            }
+        }
+
+        if (packages.Length > 0 && namespaces.Length > 0 && packages[^1].Span.End > namespaces[0].Span.Start)
+        {
+            throw new ArgumentException("Namespace declarations must follow parsed package declarations.", nameof(namespaceDeclarations));
+        }
+
         if (unparsedContentSpan is SourceSpan remainder)
         {
-            int parsedEnd = declarations.Length > 0 ? declarations[^1].Span.End : 0;
+            int parsedEnd = namespaces.Length > 0
+                ? namespaces[^1].Span.End
+                : packages.Length > 0
+                ? packages[^1].Span.End
+                : 0;
 
             if (!ReferenceEquals(remainder.Snapshot, snapshot)
                 || remainder.Start < parsedEnd
@@ -78,7 +111,8 @@ public sealed class SourceFileSyntax : SyntaxNode
         }
 
         this.Snapshot = snapshot;
-        this.PackageDeclarations = declarations;
+        this.PackageDeclarations = packages;
+        this.NamespaceDeclarations = namespaces;
         this.UnparsedContentSpan = unparsedContentSpan;
     }
 }

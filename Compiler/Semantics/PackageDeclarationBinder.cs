@@ -28,35 +28,13 @@ public sealed class PackageDeclarationBinder
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!IsStructurallyComplete(declaration))
+        if (!declaration.PackageKeyword.IsSourceBacked || !declaration.SemicolonToken.IsSourceBacked)
         {
             return null;
         }
 
-        List<string> components = new(declaration.Name.Segments.Count);
+        string? qualifiedName = QualifiedNameBinder.Bind(declaration.Name, cancellationToken);
 
-        foreach (SyntaxToken segment in declaration.Name.Segments)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            components.Add(GetSemanticIdentifierName(segment));
-        }
-
-        return new PackageIdentity(string.Join(".", components));
-    }
-
-    private static bool IsStructurallyComplete(PackageDeclarationSyntax declaration)
-        => declaration.PackageKeyword.IsSourceBacked
-            && declaration.SemicolonToken.IsSourceBacked
-            && declaration.Name.Segments.All(segment => segment.IsSourceBacked)
-            && declaration.Name.Separators.All(separator => separator.IsSourceBacked);
-
-    private static string GetSemanticIdentifierName(SyntaxToken token)
-    {
-        SourceSpan span = token.Span;
-
-        int start = token.Type is SyntaxType.EscapedIdentifierToken ? span.Start + 1 : span.Start;
-
-        return Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[start..span.End]);
+        return qualifiedName is null ? null : new PackageIdentity(qualifiedName);
     }
 }

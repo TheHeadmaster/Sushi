@@ -13,7 +13,10 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Package Identity")]
     public async Task SourceAnalyzerShould_0()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi.StandardLibrary.Text;");
+        SourceAnalysisResult result = await Analyze("""
+         package Sushi.StandardLibrary.Text;
+         namespace Sushi.Text;
+         """);
 
         result.Package
             .Should()
@@ -115,6 +118,104 @@ public class SourceSemanticAnalysisTests
         result.Package!.QualifiedName
             .Should()
             .Be("Sushi.Text");
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Bind Package And Namespace Identities")]
+    public async Task SourceAnalyzerShould_7()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Sushi.StandardLibrary.Text;
+            namespace Sushi.Text;
+            """
+        );
+
+        result.Package!.QualifiedName
+            .Should()
+            .Be("Sushi.StandardLibrary.Text");
+
+        result.Namespace!.QualifiedName
+            .Should()
+            .Be("Sushi.Text");
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Remove Identifier Escape From Namespace Identity")]
+    public async Task SourceAnalyzerShould_8()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Test;
+            namespace Sushi.@if;
+            """
+        );
+
+        result.Namespace!.QualifiedName
+            .Should()
+            .Be("Sushi.if");
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Missing Namespace Declaration")]
+    public async Task SourceAnalyzerShould_9()
+    {
+        SourceAnalysisResult result = await Analyze("package Test;");
+
+        result.Namespace
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE010");
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Duplicate Namespace Declaration")]
+    public async Task SourceAnalyzerShould_10()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Test;
+            namespace Test.One;
+            namespace Test.Two;
+            """
+        );
+
+        result.Namespace
+            .Should()
+            .BeNull();
+
+        result.Package
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE011");
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Diagnose Each Namespace Declaration Beyond The First")]
+    public async Task SourceAnalyzerShould_11()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Test;
+            namespace Test.One;
+            namespace Test.Two;
+            namespace Test.Three;
+            """
+        );
+
+        result.Diagnostics
+            .Count(diagnostic => diagnostic.Code == "SUSE011")
+            .Should()
+            .Be(2);
     }
 
     private static async Task<SourceAnalysisResult> Analyze(string source)

@@ -8,7 +8,10 @@ namespace Sushi.Semantics;
 /// <param name="Package">
 /// The source file's package identity when exactly one structurally complete package declaration exists.
 /// </param>
+/// <param name="Namespace">
+/// The source file's namespace identity when exactly one structurally complete namespace declaration exists.
+/// </param>
 /// <param name="Diagnostics">
 /// Semantic diagnostics produced while binding the source file.
 /// </param>
-public sealed record SourceFileBindResult(PackageIdentity? Package, IReadOnlyList<SushiDiagnostic> Diagnostics);
+public sealed record SourceFileBindResult(PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<SushiDiagnostic> Diagnostics);

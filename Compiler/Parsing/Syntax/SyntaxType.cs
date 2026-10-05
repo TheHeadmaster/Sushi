@@ -12,5 +12,7 @@ public enum SyntaxType
     EscapedIdentifierToken,
     DotToken,
     SemicolonToken,
-    SourceFile
+    SourceFile,
+    NamespaceDeclaration,
+    NamespaceKeyword
 }
