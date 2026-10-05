@@ -303,7 +303,7 @@ public class SourceParsingAnalysisTests
             """
             package Sushi.One;
             package Sushi.Two;
-            Package Sushi.Three;
+            package Sushi.Three;
             """
         );
 
