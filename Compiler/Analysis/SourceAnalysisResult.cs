@@ -1,15 +1,19 @@
 using Sushi.Diagnostics;
+using Sushi.Parsing.Syntax;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
 
 /// <summary>
-/// Represents the compiler source code analysis produced for a specific source snapshot.
+/// Represents lexical and syntactic analysis produced for a specific source snapshot.
 /// </summary>
 /// <param name="Snapshot">
 /// The snapshot that was analyzed.
 /// </param>
 /// <param name="Diagnostics">
-/// The diagnostics produced by the analysis.
+/// The combined source-encoding, lexical, and syntactic diagnostics.
 /// </param>
-public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics) : AnalysisResult(Snapshot, Diagnostics);
+/// <param name="SyntaxTree">
+/// The concrete syntax tree produced from the analyzed source.
+/// </param>
+public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree) : AnalysisResult(Snapshot, Diagnostics);
