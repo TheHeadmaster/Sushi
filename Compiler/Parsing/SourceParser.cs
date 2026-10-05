@@ -17,6 +17,31 @@ public sealed class SourceParser
     private const string RequiredSyntacticAdjacencyCode = "SUSE007";
 
     /// <summary>
+    /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
+    /// </summary>
+    /// <param name="lexerResult">
+    /// The lexer result.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The cancellation token.
+    /// </param>
+    /// <returns>
+    /// A source file syntax containing any recognized package declaration and its unparsed remainder.
+    /// </returns>
+    public ParserResult ParseSourceFile(LexerResult lexerResult, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lexerResult);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ParserState state = new(lexerResult, cancellationToken);
+
+        SourceFileSyntax sourceFile = state.ParseSourceFile();
+
+        return new ParserResult(new ConcreteSyntaxTree(lexerResult, sourceFile), [.. state.Diagnostics]);
+    }
+
+    /// <summary>
     /// Parses a package declaration beginning at the first significant lexical element.
     /// </summary>
     /// <param name="lexerResult">
@@ -51,6 +76,30 @@ public sealed class SourceParser
         private int position;
 
         public IReadOnlyList<SushiDiagnostic> Diagnostics => this.diagnostics;
+
+        /// <summary>
+        /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
+        /// </summary>
+        /// <returns>
+        /// A compilation unit containing any recognized package declarationa nd its unparsed remainder.
+        /// </returns>
+        public SourceFileSyntax ParseSourceFile()
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            PackageDeclarationSyntax? packageDeclaration = null;
+
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out _) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "package"u8))
+            {
+                packageDeclaration = this.ParsePackageDeclaration();
+            }
+
+            SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
+                ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
+                : null;
+
+            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclaration, unparsedContentSpan);
+        }
 
         public PackageDeclarationSyntax ParsePackageDeclaration()
         {
