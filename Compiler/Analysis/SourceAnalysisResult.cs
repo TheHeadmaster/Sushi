@@ -6,7 +6,7 @@ using Sushi.Source;
 namespace Sushi.Analysis;
 
 /// <summary>
-/// Represents lexical and syntactic analysis produced for a specific source snapshot.
+/// Represents lexical, syntactic, and initial semantic analysis produced for a specific source snapshot.
 /// </summary>
 /// <param name="Snapshot">
 /// The snapshot that was analyzed.
@@ -18,6 +18,6 @@ namespace Sushi.Analysis;
 /// The concrete syntax tree produced from the analyzed source.
 /// </param>
 /// <param name="Package">
-/// The semantic identity of the declared package when the declaration can be bound reliabliy.
+/// The semantic identity of the declared package when the declaration can be bound reliably.
 /// </param>
 public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package) : AnalysisResult(Snapshot, Diagnostics);

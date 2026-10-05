@@ -90,7 +90,7 @@ public class SourceSemanticAnalysisTests
 
         result.Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUE006");
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006");
     }
 
     [TestCase(TestName = "Source Analyzer Should Not Manufacture Package Identity Without Package Declaration")]
