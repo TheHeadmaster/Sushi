@@ -82,7 +82,7 @@ public sealed class SourceFileSyntax : SyntaxNode
 
         for (int i = 1; i < namespaces.Length; i++)
         {
-            if (namespaces[i - 1].Span.End > packages[i].Span.Start)
+            if (namespaces[i - 1].Span.End > namespaces[i].Span.Start)
             {
                 throw new ArgumentException("Namespace declarations must occur in source order without overlapping.", nameof(namespaceDeclarations));
             }

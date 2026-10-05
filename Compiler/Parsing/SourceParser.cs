@@ -165,7 +165,7 @@ public sealed class SourceParser
             {
                 this.position = index + 1;
 
-                return new SyntaxToken(SyntaxType.PackageKeyword, token);
+                return new SyntaxToken(SyntaxType.NamespaceKeyword, token);
             }
 
             int position = this.GetCurrentPosition();

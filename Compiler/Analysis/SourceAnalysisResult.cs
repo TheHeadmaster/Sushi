@@ -12,7 +12,7 @@ namespace Sushi.Analysis;
 /// The snapshot that was analyzed.
 /// </param>
 /// <param name="Diagnostics">
-/// The combined source-encoding, lexical, and syntactic diagnostics.
+/// The combined source-encoding, lexical, syntactic, and semantic diagnostics.
 /// </param>
 /// <param name="SyntaxTree">
 /// The concrete syntax tree produced from the analyzed source.

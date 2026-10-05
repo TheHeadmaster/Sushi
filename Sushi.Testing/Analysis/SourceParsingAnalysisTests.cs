@@ -14,7 +14,7 @@ public class SourceParsingAnalysisTests
 {
     private static readonly Uri testUri = new("file:///TestProject/Parsing.sus");
 
-    [TestCase(TestName = "Source Analyzer Should Produce Source File For Valid Package Declaration")]
+    [TestCase(TestName = "Source Analyzer Should Produce Source File For Valid Package And Namespace Declarations")]
     public async Task SourceAnalyzerShould_0()
     {
         const string source = """
@@ -59,12 +59,20 @@ public class SourceParsingAnalysisTests
         sourceFile.Span.End
             .Should()
             .Be(source.Length);
+
+        sourceFile.NamespaceDeclarations.Should()
+            .ContainSingle();
     }
 
     [TestCase(TestName = "Source Analyzer Should Preserve Trivia Without Treating It As Unparsed Syntax")]
     public async Task SourceAnalyzerShould_1()
     {
-        const string source = "/*before*/\npackage Sushi.Text; /*after*/";
+        const string source = """
+            /*before*/
+            package Sushi.Text;
+            namespace Sushi.Text;
+             /*after*/
+            """;
 
         SourceAnalysisResult result = await Analyze(source);
 
@@ -95,7 +103,11 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Retain Source Beyond Implemented Grammar")]
     public async Task SourceAnalyzerShould_2()
     {
-        const string source = "package Sushi.Text;\nnamespace Sushi.Text;";
+        const string source = """
+            package Sushi.Text;
+            namespace Sushi.Text;
+            using Sushi.Other;
+            """;
 
         SourceAnalysisResult result = await Analyze(source);
 
@@ -117,7 +129,7 @@ public class SourceParsingAnalysisTests
 
         remainder.Start
             .Should()
-            .Be(source.IndexOf("namespace", StringComparison.Ordinal));
+            .Be(source.IndexOf("using", StringComparison.Ordinal));
 
         remainder.End
             .Should()
@@ -131,7 +143,11 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Aggregate Lexical And Syntactic Diagnostics")]
     public async Task SourceAnalyzerShould_3()
     {
-        const string source = "package Sushi . Text; 42foo";
+        const string source = """
+            package Sushi . Text;
+            namespace Sushi.Text;
+             42foo
+            """;
 
         SourceAnalysisResult result = await Analyze(source);
 
@@ -169,7 +185,10 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Preserve Structural Recovery In Source File")]
     public async Task SourceAnalyzerShould_4()
     {
-        const string source = "package Sushi..Text;";
+        const string source = """
+            package Sushi..Text;
+            namespace Sushi.Text;
+            """;
 
         SourceAnalysisResult result = await Analyze(source);
 
@@ -209,13 +228,17 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Preserve Unexpected Leading Content Without Speculative Synchronization")]
     public async Task SourceAnalyzerShould_5()
     {
-        const string source = "namespace Sushi.Text;";
+        const string source = "using Sushi.Text;";
 
         SourceAnalysisResult result = await Analyze(source);
 
         SourceFileSyntax sourceFile = GetSourceFile(result);
 
         sourceFile.PackageDeclarations
+            .Should()
+            .BeEmpty();
+
+        sourceFile.NamespaceDeclarations
             .Should()
             .BeEmpty();
 
@@ -229,7 +252,8 @@ public class SourceParsingAnalysisTests
 
         result.Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008")
+            .And.ContainSingle(diagnostic => diagnostic.Code == "SUSE010");
     }
 
     [TestCase(TestName = "Source Analyzer Should Aggregate Encoding Diagnostics And Preserve The Source Tree")]
@@ -238,7 +262,7 @@ public class SourceParsingAnalysisTests
         byte[] source =
         [
             ..
-            Encoding.UTF8.GetBytes("package Sushi.Text;"), 0xFF
+            Encoding.UTF8.GetBytes("package Sushi.Text;\nnamespace Sushi.Text;"), 0xFF
         ];
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(testUri, version: null, source);
@@ -275,6 +299,10 @@ public class SourceParsingAnalysisTests
             .Should()
             .BeNull();
 
+        result.Namespace!.QualifiedName
+            .Should()
+            .Be("Sushi.Text");
+
         result.Diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
@@ -287,6 +315,7 @@ public class SourceParsingAnalysisTests
             """
             package Sushi.Text;
             package Sushi.Other;
+            namespace Sushi.Text;
             """
         );
 
@@ -307,6 +336,7 @@ public class SourceParsingAnalysisTests
             package Sushi.One;
             package Sushi.Two;
             package Sushi.Three;
+            namespace Sushi.Text;
             """
         );
 
@@ -329,16 +359,29 @@ public class SourceParsingAnalysisTests
             .Should()
             .BeNull();
 
-        SushiDiagnostic diagnostic = result.Diagnostics
+        SushiDiagnostic diagnosticA = result.Diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.Code == "SUSE008")
             .Which;
 
-        diagnostic.Span.Start
+        SushiDiagnostic diagnosticB = result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE010")
+            .Which;
+
+        diagnosticA.Span.Start
             .Should()
             .Be(0);
 
-        diagnostic.Span.End
+        diagnosticA.Span.End
+            .Should()
+            .Be(0);
+
+        diagnosticB.Span.Start
+            .Should()
+            .Be(0);
+
+        diagnosticB.Span.End
             .Should()
             .Be(0);
     }

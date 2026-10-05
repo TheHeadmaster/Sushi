@@ -3,7 +3,7 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Projects a structurally complete namespace declaration into its semantic package identity.
+/// Projects a structurally complete namespace declaration into its semantic namespace identity.
 /// </summary>
 public sealed class NamespaceDeclarationBinder
 {

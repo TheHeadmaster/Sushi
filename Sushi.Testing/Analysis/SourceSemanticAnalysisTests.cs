@@ -34,7 +34,10 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Remove Identifier Escape From Package Identity")]
     public async Task SourceAnalyzerShould_1()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi.@if;");
+        SourceAnalysisResult result = await Analyze("""
+            package Sushi.@if;
+            namespace Sushi.Text;
+            """);
 
         result.Package
             .Should()
@@ -52,7 +55,10 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should not Bind Package Identity With Missing Name Component")]
     public async Task SourceAnalyzerShould_2()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi..Text;");
+        SourceAnalysisResult result = await Analyze("""
+            package Sushi..Text;
+            namespace Sushi.Text;
+            """);
 
         result.Package
             .Should()
@@ -66,7 +72,10 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Recovered Package Identity Across Adjacency Violation")]
     public async Task SourceAnalyzerShould_3()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi . Text;");
+        SourceAnalysisResult result = await Analyze("""
+            package Sushi . Text;
+            namespace Sushi.Text;
+            """);
 
         result.Package
             .Should()
@@ -85,7 +94,10 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should not Bind Package Identity With Missing Semicolon")]
     public async Task SourceAnalyzerShould_4()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi.Text");
+        SourceAnalysisResult result = await Analyze("""
+            package Sushi.Text
+            namespace Sushi.Text;
+            """);
 
         result.Package
             .Should()
@@ -104,18 +116,38 @@ public class SourceSemanticAnalysisTests
         result.Package
             .Should()
             .BeNull();
+
+        result.Namespace!.QualifiedName
+            .Should()
+            .Be("Sushi.Text");
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
     }
 
     [TestCase(TestName = "Source Analyzer Should Preserve Package Identity When Later Source Is Not Yet Parsed")]
     public async Task SourceAnalyzerShould_6()
     {
-        SourceAnalysisResult result = await Analyze("package Sushi.Text;\nnamespace Sushi.Text;");
+        SourceAnalysisResult result = await Analyze("""
+            package Sushi.Text;
+            namespace Sushi.Text;
+            using Sushi.Other;
+            """);
 
         result.Package
             .Should()
             .NotBeNull();
 
         result.Package!.QualifiedName
+            .Should()
+            .Be("Sushi.Text");
+
+        result.Namespace
+            .Should()
+            .NotBeNull();
+
+        result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
     }
@@ -193,7 +225,11 @@ public class SourceSemanticAnalysisTests
 
         result.Package
             .Should()
-            .BeNull();
+            .NotBeNull();
+
+        result.Package.QualifiedName!
+            .Should()
+            .Be("Test");
 
         result.Diagnostics
             .Should()
