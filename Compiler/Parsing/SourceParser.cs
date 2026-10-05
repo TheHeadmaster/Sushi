@@ -20,10 +20,10 @@ public sealed class SourceParser
     /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
     /// </summary>
     /// <param name="lexerResult">
-    /// The lexer result.
+    /// The complete lexical result, including trivia and recovery elements.
     /// </param>
     /// <param name="cancellationToken">
-    /// The cancellation token.
+    /// The token used to cancel parsing.
     /// </param>
     /// <returns>
     /// A source file syntax containing any recognized package declaration and its unparsed remainder.
@@ -81,7 +81,7 @@ public sealed class SourceParser
         /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
         /// </summary>
         /// <returns>
-        /// A compilation unit containing any recognized package declarationa nd its unparsed remainder.
+        /// A source file containing any recognized package declarationa nd its unparsed remainder.
         /// </returns>
         public SourceFileSyntax ParseSourceFile()
         {
