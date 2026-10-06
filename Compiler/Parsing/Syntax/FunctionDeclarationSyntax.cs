@@ -73,7 +73,7 @@ public sealed class FunctionDeclarationSyntax : SyntaxNode
             throw new ArgumentException("Function declarations require an access modifier.", nameof(accessModifier));
         }
 
-        if (returnType.Type is not SyntaxType.IdentifierToken and not SyntaxType.VoidKeyword)
+        if (returnType.Type is not SyntaxType.IdentifierToken and not SyntaxType.EscapedIdentifierToken and not SyntaxType.VoidKeyword)
         {
             throw new ArgumentException("Function declarations require supported return-type syntax.", nameof(returnType));
         }

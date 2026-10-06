@@ -103,7 +103,7 @@ public sealed class SourceFileSyntax : SyntaxNode
             }
         }
 
-        for (int i = 1; i < namespaces.Length; i++)
+        for (int i = 1; i < functions.Length; i++)
         {
             if (functions[i - 1].Span.End > functions[i].Span.Start)
             {

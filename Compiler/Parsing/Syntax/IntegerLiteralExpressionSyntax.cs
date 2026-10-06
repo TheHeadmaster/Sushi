@@ -26,7 +26,7 @@ public sealed class IntegerLiteralExpressionSyntax : ExpressionSyntax
     /// </param>
     public IntegerLiteralExpressionSyntax(SyntaxToken literalToken)
     {
-        if (literalToken.Type is not SyntaxType.IntegerLiteralExpression)
+        if (literalToken.Type is not SyntaxType.IntegerLiteralToken)
         {
             throw new ArgumentException("Integer literal expressions require an integer literal token.", nameof(literalToken));
         }

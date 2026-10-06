@@ -51,7 +51,7 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// A source file syntax containing recognized leading package declarations and its unparsed remainder.
+    /// A function declaration containing recognized function declarations and its unparsed remainder.
     /// </returns>
     public ParserResult ParseFunctionDeclaration(LexerResult lexerResult, CancellationToken cancellationToken)
     {
@@ -279,17 +279,6 @@ public sealed class SourceParser
             SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.");
 
             return new BlockSyntax(openBrace, statements, closeBrace);
-        }
-
-        private ReturnStatementSyntax ParseReturnSatement()
-        {
-            SyntaxToken returnKeyword = this.ParseReturnKeyword();
-
-            IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression();
-
-            SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.");
-
-            return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
         }
 
         private ReturnStatementSyntax ParseReturnStatement()
