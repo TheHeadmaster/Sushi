@@ -14,5 +14,17 @@ public enum SyntaxType
     SemicolonToken,
     SourceFile,
     NamespaceDeclaration,
-    NamespaceKeyword
+    NamespaceKeyword,
+    FunctionDeclaration,
+    Block,
+    ReturnStatement,
+    IntegerLiteralExpression,
+    AccessModifierKeyword,
+    VoidKeyword,
+    ReturnKeyword,
+    OpenParenthesisToken,
+    CloseParenthesisToken,
+    OpenBraceToken,
+    CloseBraceToken,
+    IntegerLiteralToken
 }

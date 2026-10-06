@@ -42,6 +42,31 @@ public sealed class SourceParser
     }
 
     /// <summary>
+    /// Parses a function declaration beginning at the first significant lexical element.
+    /// </summary>
+    /// <param name="lexerResult">
+    /// The complete lexical result, including trivia and recovery elements.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token used to cancel parsing.
+    /// </param>
+    /// <returns>
+    /// A source file syntax containing recognized leading package declarations and its unparsed remainder.
+    /// </returns>
+    public ParserResult ParseFunctionDeclaration(LexerResult lexerResult, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lexerResult);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ParserState state = new(lexerResult, cancellationToken);
+
+        FunctionDeclarationSyntax declaration = state.ParseFunctionDeclaration();
+
+        return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration), [.. state.Diagnostics]);
+    }
+
+    /// <summary>
     /// Parses a package declaration beginning at the first significant lexical element.
     /// </summary>
     /// <param name="lexerResult">
@@ -130,11 +155,34 @@ public sealed class SourceParser
                 namespaceDeclarations.Add(this.ParseNamespaceDeclaration());
             }
 
+            List<FunctionDeclarationSyntax> functionDeclarations = [];
+
+            while (this.IsFunctionDeclarationAhead())
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                functionDeclarations.Add(this.ParseFunctionDeclaration());
+            }
+
             SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
                 ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
                 : null;
 
-            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, namespaceDeclarations, unparsedContentSpan);
+            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, namespaceDeclarations, functionDeclarations, unparsedContentSpan);
+        }
+
+        public FunctionDeclarationSyntax ParseFunctionDeclaration()
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            SyntaxToken accessModifier = this.ParseAccessModifier();
+            SyntaxToken returnType = this.ParseReturnType();
+            SyntaxToken name = this.ParseNameComponent("Expected function name.", skipUnknown: false);
+            SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after function name.");
+            SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after function parameter list.");
+            BlockSyntax body = this.ParseBlock();
+
+            return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, closeParenthesis, body);
         }
 
         public NamespaceDeclarationSyntax ParseNamespaceDeclaration()
@@ -157,6 +205,131 @@ public sealed class SourceParser
             SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after package declaration.");
 
             return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
+        }
+
+        private SyntaxToken ParseAccessModifier()
+        {
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && this.IsAccessModifier(token))
+            {
+                this.position = index + 1;
+                return new SyntaxToken(SyntaxType.AccessModifierKeyword, token);
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic("Expected access modifier.", position);
+
+            return SyntaxToken.Missing(SyntaxType.AccessModifierKeyword, this.lexerResult.Snapshot, position);
+        }
+
+        private SyntaxToken ParseReturnType()
+        {
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index))
+            {
+                SyntaxType type = token.Type switch
+                {
+                    LexTokenType.Identifier => SyntaxType.IdentifierToken,
+                    LexTokenType.EscapedIdentifier => SyntaxType.EscapedIdentifierToken,
+                    LexTokenType.Keyword when this.TokenTextEquals(token, "void"u8) => SyntaxType.VoidKeyword,
+                    _ => default
+                };
+
+                if (type != default)
+                {
+                    this.position = index + 1;
+
+                    return new SyntaxToken(type, token);
+                }
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic("Expected function return type.", position);
+
+            return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
+        }
+
+        private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage)
+        {
+            if (this.TryConsumePunctuation(punctuation, type, skipUnknown: false, out SyntaxToken token))
+            {
+                return token;
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic(diagnosticMessage, position);
+
+            return SyntaxToken.Missing(type, this.lexerResult.Snapshot, position);
+        }
+
+        private BlockSyntax ParseBlock()
+        {
+            SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.");
+
+            List<StatementSyntax> statements = [];
+
+            while (this.IsReturnStatementAhead())
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                statements.Add(this.ParseReturnStatement());
+            }
+
+            SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.");
+
+            return new BlockSyntax(openBrace, statements, closeBrace);
+        }
+
+        private ReturnStatementSyntax ParseReturnSatement()
+        {
+            SyntaxToken returnKeyword = this.ParseReturnKeyword();
+
+            IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression();
+
+            SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.");
+
+            return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
+        }
+
+        private ReturnStatementSyntax ParseReturnStatement()
+        {
+            SyntaxToken returnKeyword = this.ParseReturnKeyword();
+            IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression();
+
+            SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.");
+
+            return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
+        }
+
+        private SyntaxToken ParseReturnKeyword()
+        {
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "return"u8))
+            {
+                this.position = index + 1;
+                return new SyntaxToken(SyntaxType.ReturnKeyword, token);
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic("Expected \"return\" keyword.", position);
+
+            return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.lexerResult.Snapshot, position);
+        }
+
+        private IntegerLiteralExpressionSyntax ParseIntegerLiteralExpression()
+        {
+            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.IntegerLiteral)
+            {
+                this.position = index + 1;
+                return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
+            }
+
+            int position = this.GetCurrentPosition();
+
+            this.AddExpectedDiagnostic("Expected integer literal expression.", position);
+
+            return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.lexerResult.Snapshot, position));
         }
 
         private SyntaxToken ParseNamespaceKeyword()
@@ -239,19 +412,7 @@ public sealed class SourceParser
             return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParseSemicolon(string diagnosticMessage)
-        {
-            if (this.TryConsumePunctuation((byte)';', SyntaxType.SemicolonToken, skipUnknown: false, out SyntaxToken semicolon))
-            {
-                return semicolon;
-            }
-            
-            int position = this.GetCurrentPosition();
-
-            this.AddExpectedDiagnostic(diagnosticMessage, position);
-
-            return SyntaxToken.Missing(SyntaxType.SemicolonToken, this.lexerResult.Snapshot, position);
-        }
+        private SyntaxToken ParseSemicolon(string diagnosticMessage) => this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage);
 
         /// <summary>
         /// Looks ahead without advancing the parser. Unknown elements are skipped only
@@ -289,6 +450,68 @@ public sealed class SourceParser
             token = default;
             return false;
         }
+
+        private bool TryPeekSignificantToken(int offset, out LexToken token)
+        {
+            int currentOffset = 0;
+
+            for (int index = this.position; index < this.lexerResult.Tokens.Count; index++)
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                LexToken candidate = this.lexerResult.Tokens[index];
+
+                if (IsTrivia(candidate.Type))
+                {
+                    continue;
+                }
+
+                if (currentOffset++ == offset)
+                {
+                    token = candidate;
+                    return true;
+                }
+            }
+
+            token = default;
+            return false;
+        }
+
+        private bool IsFunctionDeclarationAhead()
+        {
+            return this.TryPeekSignificantToken(0, out LexToken accessModifier)
+                && this.IsAccessModifier(accessModifier)
+                && this.TryPeekSignificantToken(1, out LexToken returnType)
+                && this.IsSupportedReturnType(returnType)
+                && this.TryPeekSignificantToken(2, out LexToken name)
+                && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
+                && this.TryPeekSignificantToken(3, out LexToken openParenthesis)
+                && this.IsPunctuation(openParenthesis, (byte)'(');
+        }
+
+        private bool IsAccessModifier(LexToken token)
+            => token.Type is LexTokenType.Keyword
+                && (this.TokenTextEquals(token, "public"u8)
+                || this.TokenTextEquals(token, "internal"u8)
+                || this.TokenTextEquals(token, "package"u8)
+                || this.TokenTextEquals(token, "protected"u8)
+                || this.TokenTextEquals(token, "private"u8));
+
+        private bool IsSupportedReturnType(LexToken token)
+            => token.Type is LexTokenType.Identifier
+                or LexTokenType.EscapedIdentifier
+                || (token.Type is LexTokenType.Keyword
+                && this.TokenTextEquals(token, "void"u8));
+
+        private bool IsPunctuation(LexToken token, byte punctuation)
+            => token.Type is LexTokenType.Punctuation
+                && token.Span.Length == 1
+                && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
+
+        private bool IsReturnStatementAhead()
+            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
+            && token.Type is LexTokenType.Keyword
+            && this.TokenTextEquals(token, "return"u8);
 
         private bool TryConsumePunctuation(byte punctuation, SyntaxType type, bool skipUnknown, out SyntaxToken syntaxToken)
         {
