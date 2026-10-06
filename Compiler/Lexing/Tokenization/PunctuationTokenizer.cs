@@ -7,8 +7,17 @@ namespace Sushi.Lexing.Tokenization;
 /// </summary>
 public sealed class PunctuationTokenizer : ILexTokenizer
 {
+    private static readonly byte[] punctuationTokens = [
+        (byte)'.',
+        (byte)';',
+        (byte)'(',
+        (byte)')',
+        (byte)'{',
+        (byte)'}'
+    ];
+
     /// <inheritdoc />
-    public bool CanStart(byte firstByte) => firstByte is (byte)'.' or (byte)';';
+    public bool CanStart(byte firstByte) => punctuationTokens.Contains(firstByte);
 
     /// <inheritdoc />
     public bool TryRecognize(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match)

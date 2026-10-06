@@ -734,11 +734,46 @@ public class SourceLexerTests
 
     [TestCase(".", TestName = "Lex Should Recognize Dot Punctuation")]
     [TestCase(";", TestName = "Lex Should Recognize Semicolon Punctuation")]
+    [TestCase("(", TestName = "Lex Should Recognize Open Parenthesis Punctuation")]
+    [TestCase(")", TestName = "Lex Should Recognize Close Parenthesis Punctuation")]
+    [TestCase("{", TestName = "Lex Should Recognize Open Brace Punctuation")]
+    [TestCase("}", TestName = "Lex Should Recognize Close Brace Punctuation")]
     public void LexShould_36([NotNull] string source)
     {
         LexerResult result = Lex(source);
 
         AssertTokens(result, (LexTokenType.Punctuation, 0, 1));
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Recognize Minimum Function Declaration")]
+    public void LexShould_37()
+    {
+        const string source = "public int32 main() { return 42; }";
+
+        LexerResult result = Lex(source);
+
+        AssertTokens(result,
+            (LexTokenType.Keyword, 0, 6),
+            (LexTokenType.Whitespace, 6, 7),
+            (LexTokenType.Identifier, 7, 12),
+            (LexTokenType.Whitespace, 12, 13),
+            (LexTokenType.Identifier, 13, 17),
+            (LexTokenType.Punctuation, 17, 18),
+            (LexTokenType.Punctuation, 18, 19),
+            (LexTokenType.Whitespace, 19, 20),
+            (LexTokenType.Punctuation, 20, 21),
+            (LexTokenType.Whitespace, 21, 22),
+            (LexTokenType.Keyword, 22, 28),
+            (LexTokenType.Whitespace, 28, 29),
+            (LexTokenType.IntegerLiteral, 29, 31),
+            (LexTokenType.Punctuation, 31, 32),
+            (LexTokenType.Whitespace, 32, 33),
+            (LexTokenType.Punctuation, 33, 34)
+            );
 
         result.Diagnostics
             .Should()
