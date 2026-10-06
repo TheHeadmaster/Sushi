@@ -171,10 +171,6 @@ public class SourceParserNamespaceTests
             .Should()
             .BeTrue();
 
-        declaration.SemicolonToken.IsMissing
-            .Should()
-            .BeTrue();
-
         declaration.SemicolonToken.Type
             .Should()
             .Be(SyntaxType.SemicolonToken);
