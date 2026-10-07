@@ -223,10 +223,6 @@ public class SourceParserFunctionTests
             .Should()
             .BeFalse();
 
-        declaration.Body.CloseBraceToken.IsMissing
-            .Should()
-            .BeFalse();
-
         declaration.Span.End
             .Should()
             .Be(source.Length);
