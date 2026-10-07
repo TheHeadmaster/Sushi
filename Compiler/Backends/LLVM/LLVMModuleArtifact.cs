@@ -7,6 +7,8 @@ namespace Sushi.Backends.LLVM;
 /// </summary>
 public sealed class LLVMModuleArtifact : IDisposable
 {
+    private LLVMContextRef context;
+    private LLVMModuleRef module;
     private bool disposed;
 
     /// <summary>
@@ -15,14 +17,30 @@ public sealed class LLVMModuleArtifact : IDisposable
     /// <remarks>
     /// The module is owned by this artifact and shall not be disposed independently.
     /// </remarks>
-    public LLVMModuleRef Module { get; }
+    public LLVMModuleRef Module
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, this);
 
-    internal LLVMContextRef Context { get; }
+            return this.module;
+        }
+    }
+
+    internal LLVMContextRef Context
+    {
+        get
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, this);
+
+            return this.context;
+        }
+    }
 
     internal LLVMModuleArtifact(LLVMContextRef context, LLVMModuleRef module)
     {
-        this.Context = context;
-        this.Module = module;
+        this.context = context;
+        this.module = module;
     }
 
     /// <summary>
@@ -35,8 +53,12 @@ public sealed class LLVMModuleArtifact : IDisposable
             return;
         }
 
-        this.Module.Dispose();
-        this.Context.Dispose();
+        this.module.Dispose();
+        this.module = default;
+
+        this.context.Dispose();
+        this.context = default;
+
         this.disposed = true;
     }
 }
