@@ -5,6 +5,8 @@ fileTypes:
 
 patterns:
   - include: '#comments'
+  - include: '#namespace-declaration'
+  - include: '#package-declaration'
   - include: '#integer-literals'
   - include: '#words'
 
@@ -43,12 +45,14 @@ repository:
       - include: '#block-comment'
   words:
     patterns:
+      - include: '#escaped-function-identifier'
       - include: '#escaped-identifier'
       - include: '#boolean-literal'
       - include: '#control-keyword'
       - include: '#modifier-keyword'
       - include: '#type-builtin'
       - include: '#keyword'
+      - include: '#function-identifier'
       - include: '#identifier'
   escaped-identifier:
     match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
@@ -59,6 +63,9 @@ repository:
         name: constant.language.boolean.true.sus
       - match: '(?<![A-Za-z0-9_])false(?![A-Za-z0-9_])'
         name: constant.language.boolean.false.sus
+  punctuation-accessor:
+    match: '\.'
+    name: punctuation.accessor.sus
   keyword:
     patterns:
       - match: |-
@@ -73,9 +80,41 @@ repository:
           )
           (?![A-Za-z0-9_])
         name: keyword.other.sus
+  escaped-function-identifier:
+    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])(?=\s*\()'
+    name: entity.name.function.sus
+  function-identifier:
+    match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)(?=\s*\()'
+    name: entity.name.function.sus
   identifier:
     match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
     name: variable.other.readwrite.sus
+  namespace-declaration:
+    begin: '(?<![A-Za-z0-9_])(namespace)(?![A-Za-z0-9_])'
+    beginCaptures:
+      "1":
+        name: keyword.other.sus
+    end: '(?=;)'
+    patterns:
+      - include: '#comments'
+      - match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+        name: entity.name.type.namespace.sus
+      - match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+        name: entity.name..type.namespace.sus
+      - include: '#punctuation-accessor'
+  package-declaration:
+    begin: '(?<![A-Za-z0-9_])(package)(?![A-Za-z0-9_])'
+    beginCaptures:
+      "1":
+        name: keyword.other.sus
+    end: '(?=;)'
+    patterns:
+      - include: '#comments'
+      - match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+        name: entity.name.type.package.sus
+      - match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+        name: entity.name.type.package.sus
+      - include: '#punctuation-accessor'
   control-keyword:
     patterns:
       - match: '(?<![A-Za-z0-9_])(?:if|else|switch|case|default)(?![A-Za-z0-9_])'
@@ -85,7 +124,7 @@ repository:
       - match: '(?<![A-Za-z0-9_])(?:break|continue|return|exit)(?![A-Za-z0-9_])'
         name: keyword.control.flow.sus
   modifier-keyword:
-    match: '(?<![A-Za-z0-9_])(?:public|internal|protected|private|static)(?![A-Za-z0-9_])'
+    match: '(?<![A-Za-z0-9_])(?:public|internal|package|protected|private|static)(?![A-Za-z0-9_])'
     name: storage.modifier.sus
   type-builtin:
     match: '(?<![A-Za-z0-9_])(?:int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
