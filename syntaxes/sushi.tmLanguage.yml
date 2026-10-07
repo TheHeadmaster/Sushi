@@ -103,7 +103,7 @@ repository:
         name: entity.name.type.namespace.sus
       - include: '#punctuation-accessor'
   package-declaration:
-    begin: '(?<![A-Za-z0-9_])(package)(?![A-Za-z0-9_])'
+    begin: '(?<![A-Za-z0-9_])(package)(?![A-Za-z0-9_])(?=\s+@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)(?:\.@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*))*\s*;)'
     beginCaptures:
       "1":
         name: keyword.other.sus
