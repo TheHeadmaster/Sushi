@@ -1,0 +1,6 @@
+﻿package TestProject;
+namespace TestProject;
+
+public int32 launch() {
+    return 42;
+}

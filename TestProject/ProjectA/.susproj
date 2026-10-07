@@ -1,23 +1,12 @@
 ﻿# Sushi project
 
-name = "Sushi Compiler"
-assembly = "Sushi.Compiler"
+name = "TestProject"
+assembly = "TestProject"
 language-version = "1.0"
-
-[source]
-default-namespace = "Sushi.Compiler"
-exclude = [
-    "Generated/**",
-    "Experimental/**",
-]
 
 [build]
 default = "debug"
 sources = ["Build/**/*.sus"]
 
 [build.targets.debug]
-type = "Sushi.Compiler.Build.DebugTarget"
-
-enabled = true
-number = 42
-ratio = 3.14159
+type = "Sushi.MVP.Debug"
