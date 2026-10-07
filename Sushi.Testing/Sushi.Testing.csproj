@@ -6,6 +6,7 @@
 		<AnalysisLevel>latest-all</AnalysisLevel>
         <Nullable>enable</Nullable>
         <IsTestProject>true</IsTestProject>
+        <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     </PropertyGroup>
     <ItemGroup>
 		<PackageReference Include="FluentAssertions" Version="8.11.0" />

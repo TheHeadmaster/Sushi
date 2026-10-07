@@ -10,6 +10,7 @@
 		<VersionSuffix>alpha</VersionSuffix>
         <ApplicationIcon>Sushi.ico</ApplicationIcon>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     </PropertyGroup>
     <ItemGroup>
         <Content Include="Sushi.ico" />
