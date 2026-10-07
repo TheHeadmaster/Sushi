@@ -15,6 +15,9 @@ dotnet_diagnostic.CA1707.severity = none
 # Naming rules are too strict for my tastes, best judgement for naming is better.
 dotnet_diagnostic.CA1711.severity = none
 
+# We are building a compiler. It is defensible to turn this warning off as we will naturally have explicit type names as enum values.
+dotnet_diagnostic.CA1720.severity = none
+
 # byte[] is a defensible property value.
 dotnet_diagnostic.CA1819.severity = none
 

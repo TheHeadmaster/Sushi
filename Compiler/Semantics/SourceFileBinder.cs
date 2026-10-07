@@ -21,6 +21,8 @@ public sealed class SourceFileBinder
 
     private readonly NamespaceDeclarationBinder namespaceDeclarationBinder = new();
 
+    private readonly FunctionDeclarationBinder functionDeclarationBinder = new();
+
     /// <summary>
     /// Binds semantic information from a parsed Sushi source file.
     /// </summary>
@@ -43,8 +45,23 @@ public sealed class SourceFileBinder
 
         PackageIdentity? package = this.BindPackage(sourceFile, diagnostics, cancellationToken);
         NamespaceIdentity? @namespace = this.BindNamespace(sourceFile, diagnostics, cancellationToken);
+        List<BoundFunction> functions = [];
 
-        return new SourceFileBindResult(package, @namespace, diagnostics);
+        foreach (FunctionDeclarationSyntax declaration in sourceFile.FunctionDeclarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            FunctionBindResult result = this.functionDeclarationBinder.Bind(declaration, cancellationToken);
+
+            diagnostics.AddRange(result.Diagnostics);
+
+            if (result.Function is not null)
+            {
+                functions.Add(result.Function);
+            }
+        }
+
+        return new SourceFileBindResult(package, @namespace, functions, diagnostics);
     }
 
     private PackageIdentity? BindPackage(SourceFileSyntax sourceFile, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
@@ -53,6 +70,8 @@ public sealed class SourceFileBinder
         {
             int position = sourceFile.NamespaceDeclarations.Count > 0
                 ? sourceFile.NamespaceDeclarations[0].Span.Start
+                : sourceFile.FunctionDeclarations.Count > 0
+                ? sourceFile.FunctionDeclarations[0].Span.Start
                 : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
 
             diagnostics.Add(new SushiDiagnostic(
@@ -87,7 +106,9 @@ public sealed class SourceFileBinder
     {
         if (sourceFile.NamespaceDeclarations.Count == 0)
         {
-            int position = sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
+            int position = sourceFile.FunctionDeclarations.Count > 0
+                ? sourceFile.FunctionDeclarations[0].Span.Start
+                : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
 
             diagnostics.Add(new SushiDiagnostic(
                 MissingNamespaceDeclarationCode,

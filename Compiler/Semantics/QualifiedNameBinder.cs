@@ -1,6 +1,4 @@
-using System.Text;
 using Sushi.Parsing.Syntax;
-using Sushi.Source;
 
 namespace Sushi.Semantics;
 
@@ -26,10 +24,14 @@ internal static class QualifiedNameBinder
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            SourceSpan span = segment.Span;
-            int start = segment.Type is SyntaxType.EscapedIdentifierToken ? span.Start + 1 : span.Start;
+            string? component = IdentifierBinder.Bind(segment);
 
-            components.Add(Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[start..span.End]));
+            if (component is null)
+            {
+                return null;
+            }
+
+            components.Add(component);
         }
 
         return string.Join(".", components);

@@ -23,4 +23,7 @@ namespace Sushi.Analysis;
 /// <param name="Namespace">
 /// The semantic identity of the declared namespace when the declaration can be bound reliably.
 /// </param>
-public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace) : AnalysisResult(Snapshot, Diagnostics);
+/// <param name="Functions">
+/// The declared functions.
+/// </param>
+public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions) : AnalysisResult(Snapshot, Diagnostics);

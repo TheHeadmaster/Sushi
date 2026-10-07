@@ -59,6 +59,6 @@ public sealed class SourceAnalyzer
             .. bindResult.Diagnostics
         ];
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, bindResult.Package, bindResult.Namespace));
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions));
     }
 }
