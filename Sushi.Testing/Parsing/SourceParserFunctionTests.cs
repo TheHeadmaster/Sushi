@@ -120,6 +120,76 @@ public class SourceParserFunctionTests
             .Be(source.Length);
     }
 
+    [TestCase(TestName = "Parser Should Parse Void Function Declaration")]
+    public void ParserShould_1()
+    {
+        const string source = "public void log() {}";
+
+        ParserResult result = ParseFunction(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        FunctionDeclarationSyntax declaration = GetFunction(result);
+
+        declaration.ReturnType.Type
+            .Should()
+            .Be(SyntaxType.VoidKeyword);
+
+        declaration.Body.Statements
+            .Should()
+            .BeEmpty();
+
+        declaration.Body.CloseBraceToken.IsMissing
+            .Should()
+            .BeFalse();
+    }
+
+    [TestCase(TestName = "Parser Should Accept Escaped Function Name")]
+    public void ParserShould_2()
+    {
+        const string source = "public int32 @return() { return 42; }";
+
+        ParserResult result = ParseFunction(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        FunctionDeclarationSyntax declaration = GetFunction(result);
+
+        declaration.Name.Type
+            .Should()
+            .Be(SyntaxType.EscapedIdentifierToken);
+
+        declaration.Name.IsMissing
+            .Should()
+            .BeFalse();
+    }
+
+    [TestCase(TestName = "Parser Should Accept Escaped Function Return Type")]
+    public void ParserShould_3()
+    {
+        const string source = "public @int32 main() { return 42; }";
+
+        ParserResult result = ParseFunction(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        FunctionDeclarationSyntax declaration = GetFunction(result);
+
+        declaration.ReturnType.Type
+            .Should()
+            .Be(SyntaxType.EscapedIdentifierToken);
+
+        declaration.ReturnType.IsMissing
+            .Should()
+            .BeFalse();
+    }
+
     private static FunctionDeclarationSyntax GetFunction(ParserResult result)
         => result.Tree.Root
             .Should()
