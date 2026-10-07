@@ -47,6 +47,7 @@ repository:
       - include: '#boolean-literal'
       - include: '#control-keyword'
       - include: '#modifier-keyword'
+      - include: '#type-builtin'
       - include: '#keyword'
       - include: '#identifier'
   escaped-identifier:
@@ -86,6 +87,9 @@ repository:
   modifier-keyword:
     match: '(?<![A-Za-z0-9_])(?:public|internal|protected|private|static)(?![A-Za-z0-9_])'
     name: storage.modifier.sus
+  type-builtin:
+    match: '(?<![A-Za-z0-9_])(?:int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+    name: keyword.type.builtin.sus
   integer-literals:
     patterns:
       - match: '(?<![A-Za-z0-9_])b#[0-9_]*'
