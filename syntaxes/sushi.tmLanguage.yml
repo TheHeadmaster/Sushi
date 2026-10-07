@@ -100,7 +100,7 @@ repository:
       - match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
         name: entity.name.type.namespace.sus
       - match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
-        name: entity.name..type.namespace.sus
+        name: entity.name.type.namespace.sus
       - include: '#punctuation-accessor'
   package-declaration:
     begin: '(?<![A-Za-z0-9_])(package)(?![A-Za-z0-9_])'
