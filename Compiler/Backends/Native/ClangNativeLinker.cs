@@ -90,6 +90,9 @@ public sealed class ClangNativeLinker
                     await process.WaitForExitAsync(CancellationToken.None);
                 }
 
+                await standardOutput;
+                await standardError;
+
                 throw;
             }
 

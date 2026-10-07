@@ -51,7 +51,7 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-/// The parsed function declaration and diagnostics generated during syntactic recovery.
+    /// The parsed function declaration and diagnostics generated during syntactic recovery.
     /// </returns>
     public ParserResult ParseFunctionDeclaration(LexerResult lexerResult, CancellationToken cancellationToken)
     {

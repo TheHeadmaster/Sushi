@@ -63,9 +63,9 @@ public sealed class LLVMObjectEmitter
             module.Target = targetTriple;
             module.DataLayout = targetData.StringRepresentation;
 
-            VerifyModule(artifact.Module);
+            VerifyModule(module);
 
-            this.EmitObjectFile(targetMachine, artifact.Module, fullOutputPath, cancellationToken);
+            this.EmitObjectFile(targetMachine, module, fullOutputPath, cancellationToken);
 
             return new NativeObjectArtifact(fullOutputPath, targetTriple);
         }
