@@ -8,5 +8,6 @@ public enum ExitCode
     Success,
     UnhandledException,
     InvalidParameterSyntax,
-    InvalidProjectFileOrFolder
+    InvalidProjectFileOrFolder,
+    CompilationFailed
 }

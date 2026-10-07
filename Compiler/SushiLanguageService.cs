@@ -5,6 +5,9 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Server;
 using Serilog;
 using Sushi.LanguageServerProtocol;
+using Sushi.Compilation;
+using Sushi.Diagnostics;
+using DiagnosticSeverity = Sushi.Diagnostics.DiagnosticSeverity;
 
 namespace Sushi;
 
@@ -19,6 +22,11 @@ public sealed class SushiLanguageService
     /// Handles the orchestration and plumbing of diagnostics publishing and source document tracking.
     /// </summary>
     private readonly WorkspaceOrchestrator workspace = new();
+
+    /// <summary>
+    /// Coordinates command-line project compilation through the current executable MVP pipeline.
+    /// </summary>
+    private readonly MVPProjectCompiler projectCompiler = new();
 
     /// <summary>
     /// Runs the language server.
@@ -132,6 +140,45 @@ public sealed class SushiLanguageService
     /// </returns>
     public async Task CompileJob()
     {
-        // Stub
+        MVPCompilationResult result = await this.projectCompiler.CompileAsync(AppMeta.Options.ProjectOrFolderPath, CancellationToken.None);
+
+        foreach (SushiDiagnostic diagnostic in result.Diagnostics)
+        {
+            LogDiagnostic(diagnostic);
+        }
+
+        if (!result.Succeeded)
+        {
+            Program.Exit(ExitCode.CompilationFailed);
+        }
+
+        Log.Information("Compilation produced executable {ExecutablePath}.", result.Executable!.FilePath);
+    }
+
+    private static void LogDiagnostic(SushiDiagnostic diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(diagnostic);
+
+        (int line, int character) = diagnostic.Span.Snapshot.GetUtf16Position(diagnostic.Span.Start);
+
+        string path = diagnostic.Span.Snapshot.Uri.LocalPath;
+
+        switch (diagnostic.Severity)
+        {
+            case DiagnosticSeverity.Error:
+                Log.Error("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                break;
+            case DiagnosticSeverity.Warning:
+                Log.Warning("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                break;
+            case DiagnosticSeverity.Information:
+                Log.Information("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                break;
+            case DiagnosticSeverity.Hint:
+                Log.Debug("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(diagnostic));
+        }
     }
 }

@@ -24,5 +24,6 @@
         <PackageReference Include="Tomlyn" Version="2.10.1" />
         <PackageReference Include="LLVMSharp.Interop" Version="22.1.8" />
         <PackageReference Include="libLLVM" Version="22.1.8" />
+        <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     </ItemGroup>
 </Project>
