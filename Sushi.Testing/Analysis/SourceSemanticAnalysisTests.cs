@@ -1,6 +1,8 @@
 using FluentAssertions;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Diagnostics;
+using Sushi.Semantics;
 using Sushi.Source;
 
 namespace Sushi.Testing.Analysis;
@@ -252,6 +254,153 @@ public class SourceSemanticAnalysisTests
             .Count(diagnostic => diagnostic.Code == "SUSE011")
             .Should()
             .Be(2);
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Bind Minimum Int32 Function")]
+    public async Task SourceAnalyzerShould_12()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Example;
+            namespace Example;
+
+            public int32 main() {
+                return 42;
+            }
+            """
+        );
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        BoundFunction function = result.Functions
+            .Should()
+            .ContainSingle()
+            .Which;
+
+        function.Accessibility
+            .Should()
+            .Be(Accessibility.Public);
+
+        function.Name
+            .Should()
+            .Be("main");
+
+        function.ReturnType
+            .Should()
+            .Be(BoundIntegerType.Int32);
+
+        BoundReturnStatement returnStatement = function.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+
+        BoundIntegerLiteralExpression expression = returnStatement.Expression
+            .Should()
+            .BeOfType<BoundIntegerLiteralExpression>()
+            .Subject;
+
+        expression.Type
+        .Should()
+        .Be(BoundIntegerType.Int32);
+
+        expression.Value
+            .Should()
+            .Be(42);
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Bind Hexadecimal Integer Literal To Contextual Int32 Value")]
+    public async Task SourceAnalyzerShould_13()
+    {
+        SourceAnalysisResult result = await Analyze(
+            """
+            package Example;
+            namespace Example;
+
+            public int32 main() {
+                return x#2A;
+            }
+            """
+        );
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        BoundFunction function = result.Functions
+            .Should()
+            .ContainSingle()
+            .Which;
+
+        BoundReturnStatement returnStatement = function.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+
+        BoundIntegerLiteralExpression expression = returnStatement.Expression
+            .Should()
+            .BeOfType<BoundIntegerLiteralExpression>()
+            .Subject;
+
+        expression.Type
+            .Should()
+            .Be(BoundIntegerType.Int32);
+
+        expression.Value
+            .Should()
+            .Be(42);
+    }
+
+    [TestCase(TestName = "Source Analyzer Should Reject Integer Literal Outside Contextual Int32 Range")]
+    public async Task SourceAnalyzerShould_14()
+    {
+        const string source = """
+            package Example;
+            namespace Example;
+            public int32 main() {
+                return 2_147_483_648;
+            }
+            """;
+
+        SourceAnalysisResult result = await Analyze(source);
+
+        result.Functions
+            .Should()
+            .BeEmpty();
+
+        SushiDiagnostic diagnostic = result.Diagnostics
+            .Should()
+            .ContainSingle()
+            .Which;
+
+        diagnostic.Code
+            .Should()
+            .Be("SUSE012");
+
+        diagnostic.Severity
+            .Should()
+            .Be(DiagnosticSeverity.Error);
+
+        int literalStart = source.IndexOf("2_147_483_648", StringComparison.Ordinal);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(literalStart);
+
+        diagnostic.Span.End
+            .Should()
+            .Be(literalStart + "2_147_483_648".Length);
+
+        diagnostic.Span.Snapshot
+            .Should()
+            .BeSameAs(result.Snapshot);
     }
 
     private static async Task<SourceAnalysisResult> Analyze(string source)

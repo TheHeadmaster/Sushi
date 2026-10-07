@@ -1,6 +1,8 @@
 using System.Numerics;
 using Sushi.Parsing.Syntax;
 
+namespace Sushi.Semantics;
+
 /// <summary>
 /// Interprets source-backed integer literal syntax as an exact mathematical integer.
 /// </summary>

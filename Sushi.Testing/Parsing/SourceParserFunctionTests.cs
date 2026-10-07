@@ -190,6 +190,232 @@ public class SourceParserFunctionTests
             .BeFalse();
     }
 
+    [TestCase(TestName = "Parser Should Recover Missing Return Semicolon")]
+    public void ParserShould_4()
+    {
+        const string source = "public int32 main() { return 42 }";
+
+        ParserResult result = ParseFunction(source);
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006");
+
+        FunctionDeclarationSyntax declaration = GetFunction(result);
+
+        ReturnStatementSyntax returnStatement = declaration.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<ReturnStatementSyntax>()
+            .Subject;
+
+        returnStatement.SemicolonToken.Type
+            .Should()
+            .Be(SyntaxType.SemicolonToken);
+
+        returnStatement.SemicolonToken.IsMissing
+            .Should()
+            .BeTrue();
+
+        declaration.Body.CloseBraceToken.IsMissing
+            .Should()
+            .BeFalse();
+
+        declaration.Body.CloseBraceToken.IsMissing
+            .Should()
+            .BeFalse();
+
+        declaration.Span.End
+            .Should()
+            .Be(source.Length);
+    }
+
+    [TestCase(TestName = "Parser Should Parse Function As Source File Declaration")]
+    public void ParserShould_5()
+    {
+        const string source = 
+        """
+        package Example;
+        namespace Example;
+
+        public int32 main() {
+            return 42;
+        }
+        """;
+
+        ParserResult result = ParseSourceFile(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        SourceFileSyntax sourceFile = GetSourceFile(result);
+
+        sourceFile.PackageDeclarations
+            .Should()
+            .ContainSingle();
+
+        sourceFile.NamespaceDeclarations
+            .Should()
+            .ContainSingle();
+
+        sourceFile.FunctionDeclarations
+            .Should()
+            .ContainSingle();
+
+        FunctionDeclarationSyntax declaration = sourceFile.FunctionDeclarations[0];
+
+        declaration.Name.Type
+            .Should()
+            .Be(SyntaxType.IdentifierToken);
+
+        declaration.Body.Statements
+            .Should()
+            .ContainSingle();
+
+        sourceFile.UnparsedContentSpan
+            .Should()
+            .BeNull();
+    }
+
+    [TestCase(TestName = "Parser Should Parse Consecutive Function Declarations")]
+    public void ParserShould_6()
+    {
+        const string source = """
+        package Example;
+        namespace Example;
+
+        public int32 first() {
+            return 1;
+        }
+
+        public int32 second() {
+            return 2;
+        }
+        """;
+
+        ParserResult result = ParseSourceFile(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        SourceFileSyntax sourceFile = GetSourceFile(result);
+
+        sourceFile.FunctionDeclarations
+            .Should()
+            .HaveCount(2);
+
+        sourceFile.FunctionDeclarations[0].Span.End
+            .Should()
+            .BeLessThan(sourceFile.FunctionDeclarations[1].Span.Start);
+
+        sourceFile.UnparsedContentSpan
+            .Should()
+            .BeNull();
+    }
+
+    [TestCase(TestName = "Parser Should Preserve Unsupported Content After Parsed Function")]
+    public void ParserShould_7()
+    {
+        const string source = """
+        package Example;
+        namespace Example;
+
+        public int32 main() {
+            return 42;
+        }
+
+        using Example.Other;
+        """;
+
+        ParserResult result = ParseSourceFile(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        SourceFileSyntax sourceFile = GetSourceFile(result);
+
+        sourceFile.FunctionDeclarations
+            .Should()
+            .ContainSingle();
+
+        sourceFile.UnparsedContentSpan
+            .Should()
+            .NotBeNull();
+        
+        SourceSpan remainder = sourceFile.UnparsedContentSpan!.Value;
+
+        remainder.Start
+            .Should()
+            .Be(source.IndexOf("using", StringComparison.Ordinal));
+
+        remainder.End
+            .Should()
+            .Be(source.Length);
+
+        remainder.Snapshot
+            .Should()
+            .BeSameAs(result.Tree.Snapshot);
+    }
+
+    [TestCase(TestName = "Parser Should Not Speculatively Parse Non Function Declaration")]
+    public void ParserShould_8()
+    {
+        const string source = """
+            package Example;
+            namespace Example;
+            public int32 value;
+        """;
+
+        ParserResult result = ParseSourceFile(source);
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        SourceFileSyntax sourceFile = GetSourceFile(result);
+
+        sourceFile.FunctionDeclarations
+            .Should()
+            .BeEmpty();
+
+        sourceFile.UnparsedContentSpan
+            .Should()
+            .NotBeNull();
+
+        sourceFile.UnparsedContentSpan!.Value.Start
+            .Should()
+            .Be(source.IndexOf("public", StringComparison.Ordinal));
+    }
+
+    [TestCase("public", TestName = "Parser Should Recognize Public Function Access Modifier")]
+    [TestCase("internal", TestName = "Parser Should Recognize Internal Function Access Modifier")]
+    [TestCase("package", TestName = "Parser Should Recognize Package Function Access Modifier")]
+    [TestCase("protected", TestName = "Parser Should Recognize Protected Function Access Modifier")]
+    [TestCase("private", TestName = "Parser Should Recognize Private Function Access Modifier")]
+    public void ParserShould_9(string accessModifier)
+    {
+        ParserResult result = ParseFunction($"{accessModifier} int32 test() {{ return 42; }}");
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        FunctionDeclarationSyntax declaration = GetFunction(result);
+
+        declaration.AccessModifier.Type
+            .Should()
+            .Be(SyntaxType.AccessModifierKeyword);
+
+        declaration.AccessModifier.IsMissing
+            .Should()
+            .BeFalse();
+    }
+
     private static FunctionDeclarationSyntax GetFunction(ParserResult result)
         => result.Tree.Root
             .Should()
