@@ -15,20 +15,22 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Package Identity")]
     public async Task SourceAnalyzerShould_0()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
          package Sushi.StandardLibrary.Text;
          namespace Sushi.Text;
-         """);
+         """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .NotBeNull();
 
-        result.Package!.QualifiedName
+        Result.Package!.QualifiedName
             .Should()
             .Be("Sushi.StandardLibrary.Text");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
             .BeEmpty();
     }
@@ -36,20 +38,22 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Remove Identifier Escape From Package Identity")]
     public async Task SourceAnalyzerShould_1()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
             package Sushi.@if;
             namespace Sushi.Text;
-            """);
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .NotBeNull();
 
-        result.Package!.QualifiedName
+        Result.Package!.QualifiedName
             .Should()
             .Be("Sushi.if");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
             .BeEmpty();
     }
@@ -57,38 +61,42 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should not Bind Package Identity With Missing Name Component")]
     public async Task SourceAnalyzerShould_2()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
             package Sushi..Text;
             namespace Sushi.Text;
-            """);
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
     [TestCase(TestName = "Source Analyzer Should Bind Recovered Package Identity Across Adjacency Violation")]
     public async Task SourceAnalyzerShould_3()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
             package Sushi . Text;
             namespace Sushi.Text;
-            """);
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .NotBeNull();
 
-        result.Package!.QualifiedName
+        Result.Package!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        result.Diagnostics
-            .Count(diagnostic => diagnostic.Code == "SUSE007")
+        Diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
             .Should()
             .Be(2);
     }
@@ -96,60 +104,66 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should not Bind Package Identity With Missing Semicolon")]
     public async Task SourceAnalyzerShould_4()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
             package Sushi.Text
             namespace Sushi.Text;
-            """);
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
     [TestCase(TestName = "Source Analyzer Should Not Manufacture Package Identity Without Package Declaration")]
     public async Task SourceAnalyzerShould_5()
     {
-        SourceAnalysisResult result = await Analyze("namespace Sushi.Text;");
+        const string source = "namespace Sushi.Text;";
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Namespace!.QualifiedName
+        Result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingPackageDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Preserve Package Identity When Later Source Is Not Yet Parsed")]
     public async Task SourceAnalyzerShould_6()
     {
-        SourceAnalysisResult result = await Analyze("""
+        const string source = """
             package Sushi.Text;
             namespace Sushi.Text;
             using Sushi.Other;
-            """);
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> _) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package
             .Should()
             .NotBeNull();
 
-        result.Package!.QualifiedName
+        Result.Package!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        result.Namespace
+        Result.Namespace
             .Should()
             .NotBeNull();
 
-        result.Namespace!.QualifiedName
+        Result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
     }
@@ -157,22 +171,23 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Package And Namespace Identities")]
     public async Task SourceAnalyzerShould_7()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Sushi.StandardLibrary.Text;
             namespace Sushi.Text;
-            """
-        );
+            """;
 
-        result.Package!.QualifiedName
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Package!.QualifiedName
             .Should()
             .Be("Sushi.StandardLibrary.Text");
 
-        result.Namespace!.QualifiedName
+        Result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
             .BeEmpty();
     }
@@ -180,18 +195,19 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Remove Identifier Escape From Namespace Identity")]
     public async Task SourceAnalyzerShould_8()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Test;
             namespace Sushi.@if;
-            """
-        );
+            """;
 
-        result.Namespace!.QualifiedName
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.if");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
             .BeEmpty();
     }
@@ -199,59 +215,63 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Diagnose Missing Namespace Declaration")]
     public async Task SourceAnalyzerShould_9()
     {
-        SourceAnalysisResult result = await Analyze("package Test;");
+        const string source = "package Test;";
 
-        result.Namespace
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Namespace
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE010");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingNamespaceDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Diagnose Duplicate Namespace Declaration")]
     public async Task SourceAnalyzerShould_10()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Test;
             namespace Test.One;
             namespace Test.Two;
-            """
-        );
+            """;
 
-        result.Namespace
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Result.Namespace
             .Should()
             .BeNull();
 
-        result.Package
+        Result.Package
             .Should()
             .NotBeNull();
 
-        result.Package.QualifiedName!
+        Result.Package.QualifiedName!
             .Should()
             .Be("Test");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE011");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.DuplicateNamespaceDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Diagnose Each Namespace Declaration Beyond The First")]
     public async Task SourceAnalyzerShould_11()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Test;
             namespace Test.One;
             namespace Test.Two;
             namespace Test.Three;
-            """
-        );
+            """;
 
-        result.Diagnostics
-            .Count(diagnostic => diagnostic.Code == "SUSE011")
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.DuplicateNamespaceDeclaration))
             .Should()
             .Be(2);
     }
@@ -259,7 +279,7 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Minimum Int32 Function")]
     public async Task SourceAnalyzerShould_12()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Example;
             namespace Example;
@@ -267,14 +287,15 @@ public class SourceSemanticAnalysisTests
             public int32 main() {
                 return 42;
             }
-            """
-        );
+            """;
 
-        result.Diagnostics
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Diagnostics
             .Should()
             .BeEmpty();
 
-        BoundFunction function = result.Functions
+        BoundFunction function = Result.Functions
             .Should()
             .ContainSingle()
             .Which;
@@ -316,7 +337,7 @@ public class SourceSemanticAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Bind Hexadecimal Integer Literal To Contextual Int32 Value")]
     public async Task SourceAnalyzerShould_13()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source = 
             """
             package Example;
             namespace Example;
@@ -324,14 +345,15 @@ public class SourceSemanticAnalysisTests
             public int32 main() {
                 return x#2A;
             }
-            """
-        );
+            """;
 
-        result.Diagnostics
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+
+        Diagnostics
             .Should()
             .BeEmpty();
 
-        BoundFunction function = result.Functions
+        BoundFunction function = Result.Functions
             .Should()
             .ContainSingle()
             .Which;
@@ -369,20 +391,20 @@ public class SourceSemanticAnalysisTests
             }
             """;
 
-        SourceAnalysisResult result = await Analyze(source);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        result.Functions
+        Result.Functions
             .Should()
             .BeEmpty();
 
-        SushiDiagnostic diagnostic = result.Diagnostics
+        SushiDiagnostic diagnostic = Diagnostics
             .Should()
             .ContainSingle()
             .Which;
 
-        diagnostic.Code
+        diagnostic.IsType(ErrorType.IntegerConstantOutOfRange)
             .Should()
-            .Be("SUSE012");
+            .BeTrue();
 
         diagnostic.Severity
             .Should()
@@ -400,20 +422,6 @@ public class SourceSemanticAnalysisTests
 
         diagnostic.Span.Snapshot
             .Should()
-            .BeSameAs(result.Snapshot);
-    }
-
-    private static async Task<SourceAnalysisResult> Analyze(string source)
-    {
-        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
-
-        SourceAnalyzer analyzer = new();
-
-        AnalysisResult result = await analyzer.Analyze(snapshot, CancellationToken.None);
-
-        return result
-            .Should()
-            .BeOfType<SourceAnalysisResult>()
-            .Subject;
+            .BeSameAs(Result.Snapshot);
     }
 }

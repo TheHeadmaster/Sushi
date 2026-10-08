@@ -24,31 +24,26 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susproj"), version: null, source);
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-
-        AnalysisResult result = await ProjectAnalyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
-
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
-
-        ProjectAnalysisResult projectResult = result
-            .Should()
-            .BeOfType<ProjectAnalysisResult>()
-            .Subject;
-
-        projectResult.Project
+        (ProjectAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeProject(snapshot);
+        
+        Result.Project
             .Should()
             .BeNull();
 
-        diagnostics
+        Diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = diagnostics.Single();
+        SushiDiagnostic diagnostic = Diagnostics.Single();
 
         diagnostic.Severity
             .Should()
             .Be(DiagnosticSeverity.Error);
 
+        diagnostic.IsType(ErrorType.InvalidUtf8)
+            .Should()
+            .BeTrue();
+        
         diagnostic.Span.Snapshot
             .Should()
             .BeSameAs(snapshot);
@@ -76,30 +71,25 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susln"), version: null, source);
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
+        (SolutionAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSolution(snapshot);
 
-        AnalysisResult result = await SolutionAnalyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
-
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
-
-        SolutionAnalysisResult solutionResult = result
-            .Should()
-            .BeOfType<SolutionAnalysisResult>()
-            .Subject;
-
-        solutionResult.Solution
+        Result.Solution
             .Should()
             .BeNull();
 
-        diagnostics
+        Diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = diagnostics.Single();
+        SushiDiagnostic diagnostic = Diagnostics.Single();
 
         diagnostic.Severity
             .Should()
             .Be(DiagnosticSeverity.Error);
+
+        diagnostic.IsType(ErrorType.InvalidUtf8)
+            .Should()
+            .BeTrue();
 
         diagnostic.Span.Snapshot
             .Should()

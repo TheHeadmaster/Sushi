@@ -30,4 +30,26 @@ public sealed record SushiDiagnostic(int Code, string Message, DiagnosticSeverit
         DiagnosticSeverity.Hint => $"SUSH{this.Code:D4}",
         _ => throw new InvalidOperationException($"Severity is invalid value {this.Severity}.")
     };
+
+    /// <summary>
+    /// Returns whether the specified error type is the same type represented by this diagnostic's code and severity.
+    /// </summary>
+    /// <param name="type">
+    /// The type to check.
+    /// </param>
+    /// <returns>
+    /// True if it is the same error type. False otherwise.
+    /// </returns>
+    public bool IsType(ErrorType type) => this.Code == (int)type && this.Severity == DiagnosticSeverity.Error;
+
+    /// <summary>
+    /// Returns whether the specified warning type is the same type represented by this diagnostic's code and severity.
+    /// </summary>
+    /// <param name="type">
+    /// The type to check.
+    /// </param>
+    /// <returns>
+    /// True if it is the same warning type. False otherwise.
+    /// </returns>
+    public bool IsType(WarningType type) => this.Code == (int)type && this.Severity == DiagnosticSeverity.Warning;
 }

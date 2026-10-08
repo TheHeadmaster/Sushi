@@ -22,14 +22,13 @@ public class SourceParsingAnalysisTests
          namespace Sushi.Text;
          """;
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        SourceAnalysisResult result = await Analyze(source, diagnosticReporter);
+         (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        diagnosticReporter.HasErrors()
+        Diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
         sourceFile.PackageDeclarations
             .Should()
@@ -51,7 +50,7 @@ public class SourceParsingAnalysisTests
 
         sourceFile.Span.Snapshot
             .Should()
-            .BeSameAs(result.Snapshot);
+            .BeSameAs(Result.Snapshot);
 
         sourceFile.Span.Start
             .Should()
@@ -75,14 +74,13 @@ public class SourceParsingAnalysisTests
              /*after*/
             """;
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        SourceAnalysisResult result = await Analyze(source, diagnosticReporter);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
-        diagnosticReporter.HasErrors()
+        Diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
         sourceFile.PackageDeclarations
             .Should()
@@ -96,7 +94,7 @@ public class SourceParsingAnalysisTests
             .Should()
             .Be(source.Length);
 
-        result.SyntaxTree.LexerResult.Tokens
+        Result.SyntaxTree.LexerResult.Tokens
             .Count(token => token.Type is LexTokenType.BlockComment)
             .Should()
             .Be(2);
@@ -111,14 +109,13 @@ public class SourceParsingAnalysisTests
             using Sushi.Other;
             """;
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        SourceAnalysisResult result = await Analyze(source, diagnosticReporter);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
-        diagnosticReporter.HasErrors()
+        Diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
         sourceFile.PackageDeclarations
             .Should()
@@ -140,7 +137,7 @@ public class SourceParsingAnalysisTests
 
         remainder.Snapshot
             .Should()
-            .BeSameAs(result.Snapshot);
+            .BeSameAs(Result.Snapshot);
     }
 
     [TestCase(TestName = "Source Analyzer Should Aggregate Lexical And Syntactic Diagnostics")]
@@ -152,24 +149,21 @@ public class SourceParsingAnalysisTests
              42foo
             """;
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        SourceAnalysisResult result = await Analyze(source, diagnosticReporter);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
-
-        diagnostics
-            .Count(diagnostic => diagnostic.Code == 0)
+        Diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.MissingLexicalSeparation))
             .Should()
             .Be(1);
 
-        diagnostics
-            .Count(diagnostic => diagnostic.Code == 0)
+        Diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
             .Should()
             .Be(2);
 
-        diagnostics
+        Diagnostics
             .Should()
             .HaveCount(3);
 
@@ -188,8 +182,6 @@ public class SourceParsingAnalysisTests
             .Be(source.IndexOf("42foo", StringComparison.Ordinal));
     }
 
-    /*
-
     [TestCase(TestName = "Source Analyzer Should Preserve Structural Recovery In Source File")]
     public async Task SourceAnalyzerShould_4()
     {
@@ -198,9 +190,9 @@ public class SourceParsingAnalysisTests
             namespace Sushi.Text;
             """;
 
-        SourceAnalysisResult result = await Analyze(source);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
         IReadOnlyList<PackageDeclarationSyntax> declarations = sourceFile.PackageDeclarations;
 
@@ -222,11 +214,11 @@ public class SourceParsingAnalysisTests
             .Should()
             .HaveCount(2);
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006")
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax))
             .And
-            .NotContain(diagnostic => diagnostic.Code == "SUSE007");
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency));
 
         sourceFile.UnparsedContentSpan
             .Should()
@@ -238,9 +230,9 @@ public class SourceParsingAnalysisTests
     {
         const string source = "using Sushi.Text;";
 
-        SourceAnalysisResult result = await Analyze(source);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
         sourceFile.PackageDeclarations
             .Should()
@@ -258,10 +250,10 @@ public class SourceParsingAnalysisTests
             .Should()
             .Be(0);
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008")
-            .And.ContainSingle(diagnostic => diagnostic.Code == "SUSE010");
+            .ContainSingle(diagnostic =>  diagnostic.IsType(ErrorType.MissingPackageDeclaration))
+            .And.ContainSingle(diagnostic =>  diagnostic.IsType(ErrorType.MissingNamespaceDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Aggregate Encoding Diagnostics And Preserve The Source Tree")]
@@ -275,15 +267,15 @@ public class SourceParsingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(testUri, version: null, source);
 
-        SourceAnalysisResult result = await Analyze(snapshot);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(snapshot);   
 
-        SourceFileSyntax sourceFile = GetSourceFile(result);
+        SourceFileSyntax sourceFile = AnalysisHelper.GetSourceFile(Result);
 
-        result.SyntaxTree.Snapshot
+        Result.SyntaxTree.Snapshot
             .Should()
             .BeSameAs(snapshot);
 
-        result.Diagnostics
+        Diagnostics
             .Should()
             .Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error
                 && diagnostic.Span.Start == source.Length - 1
@@ -301,59 +293,64 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Diagnose Missing Package Declaration")]
     public async Task SourceAnalyzerShould_7()
     {
-        SourceAnalysisResult result = await Analyze("namespace Sushi.Text;");
+        const string source = "namespace Sushi.Text;";
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Namespace!.QualifiedName
+        Result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008");
+            .ContainSingle(diagnostic =>  diagnostic.IsType(ErrorType.MissingPackageDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Diagnose Duplicate Package Declaration")]
     public async Task SourceAnalyzerShould_8()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source =
             """
             package Sushi.Text;
             package Sushi.Other;
             namespace Sushi.Text;
             """
-        );
+        ;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);   
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE009");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.DuplicatePackageDeclaration));
     }
 
     [TestCase(TestName = "Source Analyzer Should Diagnose Each Package Declaration Beyond The First")]
     public async Task SourceAnalyzerShould_9()
     {
-        SourceAnalysisResult result = await Analyze(
+        const string source =
             """
             package Sushi.One;
             package Sushi.Two;
             package Sushi.Three;
             namespace Sushi.Text;
-            """
-        );
+            """;
 
-        result.Package
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);  
+
+        Result.Package
             .Should()
             .BeNull();
 
-        result.Diagnostics
-            .Count(diagnostic => diagnostic.Code == "SUSE009")
+        Diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.DuplicatePackageDeclaration))
             .Should()
             .Be(2);
     }
@@ -361,20 +358,20 @@ public class SourceParsingAnalysisTests
     [TestCase(TestName = "Source Analyzer Should Diagnose Missing Package At End of Empty Source")]
     public async Task SourceAnalyzerShould_10()
     {
-        SourceAnalysisResult result = await Analyze(string.Empty);
+        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(string.Empty, testUri);  
 
-        result.Package
+        Result.Package
             .Should()
             .BeNull();
 
-        SushiDiagnostic diagnosticA = result.Diagnostics
+        SushiDiagnostic diagnosticA = Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE008")
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingPackageDeclaration))
             .Which;
 
-        SushiDiagnostic diagnosticB = result.Diagnostics
+        SushiDiagnostic diagnosticB = Diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE010")
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingNamespaceDeclaration))
             .Which;
 
         diagnosticA.Span.Start
@@ -393,24 +390,34 @@ public class SourceParsingAnalysisTests
             .Should()
             .Be(0);
     }
-    */
 
-    private static SourceFileSyntax GetSourceFile(SourceAnalysisResult result)
-        => result.SyntaxTree.Root
-                .Should()
-                .BeOfType<SourceFileSyntax>().Subject;
-
-    private static Task<SourceAnalysisResult> Analyze(string source, IDiagnosticReporter diagnosticReporter)
-        => Analyze(SourceSnapshot.FromText(testUri, version: null, source), diagnosticReporter);
-
-    private static async Task<SourceAnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter)
+    [TestCase(TestName = "Source Analyzer Should Report Encoding Diagnostics Before Later Pipeline Diagnostics")]
+    public async Task SourceAnalyzerShould_11()
     {
-        SourceAnalyzer analyzer = new();
+        byte[] source = [
+            .. Encoding.UTF8.GetBytes(
+                """
+                package Sushi . Text;
+                namespace Sushi.Text;
+                """
+            ),
+            0xFF
+        ];
 
-        AnalysisResult result = await analyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
+        SourceSnapshot snapshot = SourceSnapshot.FromUtf8(testUri, version: null, source);
 
-        return result
+        (_, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(snapshot);
+
+        Diagnostics
             .Should()
-            .BeOfType<SourceAnalysisResult>().Subject;
+            .NotBeEmpty();
+
+        Diagnostics[0].IsType(ErrorType.InvalidUtf8)
+            .Should()
+            .BeTrue();
+
+        Diagnostics.Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
+            .Should()
+            .Be(2);
     }
 }
