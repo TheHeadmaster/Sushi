@@ -21,7 +21,7 @@ public sealed class SourceFileBinder
     /// The token used to cancel binding.
     /// </param>
     /// <returns>
-    /// The bound package and namespaces identities when unambiguous, together with file-level semantic diagnostics.
+    /// The bound package and namespaces identities when unambiguous.
     /// </returns>
     public static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {

@@ -40,7 +40,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
     /// <inheritdoc />
     public bool HasWarnings() => this.diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
 
-        /// <inheritdoc />
+    /// <inheritdoc />
     public bool HasDiagnostics() => this.diagnostics.Count != 0;
 
     /// <inheritdoc />

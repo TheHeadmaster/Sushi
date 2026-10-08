@@ -1,5 +1,3 @@
-using Sushi.Diagnostics;
-
 namespace Sushi.Semantics;
 
 /// <summary>
