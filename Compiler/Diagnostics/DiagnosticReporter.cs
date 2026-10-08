@@ -38,7 +38,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
     public bool HasErrors() => this.diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
     /// <inheritdoc />
-    public IReadOnlyList<SushiDiagnostic> ReportDiagnostics() => new ReadOnlyCollection<SushiDiagnostic>(this.diagnostics);
+    public IReadOnlyList<SushiDiagnostic> ReportDiagnostics() => new ReadOnlyCollection<SushiDiagnostic>([..this.diagnostics]);
 
     /// <inheritdoc />
     public void GenerateError(ErrorType type, SourceSpan sourceSpan)
