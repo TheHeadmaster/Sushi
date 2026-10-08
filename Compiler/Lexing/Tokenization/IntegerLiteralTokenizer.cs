@@ -149,7 +149,7 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
 
         bool diagnosesFollowingBoundary = end == bodyStart;
 
-        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnosesFollowingBoundary, diagnosticReporter.HasErrors() ? diagnosticReporter : null);
+        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnosesFollowingBoundary, diagnosticReporter.HasDiagnostics() ? diagnosticReporter : null);
     }
 
     /// <summary>
