@@ -88,20 +88,20 @@ public sealed class LLVMModuleEmitter
             this.EmitInstruction(instruction);
         }
 
-        this.EmitTerminator(context, builder, block.Terminator, cancellationToken);
+        EmitTerminator(context, builder, block.Terminator, cancellationToken);
     }
 
     private void EmitInstruction(LoweredInstruction instruction)
         => throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
 
-    private void EmitTerminator(LLVMContextRef context, LLVMBuilderRef builder, LoweredTerminator terminator, CancellationToken cancellationToken)
+    private static void EmitTerminator(LLVMContextRef context, LLVMBuilderRef builder, LoweredTerminator terminator, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         switch (terminator)
         {
             case LoweredReturnTerminator returnTerminator:
-                builder.BuildRet(this.EmitValue(context, returnTerminator.Value));
+                builder.BuildRet(EmitValue(context, returnTerminator.Value));
                 return;
 
             default:
@@ -109,7 +109,7 @@ public sealed class LLVMModuleEmitter
         }
     }
 
-    private LLVMValueRef EmitValue(LLVMContextRef context, LoweredValue value)
+    private static LLVMValueRef EmitValue(LLVMContextRef context, LoweredValue value)
         => value switch
         {
             LoweredIntegerConstant integerConstant => LLVMValueRef.CreateConstInt(

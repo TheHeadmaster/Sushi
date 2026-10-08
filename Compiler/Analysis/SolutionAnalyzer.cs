@@ -9,27 +9,29 @@ namespace Sushi.Analysis;
 /// </summary>
 public sealed class SolutionAnalyzer : Analyzer
 {
-    private readonly TomlConfigurationParser parser = new();
-
-    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
         if (!snapshot.IsValidUtf8)
         {
-            AccumulateEncodingDiagnostics(diagnosticReporter, snapshot);
+            AccumulateEncodingDiagnostics(localDiagnostics, snapshot);
             return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, null));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
         // TODO: This result has a use later
-        TomlConfigurationParseResult _ = this.parser.Parse(snapshot, diagnosticReporter, cancellationToken);
+        TomlConfigurationParseResult _ = TomlConfigurationParser.Parse(snapshot, localDiagnostics, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, new SolutionDefinition()));
     }

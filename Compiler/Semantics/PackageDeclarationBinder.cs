@@ -22,7 +22,7 @@ public sealed class PackageDeclarationBinder
     /// <returns>
     /// The declared package identity, or null when the declaration contains synthetic missing syntax.
     /// </returns>
-    public PackageIdentity? Bind(PackageDeclarationSyntax declaration, CancellationToken cancellationToken)
+    public static PackageIdentity? Bind(PackageDeclarationSyntax declaration, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
 

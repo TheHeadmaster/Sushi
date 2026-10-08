@@ -24,7 +24,7 @@ public sealed class LLVMObjectEmitter
     /// <returns>
     /// The emitted native object artifact.
     /// </returns>
-    public NativeObjectArtifact EmitForHost(LLVMModuleArtifact artifact, string outputPath, CancellationToken cancellationToken)
+    public static NativeObjectArtifact EmitForHost(LLVMModuleArtifact artifact, string outputPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
@@ -65,7 +65,7 @@ public sealed class LLVMObjectEmitter
 
             VerifyModule(module);
 
-            this.EmitObjectFile(targetMachine, module, fullOutputPath, cancellationToken);
+            EmitObjectFile(targetMachine, module, fullOutputPath, cancellationToken);
 
             return new NativeObjectArtifact(fullOutputPath, targetTriple);
         }
@@ -76,7 +76,7 @@ public sealed class LLVMObjectEmitter
         }
     }
 
-    private void EmitObjectFile(LLVMTargetMachineRef targetMachine, LLVMModuleRef module, string outputPath, CancellationToken cancellationToken)
+    private static void EmitObjectFile(LLVMTargetMachineRef targetMachine, LLVMModuleRef module, string outputPath, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

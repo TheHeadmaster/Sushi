@@ -9,35 +9,36 @@ namespace Sushi.Analysis;
 /// </summary>
 public sealed class ProjectAnalyzer : Analyzer
 {
-    private readonly TomlConfigurationParser parser = new();
-    private readonly ProjectConfigurationBinder binder = new();
-
-    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
         if (!snapshot.IsValidUtf8)
         {
-            AccumulateEncodingDiagnostics(diagnosticReporter, snapshot);
+            AccumulateEncodingDiagnostics(localDiagnostics, snapshot);
             return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, null));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        TomlConfigurationParseResult parseResult = this.parser.Parse(snapshot, diagnosticReporter, cancellationToken);
+        TomlConfigurationParseResult parseResult = TomlConfigurationParser.Parse(snapshot, localDiagnostics, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        bool hasSyntaxErrors = diagnosticReporter.HasErrors();
+        bool hasSyntaxErrors = localDiagnostics.HasErrors();
 
-        ProjectConfigurationBindResult bindResult = this.binder.Bind(snapshot, diagnosticReporter, parseResult.Document, cancellationToken);
+        ProjectConfigurationBindResult bindResult = ProjectConfigurationBinder.Bind(snapshot, localDiagnostics, parseResult.Document, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         ProjectDefinition? project = hasSyntaxErrors ? null : bindResult.Project;
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return Task.FromResult<AnalysisResult>(new ProjectAnalysisResult(snapshot, project));
     }

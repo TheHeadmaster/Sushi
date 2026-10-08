@@ -7,7 +7,7 @@ namespace Sushi.Configuration;
 
 public sealed class ProjectConfigurationBinder
 {
-    public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, TomlConfigurationTable document, CancellationToken cancellationToken)
+    public static ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, TomlConfigurationTable document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -54,7 +54,7 @@ public sealed class ProjectConfigurationBinder
             return null;
         }
 
-        return BindStringValue(property, propertyName, diagnosticReporter);
+        return BindStringValue(property, diagnosticPropertyName, diagnosticReporter);
     }
 
     private static string? BindStringValue(TomlConfigurationProperty property, string diagnosticName, IDiagnosticReporter diagnosticReporter)
@@ -204,7 +204,7 @@ public sealed class ProjectConfigurationBinder
 
             if (targetProperty.Value is not TomlConfigurationTable targetTable)
             {
-                AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, targetProperty.Name, "table", targetProperty);
+                AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, $"build.targets.{targetProperty.Name}", "table", targetProperty);
 
                 continue;
             }

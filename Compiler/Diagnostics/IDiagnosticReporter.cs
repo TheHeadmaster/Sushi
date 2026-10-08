@@ -25,6 +25,22 @@ public interface IDiagnosticReporter
     public bool HasErrors();
 
     /// <summary>
+    /// Returns whether the diagnostic reporter has accumulated any warnings so far.
+    /// </summary>
+    /// <returns>
+    /// True if the diagnostic reporter has accumulated at least one warning. False otherwise.
+    /// </returns>
+    public bool HasWarnings();
+
+    /// <summary>
+    /// Returns whether the diagnostic reporter has accumulated any diagnostics so far.
+    /// </summary>
+    /// <returns>
+    /// True if the diagnostic reporter has accumulated at least one diagnostic. False otherwise.
+    /// </returns>
+    public bool HasDiagnostics();
+
+    /// <summary>
     /// Generates an error of the specified <see cref="ErrorType"/> and posts it to the diagnostic reporter.
     /// </summary>
     /// <param name="type">

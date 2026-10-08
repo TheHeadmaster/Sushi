@@ -24,9 +24,10 @@ public sealed class FunctionDeclarationBinder
     /// <returns>
     /// The bound function declaration.
     /// </returns>
-    public FunctionBindResult Bind(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static FunctionBindResult Bind(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -47,14 +48,14 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        BoundBlock? body = this.BindBody(declaration.Body, diagnosticReporter, cancellationToken);
+        BoundBlock? body = BindBody(declaration.Body, diagnosticReporter, cancellationToken);
 
         return body is null
             ? new FunctionBindResult(null)
             : new FunctionBindResult(new BoundFunction(accessibility, name, BoundIntegerType.Int32, body));
     }
 
-    private BoundBlock? BindBody(BlockSyntax block, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundBlock? BindBody(BlockSyntax block, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         List<BoundStatement> statements = [];
 
@@ -67,7 +68,7 @@ public sealed class FunctionDeclarationBinder
                 return null;
             }
 
-            BoundReturnStatement? boundReturn = this.BindReturnStatement(returnStatement, diagnosticReporter);
+            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, diagnosticReporter);
 
             if (boundReturn is null)
             {
@@ -80,8 +81,10 @@ public sealed class FunctionDeclarationBinder
         return new BoundBlock(statements);
     }
 
-    private BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
+    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
     {
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
         if (!statement.ReturnKeyword.IsSourceBacked
             || !statement.SemicolonToken.IsSourceBacked
             || statement.Expression is not IntegerLiteralExpressionSyntax literal

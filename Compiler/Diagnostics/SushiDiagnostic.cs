@@ -17,4 +17,17 @@ namespace Sushi.Diagnostics;
 /// <param name="Span">
 /// The <see cref="SourceSpan"/> that the diagnostic originated from.
 /// </param>
-public sealed record SushiDiagnostic(int Code, string Message, DiagnosticSeverity Severity, SourceSpan Span);
+public sealed record SushiDiagnostic(int Code, string Message, DiagnosticSeverity Severity, SourceSpan Span)
+{
+    /// <summary>
+    /// Gets the display name of this <see cref="SushiDiagnostic"/>. Display names are in the format SUS(E|W|I|H)[0-9]{4}.
+    /// </summary>
+    public string DisplayName => this.Severity switch
+    {
+        DiagnosticSeverity.Error => $"SUSE{this.Code:D4}",
+        DiagnosticSeverity.Warning => $"SUSW{this.Code:D4}",
+        DiagnosticSeverity.Information => $"SUSI{this.Code:D4}",
+        DiagnosticSeverity.Hint => $"SUSH{this.Code:D4}",
+        _ => throw new InvalidOperationException($"Severity is invalid value {this.Severity}.")
+    };
+}

@@ -166,16 +166,16 @@ public sealed class SushiLanguageService
         switch (diagnostic.Severity)
         {
             case DiagnosticSeverity.Error:
-                Log.Error("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                Log.Error("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.DisplayName, diagnostic.Message);
                 break;
             case DiagnosticSeverity.Warning:
-                Log.Warning("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                Log.Warning("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.DisplayName, diagnostic.Message);
                 break;
             case DiagnosticSeverity.Information:
-                Log.Information("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                Log.Information("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.DisplayName, diagnostic.Message);
                 break;
             case DiagnosticSeverity.Hint:
-                Log.Debug("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.Code, diagnostic.Message);
+                Log.Debug("{Path}({Line},{Column}): {Code}: {Message}", path, line + 1, character + 1, diagnostic.DisplayName, diagnostic.Message);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(diagnostic));

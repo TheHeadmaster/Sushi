@@ -8,7 +8,7 @@ namespace Sushi.Configuration;
 
 public sealed class TomlConfigurationParser
 {
-    public TomlConfigurationParseResult Parse(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static TomlConfigurationParseResult Parse(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -28,7 +28,9 @@ public sealed class TomlConfigurationParser
         return new TomlConfigurationParseResult(snapshot, syntax, document);
     }
 
+#pragma warning disable IDE0060 // Remove unused parameter
     private static TomlConfigurationTable BuildDocument(SourceSnapshot snapshot, TomlParser parser, CancellationToken cancellationToken)
+#pragma warning restore IDE0060 // Remove unused parameter
     {
         // Placeholder until this gets fleshed out
         return new(
@@ -238,7 +240,7 @@ public sealed class TomlConfigurationParser
                 return existingTable;
             }
 
-            if (existing.Value is TomlConfigurationArray array && array.Items.LastOrDefault() is TomlConfigurationTable lastTable)
+            if (existing.Value is TomlConfigurationArray array && array.Items.Count > 0 && array.Items[^1] is TomlConfigurationTable lastTable)
             {
                 return lastTable;
             }

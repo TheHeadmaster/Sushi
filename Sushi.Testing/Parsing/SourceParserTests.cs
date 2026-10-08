@@ -86,8 +86,6 @@ public class SourceParserTests
             .Should()
             .BeFalse();
 
-        SourceParser parser = new();
-
-        return parser.ParsePackageDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
+        return SourceParser.ParsePackageDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
     }
 }

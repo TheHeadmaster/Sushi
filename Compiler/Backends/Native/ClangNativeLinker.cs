@@ -23,7 +23,7 @@ public sealed class ClangNativeLinker
     /// <returns>
     /// The linked executable artifact.
     /// </returns>
-    public async Task<NativeExecutableArtifact> LinkAsync(NativeObjectArtifact objectArtifact, string outputPath, CancellationToken cancellationToken)
+    public static async Task<NativeExecutableArtifact> LinkAsync(NativeObjectArtifact objectArtifact, string outputPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(objectArtifact);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);

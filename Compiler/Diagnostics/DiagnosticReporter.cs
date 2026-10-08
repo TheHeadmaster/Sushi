@@ -38,6 +38,12 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
     public bool HasErrors() => this.diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 
     /// <inheritdoc />
+    public bool HasWarnings() => this.diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning);
+
+        /// <inheritdoc />
+    public bool HasDiagnostics() => this.diagnostics.Count != 0;
+
+    /// <inheritdoc />
     public IReadOnlyList<SushiDiagnostic> ReportDiagnostics() => new ReadOnlyCollection<SushiDiagnostic>([..this.diagnostics]);
 
     /// <inheritdoc />

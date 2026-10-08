@@ -1,4 +1,3 @@
-using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
 namespace Sushi.Parsing;

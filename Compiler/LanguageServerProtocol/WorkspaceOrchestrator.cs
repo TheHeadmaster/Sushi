@@ -569,7 +569,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         return new Diagnostic
         {
-            Code = diagnostic.Code,
+            Code = diagnostic.DisplayName,
             Message = diagnostic.Message,
             Severity = ToLspSeverity(diagnostic.Severity),
             Range = new LSPRange(startLine, startCharacter, endLine, endCharacter),

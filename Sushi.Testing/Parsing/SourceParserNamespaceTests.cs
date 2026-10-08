@@ -205,6 +205,6 @@ public class SourceParserNamespaceTests
             .Should()
             .BeFalse();
 
-        return new SourceParser().ParseNamespaceDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
+        return SourceParser.ParseNamespaceDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
     }
 }

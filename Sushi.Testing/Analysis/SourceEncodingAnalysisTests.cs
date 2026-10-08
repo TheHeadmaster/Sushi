@@ -24,10 +24,9 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susproj"), version: null, source);
 
-        ProjectAnalyzer analyzer = new();
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        AnalysisResult result = await analyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
+        AnalysisResult result = await ProjectAnalyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
 
         IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
 
@@ -77,10 +76,9 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susln"), version: null, source);
 
-        SolutionAnalyzer analyzer = new();
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        AnalysisResult result = await analyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
+        AnalysisResult result = await SolutionAnalyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
 
         IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
 

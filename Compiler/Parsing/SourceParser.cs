@@ -27,15 +27,20 @@ public sealed class SourceParser
     /// <returns>
     /// A source file syntax containing recognized leading package declarations and its unparsed remainder.
     /// </returns>
-    public ParserResult ParseSourceFile(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static ParserResult ParseSourceFile(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserState state = new(lexerResult, diagnosticReporter, cancellationToken);
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
-        SourceFileSyntax sourceFile = state.ParseSourceFile();
+        ParserState state = new(lexerResult, cancellationToken);
+
+        SourceFileSyntax sourceFile = state.ParseSourceFile(localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, sourceFile));
     }
@@ -53,17 +58,21 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// The parsed function declaration and diagnostics generated during syntactic recovery.
+    /// The parsed function declaration.
     /// </returns>
-    public ParserResult ParseFunctionDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static ParserResult ParseFunctionDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(lexerResult);
+        ArgumentNullException.ThrowIfNull(lexerResult);    
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserState state = new(lexerResult, diagnosticReporter, cancellationToken);
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+        ParserState state = new(lexerResult, cancellationToken);
 
-        FunctionDeclarationSyntax declaration = state.ParseFunctionDeclaration();
+        FunctionDeclarationSyntax declaration = state.ParseFunctionDeclaration(localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
@@ -81,16 +90,21 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// The parsed declaration and diagnostics generated during syntactic recovery.
+    /// The parsed package declaration.
     /// </returns>
-    public ParserResult ParsePackageDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static ParserResult ParsePackageDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserState state = new(lexerResult, diagnosticReporter, cancellationToken);
-        PackageDeclarationSyntax declaration = state.ParsePackageDeclaration();
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+        ParserState state = new(lexerResult, cancellationToken);
+        PackageDeclarationSyntax declaration = state.ParsePackageDeclaration(localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
@@ -109,39 +123,49 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// The parsed declaration and diagnostics generated during syntactic recovery.
+    /// The parsed namespace declaration.
     /// </returns>
-    public ParserResult ParseNamespaceDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static ParserResult ParseNamespaceDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserState state = new(lexerResult, diagnosticReporter, cancellationToken);
-        NamespaceDeclarationSyntax declaration = state.ParseNamespaceDeclaration();
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+        ParserState state = new(lexerResult, cancellationToken);
+        NamespaceDeclarationSyntax declaration = state.ParseNamespaceDeclaration(localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
 
-    private sealed class ParserState(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private sealed class ParserState(LexerResult lexerResult, CancellationToken cancellationToken)
     {
         private readonly LexerResult lexerResult = lexerResult;
 
         private readonly CancellationToken cancellationToken = cancellationToken;
-
-        private readonly IDiagnosticReporter diagnosticReporter = diagnosticReporter;
 
         private int position;
 
         /// <summary>
         /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
         /// </summary>
+        /// <param name="diagnosticReporter">
+        /// The reporter used to accumulate diagnostics.
+        /// </param>
         /// <returns>
         /// A source file containing recognized leading package declarations and its unparsed remainder.
         /// </returns>
-        public SourceFileSyntax ParseSourceFile()
+        public SourceFileSyntax ParseSourceFile(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             this.cancellationToken.ThrowIfCancellationRequested();
+
+            IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
             List<PackageDeclarationSyntax> packageDeclarations = [];
 
@@ -149,7 +173,7 @@ public sealed class SourceParser
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
 
-                packageDeclarations.Add(this.ParsePackageDeclaration());
+                packageDeclarations.Add(this.ParsePackageDeclaration(localDiagnostics));
             }
 
             List<NamespaceDeclarationSyntax> namespaceDeclarations = [];
@@ -158,7 +182,7 @@ public sealed class SourceParser
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
 
-                namespaceDeclarations.Add(this.ParseNamespaceDeclaration());
+                namespaceDeclarations.Add(this.ParseNamespaceDeclaration(localDiagnostics));
             }
 
             List<FunctionDeclarationSyntax> functionDeclarations = [];
@@ -167,54 +191,76 @@ public sealed class SourceParser
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
 
-                functionDeclarations.Add(this.ParseFunctionDeclaration());
+                functionDeclarations.Add(this.ParseFunctionDeclaration(localDiagnostics));
             }
 
             SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
                 ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
                 : null;
 
+            diagnosticReporter.CommitReporter(localDiagnostics);
+
             return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, namespaceDeclarations, functionDeclarations, unparsedContentSpan);
         }
 
-        public FunctionDeclarationSyntax ParseFunctionDeclaration()
+        public FunctionDeclarationSyntax ParseFunctionDeclaration(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             this.cancellationToken.ThrowIfCancellationRequested();
 
-            SyntaxToken accessModifier = this.ParseAccessModifier();
-            SyntaxToken returnType = this.ParseReturnType();
-            SyntaxToken name = this.ParseNameComponent("Expected function name.", skipUnknown: false);
-            SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after function name.");
-            SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after function parameter list.");
-            BlockSyntax body = this.ParseBlock();
+            IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+            SyntaxToken accessModifier = this.ParseAccessModifier(localDiagnostics);
+            SyntaxToken returnType = this.ParseReturnType(localDiagnostics);
+            SyntaxToken name = this.ParseNameComponent("Expected function name.", skipUnknown: false, localDiagnostics);
+            SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after function name.", localDiagnostics);
+            SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after function parameter list.", localDiagnostics);
+            BlockSyntax body = this.ParseBlock(localDiagnostics);
+
+            diagnosticReporter.CommitReporter(localDiagnostics);
 
             return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, closeParenthesis, body);
         }
 
-        public NamespaceDeclarationSyntax ParseNamespaceDeclaration()
+        public NamespaceDeclarationSyntax ParseNamespaceDeclaration(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             this.cancellationToken.ThrowIfCancellationRequested();
 
-            SyntaxToken namespaceKeyword = this.ParseNamespaceKeyword();
-            QualifiedNameSyntax name = this.ParseQualifiedName("namespace");
-            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after namespace declaration.");
+            IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+            SyntaxToken namespaceKeyword = this.ParseNamespaceKeyword(localDiagnostics);
+            QualifiedNameSyntax name = this.ParseQualifiedName("namespace", localDiagnostics);
+            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after namespace declaration.", localDiagnostics);
+
+            diagnosticReporter.CommitReporter(localDiagnostics);
 
             return new NamespaceDeclarationSyntax(namespaceKeyword, name, semicolonToken);
         }
 
-        public PackageDeclarationSyntax ParsePackageDeclaration()
+        public PackageDeclarationSyntax ParsePackageDeclaration(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             this.cancellationToken.ThrowIfCancellationRequested();
 
-            SyntaxToken packageKeyword = this.ParsePackageKeyword();
-            QualifiedNameSyntax name = this.ParseQualifiedName("package");
-            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after package declaration.");
+            IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+            SyntaxToken packageKeyword = this.ParsePackageKeyword(localDiagnostics);
+            QualifiedNameSyntax name = this.ParseQualifiedName("package", localDiagnostics);
+            SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after package declaration.", localDiagnostics);
+
+            diagnosticReporter.CommitReporter(localDiagnostics);
 
             return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
         }
 
-        private SyntaxToken ParseAccessModifier()
+        private SyntaxToken ParseAccessModifier(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && this.IsAccessModifier(token))
             {
                 this.position = index + 1;
@@ -223,13 +269,15 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected access modifier.", position);
+            this.AccumulateExpectedDiagnostic("Expected access modifier.", position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.AccessModifierKeyword, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParseReturnType()
+        private SyntaxToken ParseReturnType(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index))
             {
                 SyntaxType type = token.Type switch
@@ -250,13 +298,15 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected function return type.", position);
+            this.AccumulateExpectedDiagnostic("Expected function return type.", position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage)
+        private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryConsumePunctuation(punctuation, type, skipUnknown: false, out SyntaxToken token))
             {
                 return token;
@@ -264,14 +314,16 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic(diagnosticMessage, position);
+            this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
 
             return SyntaxToken.Missing(type, this.lexerResult.Snapshot, position);
         }
 
-        private BlockSyntax ParseBlock()
+        private BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
         {
-            SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.");
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
+            SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.", diagnosticReporter);
 
             List<StatementSyntax> statements = [];
 
@@ -279,26 +331,30 @@ public sealed class SourceParser
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
 
-                statements.Add(this.ParseReturnStatement());
+                statements.Add(this.ParseReturnStatement(diagnosticReporter));
             }
 
-            SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.");
+            SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.", diagnosticReporter);
 
             return new BlockSyntax(openBrace, statements, closeBrace);
         }
 
-        private ReturnStatementSyntax ParseReturnStatement()
+        private ReturnStatementSyntax ParseReturnStatement(IDiagnosticReporter diagnosticReporter)
         {
-            SyntaxToken returnKeyword = this.ParseReturnKeyword();
-            IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression();
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.");
+            SyntaxToken returnKeyword = this.ParseReturnKeyword(diagnosticReporter);
+            IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression(diagnosticReporter);
+
+            SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.", diagnosticReporter);
 
             return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
         }
 
-        private SyntaxToken ParseReturnKeyword()
+        private SyntaxToken ParseReturnKeyword(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "return"u8))
             {
                 this.position = index + 1;
@@ -307,13 +363,15 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected \"return\" keyword.", position);
+            this.AccumulateExpectedDiagnostic("Expected \"return\" keyword.", position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.lexerResult.Snapshot, position);
         }
 
-        private IntegerLiteralExpressionSyntax ParseIntegerLiteralExpression()
+        private IntegerLiteralExpressionSyntax ParseIntegerLiteralExpression(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.IntegerLiteral)
             {
                 this.position = index + 1;
@@ -322,13 +380,15 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected integer literal expression.", position);
+            this.AccumulateExpectedDiagnostic("Expected integer literal expression.", position, diagnosticReporter);
 
             return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.lexerResult.Snapshot, position));
         }
 
-        private SyntaxToken ParseNamespaceKeyword()
+        private SyntaxToken ParseNamespaceKeyword(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "namespace"u8))
             {
                 this.position = index + 1;
@@ -338,13 +398,15 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected \"namespace\" keyword.", position);
+            this.AccumulateExpectedDiagnostic("Expected \"namespace\" keyword.", position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.NamespaceKeyword, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParsePackageKeyword()
+        private SyntaxToken ParsePackageKeyword(IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "package"u8))
             {
                 this.position = index + 1;
@@ -354,25 +416,27 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic("Expected \"package\" keyword.", position);
+            this.AccumulateExpectedDiagnostic("Expected \"package\" keyword.", position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.PackageKeyword, this.lexerResult.Snapshot, position);
         }
 
-        private QualifiedNameSyntax ParseQualifiedName(string declarationKind)
+        private QualifiedNameSyntax ParseQualifiedName(string declarationKind, IDiagnosticReporter diagnosticReporter)
         {
-            List<SyntaxToken> segments = [this.ParseNameComponent($"Expected {declarationKind} name.", skipUnknown: false)];
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
+            List<SyntaxToken> segments = [this.ParseNameComponent($"Expected {declarationKind} name.", skipUnknown: false, diagnosticReporter)];
             List<SyntaxToken> separators = [];
 
             while (this.TryConsumePunctuation((byte)'.', SyntaxType.DotToken, skipUnknown: true, out SyntaxToken separator))
             {
                 // A source-backed name and dot may be separated only by a diagnosed recovery gap.
 
-                this.RequireSyntacticAdjacency(segments[^1], separator, $"\".\" must immediately follow the preceding {declarationKind}-name component.");
+                this.RequireSyntacticAdjacency(segments[^1], separator, $"\".\" must immediately follow the preceding {declarationKind}-name component.", diagnosticReporter);
 
-                SyntaxToken segment = this.ParseNameComponent($"Expected identifier after \".\" in {declarationKind} name.", skipUnknown: true);
+                SyntaxToken segment = this.ParseNameComponent($"Expected identifier after \".\" in {declarationKind} name.", skipUnknown: true, diagnosticReporter);
 
-                this.RequireSyntacticAdjacency(separator, segment, $"A {declarationKind}-name component must immediately follow \".\".");
+                this.RequireSyntacticAdjacency(separator, segment, $"A {declarationKind}-name component must immediately follow \".\".", diagnosticReporter);
 
                 separators.Add(separator);
                 segments.Add(segment);
@@ -381,8 +445,10 @@ public sealed class SourceParser
             return new QualifiedNameSyntax(segments, separators);
         }
 
-        private SyntaxToken ParseNameComponent(string diagnosticMessage, bool skipUnknown)
+        private SyntaxToken ParseNameComponent(string diagnosticMessage, bool skipUnknown, IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (this.TryPeekToken(skipUnknown, out LexToken token, out int index))
             {
                 SyntaxType type = token.Type switch
@@ -402,12 +468,17 @@ public sealed class SourceParser
 
             int position = this.GetCurrentPosition();
 
-            this.AccumulateExpectedDiagnostic(diagnosticMessage, position);
+            this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
 
             return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
         }
 
-        private SyntaxToken ParseSemicolon(string diagnosticMessage) => this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage);
+        private SyntaxToken ParseSemicolon(string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
+        {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
+            return this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage, diagnosticReporter);
+        }
 
         /// <summary>
         /// Looks ahead without advancing the parser. Unknown elements are skipped only
@@ -538,8 +609,13 @@ public sealed class SourceParser
         /// <param name="message">
         /// The message to show if the adjacency rules are violated.
         /// </param>
-        private void RequireSyntacticAdjacency(SyntaxToken left, SyntaxToken right, string message)
+        /// <param name="diagnosticReporter">
+        /// The diagnostic reporter used to accumulate diagnostics.
+        /// </param>
+        private void RequireSyntacticAdjacency(SyntaxToken left, SyntaxToken right, string message, IDiagnosticReporter diagnosticReporter)
         {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
             if (!left.IsSourceBacked || !right.IsSourceBacked)
             {
                 return;
@@ -558,18 +634,22 @@ public sealed class SourceParser
                 throw new InvalidOperationException("Adjacency participants must occur in source order without overlapping.");
             }
 
-            this.diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.RequiredSyntacticAdjacency, message, new SourceSpan(this.lexerResult.Snapshot, leftSpan.End, rightSpan.Start));
+            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.RequiredSyntacticAdjacency, message, new SourceSpan(this.lexerResult.Snapshot, leftSpan.End, rightSpan.Start));
         }
 
         private bool TokenTextEquals(LexToken token, ReadOnlySpan<byte> expected) => token.Span.Length == expected.Length && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start..token.Span.End].SequenceEqual(expected);
 
         private int GetCurrentPosition() => this.TryPeekToken(skipUnknown: false, out LexToken token, out _) ? token.Span.Start : this.lexerResult.Snapshot.SourceLength;
 
-        private void AccumulateExpectedDiagnostic(string message, int position)
-            => this.diagnosticReporter.GenerateErrorWithCustomMessage(
-                ErrorType.ExpectedSyntax,
-                message,
-                new SourceSpan(this.lexerResult.Snapshot, position, position));
+        private void AccumulateExpectedDiagnostic(string message, int position, IDiagnosticReporter diagnosticReporter)
+        {
+            ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                        ErrorType.ExpectedSyntax,
+                        message,
+                        new SourceSpan(this.lexerResult.Snapshot, position, position));
+        }
 
         private bool IsNamespaceDeclarationAhead()
             => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)

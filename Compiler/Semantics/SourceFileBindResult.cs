@@ -1,9 +1,7 @@
-using Sushi.Diagnostics;
-
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Represents semantic information and diagnostics produced by binding one Sushi source file.
+/// Represents semantic information produced by binding one Sushi source file.
 /// </summary>
 /// <param name="Package">
 /// The source file's package identity when exactly one structurally complete package declaration exists.

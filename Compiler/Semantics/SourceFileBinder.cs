@@ -8,12 +8,6 @@ namespace Sushi.Semantics;
 /// </summary>
 public sealed class SourceFileBinder
 {
-    private readonly PackageDeclarationBinder packageDeclarationBinder = new();
-
-    private readonly NamespaceDeclarationBinder namespaceDeclarationBinder = new();
-
-    private readonly FunctionDeclarationBinder functionDeclarationBinder = new();
-
     /// <summary>
     /// Binds semantic information from a parsed Sushi source file.
     /// </summary>
@@ -29,21 +23,24 @@ public sealed class SourceFileBinder
     /// <returns>
     /// The bound package and namespaces identities when unambiguous, together with file-level semantic diagnostics.
     /// </returns>
-    public SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    public static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        PackageIdentity? package = this.BindPackage(sourceFile, diagnosticReporter, cancellationToken);
-        NamespaceIdentity? @namespace = this.BindNamespace(sourceFile, diagnosticReporter, cancellationToken);
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+        PackageIdentity? package = BindPackage(sourceFile, localDiagnostics, cancellationToken);
+        NamespaceIdentity? @namespace = BindNamespace(sourceFile, localDiagnostics, cancellationToken);
         List<BoundFunction> functions = [];
 
         foreach (FunctionDeclarationSyntax declaration in sourceFile.FunctionDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            FunctionBindResult result = this.functionDeclarationBinder.Bind(declaration, diagnosticReporter,  cancellationToken);
+            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, localDiagnostics,  cancellationToken);
 
             if (result.Function is not null)
             {
@@ -51,10 +48,12 @@ public sealed class SourceFileBinder
             }
         }
 
+        diagnosticReporter.CommitReporter(localDiagnostics);
+
         return new SourceFileBindResult(package, @namespace, functions);
     }
 
-    private PackageIdentity? BindPackage(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static PackageIdentity? BindPackage(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {      
         if (sourceFile.PackageDeclarations.Count == 0)
         {
@@ -81,10 +80,10 @@ public sealed class SourceFileBinder
             return null;
         }
 
-        return this.packageDeclarationBinder.Bind(sourceFile.PackageDeclarations[0], cancellationToken);
+        return PackageDeclarationBinder.Bind(sourceFile.PackageDeclarations[0], cancellationToken);
     }
 
-    private NamespaceIdentity? BindNamespace(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static NamespaceIdentity? BindNamespace(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         if (sourceFile.NamespaceDeclarations.Count == 0)
         {
@@ -109,6 +108,6 @@ public sealed class SourceFileBinder
             return null;
         }
 
-        return this.namespaceDeclarationBinder.Bind(sourceFile.NamespaceDeclarations[0], cancellationToken);
+        return NamespaceDeclarationBinder.Bind(sourceFile.NamespaceDeclarations[0], cancellationToken);
     }
 }

@@ -786,7 +786,7 @@ public class SourceLexerTests
 
         SourceLexer lexer = new();
 
-        return lexer.Lex(snapshot, CancellationToken.None);
+        return lexer.Lex(snapshot, diagnosticReporter, CancellationToken.None);
     }
 
     private static LexerResult Lex(ReadOnlySpan<byte> source)

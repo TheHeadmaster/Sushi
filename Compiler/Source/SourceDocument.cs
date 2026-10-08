@@ -152,6 +152,7 @@ public sealed class SourceDocument
     public bool TryUpdateAnalysis(AnalysisResult analysis, IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(analysis);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         lock (this.syncRoot)
         {

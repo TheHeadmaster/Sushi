@@ -19,7 +19,7 @@ public sealed class BoundFunctionIRConverter
     /// <returns>
     /// The equivalent structured Sushi IR function.
     /// </returns>
-    public IRFunction Convert(BoundFunction function, CancellationToken cancellationToken)
+    public static IRFunction Convert(BoundFunction function, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(function);
 
@@ -29,10 +29,10 @@ public sealed class BoundFunctionIRConverter
             ConvertAccessibility(function.Accessibility),
             function.Name,
             ConvertType(function.ReturnType),
-            this.ConvertBlock(function.Body, cancellationToken));
+            ConvertBlock(function.Body, cancellationToken));
     }
 
-    private IRBlock ConvertBlock(BoundBlock block, CancellationToken cancellationToken)
+    private static IRBlock ConvertBlock(BoundBlock block, CancellationToken cancellationToken)
     {
         List<IRStatement> statements = [with(block.Statements.Count)];
 
@@ -40,24 +40,24 @@ public sealed class BoundFunctionIRConverter
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            statements.Add(this.ConvertStatement(statement, cancellationToken));
+            statements.Add(ConvertStatement(statement, cancellationToken));
         }
 
         return new IRBlock(statements);
     }
 
-    private IRStatement ConvertStatement(BoundStatement statement, CancellationToken cancellationToken)
+    private static IRStatement ConvertStatement(BoundStatement statement, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         return statement switch
         {
-            BoundReturnStatement returnStatement => new IRReturnStatement(this.ConvertExpression(returnStatement.Expression, cancellationToken)),
+            BoundReturnStatement returnStatement => new IRReturnStatement(ConvertExpression(returnStatement.Expression, cancellationToken)),
             _ => throw new NotSupportedException($"Bound statement type \"{statement.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
 
-    private IRExpression ConvertExpression(BoundExpression expression, CancellationToken cancellationToken)
+    private static IRExpression ConvertExpression(BoundExpression expression, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

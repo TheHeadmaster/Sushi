@@ -14,13 +14,8 @@ public sealed class SourceAnalyzer : Analyzer
 {
     private readonly SourceLexer lexer = new();
 
-    private readonly SourceParser parser = new();
-
-    private readonly SourceFileBinder sourceFileBinder = new();
-
     /// <summary>
-    /// Analyzes a Sushi source snapshot and produces its concrete syntax tree
-    /// together with source-encoding, lexical, syntactic, and initial semantic diagnostics.
+    /// Analyzes a Sushi source snapshot and produces its concrete syntax tree.
     /// </summary>
     /// <param name="snapshot">
     /// The authoritative source snapshot to analyze.
@@ -32,7 +27,7 @@ public sealed class SourceAnalyzer : Analyzer
     /// The token used to cancel analysis.
     /// </param>
     /// <returns>
-    /// The source analysis result, including the recovered concrete syntax tree and combined diagnostics.
+    /// The source analysis result, including the recovered concrete syntax tree.
     /// </returns>
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
@@ -41,21 +36,27 @@ public sealed class SourceAnalyzer : Analyzer
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        LexerResult lexerResult = this.lexer.Lex(snapshot, diagnosticReporter, cancellationToken);
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+        AccumulateEncodingDiagnostics(localDiagnostics, snapshot);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserResult parserResult = this.parser.ParseSourceFile(lexerResult, diagnosticReporter, cancellationToken);
+        LexerResult lexerResult = this.lexer.Lex(snapshot, localDiagnostics, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        ParserResult parserResult = SourceParser.ParseSourceFile(lexerResult, localDiagnostics, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
 
-        SourceFileBindResult bindResult = this.sourceFileBinder.Bind(sourceFile, diagnosticReporter, cancellationToken);
+        SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        AccumulateEncodingDiagnostics(diagnosticReporter, snapshot);
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions));
     }

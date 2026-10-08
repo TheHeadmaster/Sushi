@@ -20,7 +20,7 @@ public sealed class NamespaceDeclarationBinder
     /// <returns>
     /// The declared namespace identity, or null when the declaration contains synthetic missing syntax.
     /// </returns>
-    public NamespaceIdentity? Bind(NamespaceDeclarationSyntax declaration, CancellationToken cancellationToken)
+    public static NamespaceIdentity? Bind(NamespaceDeclarationSyntax declaration, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
 

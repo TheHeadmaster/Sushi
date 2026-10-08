@@ -22,8 +22,11 @@ public sealed class SourceLexer : Lexer
     public override LexerResult Lex(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
+
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
         List<LexToken> tokens = [];
         HashSet<int> specificallyDiagnosedBoundaries = [];
@@ -45,7 +48,7 @@ public sealed class SourceLexer : Lexer
             {
                 int matchEnd = position + match.Length;
 
-                position = CommitMatch(snapshot, position, match, tokens, diagnosticReporter, ref encodingIssueIndex);
+                position = CommitMatch(snapshot, position, match, tokens, localDiagnostics, ref encodingIssueIndex);
 
                 if (match.DiagnosesFollowingBoundary)
                 {
@@ -61,7 +64,9 @@ public sealed class SourceLexer : Lexer
             position = unknownEnd;
         }
 
-        AddLexicalAdjacencyDiagnostics(snapshot, tokens, diagnosticReporter, specificallyDiagnosedBoundaries);
+        AddLexicalAdjacencyDiagnostics(snapshot, tokens, localDiagnostics, specificallyDiagnosedBoundaries);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new LexerResult(snapshot, [.. tokens]);
     }
@@ -181,7 +186,7 @@ public sealed class SourceLexer : Lexer
             tokens.Add(new LexToken(match.Type, new SourceSpan(snapshot, segmentStart, matchEnd)));
         }
 
-        if (match.DiagnosticReporter is not null && match.DiagnosticReporter.HasErrors())
+        if (match.DiagnosticReporter is not null)
         {
             diagnosticReporter.CommitReporter(match.DiagnosticReporter);
         }

@@ -19,10 +19,7 @@ namespace Sushi.Compilation;
 /// </remarks>
 public sealed class MVPProjectCompiler
 {
-    private readonly ProjectAnalyzer projectAnalyzer = new();
     private readonly SourceAnalyzer sourceAnalyzer = new();
-    private readonly BoundFunctionIRConverter irConverter = new();
-    private readonly IRFunctionLowerer lowerer = new();
     private readonly MVPExecutableBuilder executableBuilder = new();
 
     /// <summary>
@@ -50,7 +47,7 @@ public sealed class MVPProjectCompiler
 
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await this.projectAnalyzer.Analyze(projectSnapshot, diagnosticReporter, cancellationToken);
+        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(projectSnapshot, diagnosticReporter, cancellationToken);
 
         if (diagnosticReporter.HasErrors())
         {
@@ -87,8 +84,8 @@ public sealed class MVPProjectCompiler
 
         BoundFunction entryFunction = SelectMVPEntryFunction(functions);
 
-        IRFunction structuredFunction = this.irConverter.Convert(entryFunction, cancellationToken);
-        LoweredFunction loweredFunction = this.lowerer.Lower(structuredFunction, cancellationToken);
+        IRFunction structuredFunction = BoundFunctionIRConverter.Convert(entryFunction, cancellationToken);
+        LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structuredFunction, cancellationToken);
 
         string outputPath = GetMVPOutputPath(projectDirectory, project);
 

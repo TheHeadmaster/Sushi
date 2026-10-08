@@ -17,18 +17,18 @@ public sealed class IRFunctionLowerer
     /// <returns>
     /// The equivalent lowered function.
     /// </returns>
-    public LoweredFunction Lower(IRFunction function, CancellationToken cancellationToken)
+    public static LoweredFunction Lower(IRFunction function, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(function);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        LoweredBasicBlock entryBlock = this.LowerEntryBlock(function.Body, cancellationToken);
+        LoweredBasicBlock entryBlock = LowerEntryBlock(function.Body, cancellationToken);
 
         return new LoweredFunction(function.Accessibility, function.Name, function.ReturnType, [entryBlock]);
     }
 
-    private LoweredBasicBlock LowerEntryBlock(IRBlock block, CancellationToken cancellationToken)
+    private static LoweredBasicBlock LowerEntryBlock(IRBlock block, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -37,12 +37,12 @@ public sealed class IRFunctionLowerer
             throw new NotSupportedException("The current lowering pass supports exactly one return statement in a function body.");
         }
 
-        LoweredValue value = this.LowerExpression(returnStatement.Expression, cancellationToken);
+        LoweredValue value = LowerExpression(returnStatement.Expression, cancellationToken);
 
         return new LoweredBasicBlock("entry", [], new LoweredReturnTerminator(value));
     }
 
-    private LoweredValue LowerExpression(IRExpression expression, CancellationToken cancellationToken)
+    private static LoweredValue LowerExpression(IRExpression expression, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
