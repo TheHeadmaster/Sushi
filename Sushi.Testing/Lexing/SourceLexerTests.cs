@@ -761,7 +761,7 @@ public class SourceLexerTests
     [TestCase("42+foo", TestName = "Lex Should Allow Other Source Element Between Separation Required Elements")]
     public void LexShould_35([NotNull] string source)
     {
-        (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);
+        (LexerResult _, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);
 
         diagnostics
             .Should()
