@@ -24,17 +24,17 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susproj"), version: null, source);
 
-        (ProjectAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeProject(snapshot);
+        (ProjectAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeProject(snapshot);
         
-        Result.Project
+        result.Project
             .Should()
             .BeNull();
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = Diagnostics.Single();
+        SushiDiagnostic diagnostic = diagnostics.Single();
 
         diagnostic.Severity
             .Should()
@@ -71,17 +71,17 @@ public class SourceEncodingAnalysisTests
 
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susln"), version: null, source);
 
-        (SolutionAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSolution(snapshot);
+        (SolutionAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSolution(snapshot);
 
-        Result.Solution
+        result.Solution
             .Should()
             .BeNull();
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = Diagnostics.Single();
+        SushiDiagnostic diagnostic = diagnostics.Single();
 
         diagnostic.Severity
             .Should()

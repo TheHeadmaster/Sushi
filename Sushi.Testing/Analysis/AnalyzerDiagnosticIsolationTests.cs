@@ -4,7 +4,7 @@ using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Source;
 
-namespace SUshi.Testing.Analysis;
+namespace Sushi.Testing.Analysis;
 
 [TestFixture]
 public class AnalyzerDiagnosticIsolationTests
@@ -41,6 +41,17 @@ public class AnalyzerDiagnosticIsolationTests
         projectResult.Project
             .Should()
             .NotBeNull();
+
+        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
+
+        SushiDiagnostic diagnostic = diagnostics
+            .Should()
+            .ContainSingle()
+            .Which;
+
+        diagnostic.IsType(ErrorType.ExpectedSyntax)
+            .Should()
+            .BeTrue();
 
         diagnosticReporter.ReportDiagnostics()
             .Should()

@@ -20,17 +20,17 @@ public class SourceSemanticAnalysisTests
          namespace Sushi.Text;
          """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .NotBeNull();
 
-        Result.Package!.QualifiedName
+        result.Package!.QualifiedName
             .Should()
             .Be("Sushi.StandardLibrary.Text");
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
     }
@@ -43,17 +43,17 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.Text;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .NotBeNull();
 
-        Result.Package!.QualifiedName
+        result.Package!.QualifiedName
             .Should()
             .Be("Sushi.if");
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
     }
@@ -66,13 +66,13 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.Text;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .BeNull();
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
@@ -85,17 +85,17 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.Text;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .NotBeNull();
 
-        Result.Package!.QualifiedName
+        result.Package!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        Diagnostics
+        diagnostics
             .Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
             .Should()
             .Be(2);
@@ -109,13 +109,13 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.Text;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .BeNull();
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
@@ -125,17 +125,17 @@ public class SourceSemanticAnalysisTests
     {
         const string source = "namespace Sushi.Text;";
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .BeNull();
 
-        Result.Namespace!.QualifiedName
+        result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingPackageDeclaration));
     }
@@ -149,21 +149,21 @@ public class SourceSemanticAnalysisTests
             using Sushi.Other;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> _) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> _) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package
+        result.Package
             .Should()
             .NotBeNull();
 
-        Result.Package!.QualifiedName
+        result.Package!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        Result.Namespace
+        result.Namespace
             .Should()
             .NotBeNull();
 
-        Result.Namespace!.QualifiedName
+        result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
     }
@@ -177,17 +177,17 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.Text;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Package!.QualifiedName
+        result.Package!.QualifiedName
             .Should()
             .Be("Sushi.StandardLibrary.Text");
 
-        Result.Namespace!.QualifiedName
+        result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.Text");
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
     }
@@ -201,13 +201,13 @@ public class SourceSemanticAnalysisTests
             namespace Sushi.@if;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Namespace!.QualifiedName
+        result.Namespace!.QualifiedName
             .Should()
             .Be("Sushi.if");
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
     }
@@ -217,13 +217,13 @@ public class SourceSemanticAnalysisTests
     {
         const string source = "package Test;";
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Namespace
+        result.Namespace
             .Should()
             .BeNull();
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.MissingNamespaceDeclaration));
     }
@@ -238,21 +238,21 @@ public class SourceSemanticAnalysisTests
             namespace Test.Two;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Namespace
+        result.Namespace
             .Should()
             .BeNull();
 
-        Result.Package
+        result.Package
             .Should()
             .NotBeNull();
 
-        Result.Package.QualifiedName!
+        result.Package.QualifiedName!
             .Should()
             .Be("Test");
 
-        Diagnostics
+        diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.DuplicateNamespaceDeclaration));
     }
@@ -268,9 +268,9 @@ public class SourceSemanticAnalysisTests
             namespace Test.Three;
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Diagnostics
+        diagnostics
             .Count(diagnostic => diagnostic.IsType(ErrorType.DuplicateNamespaceDeclaration))
             .Should()
             .Be(2);
@@ -289,13 +289,13 @@ public class SourceSemanticAnalysisTests
             }
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
-        BoundFunction function = Result.Functions
+        BoundFunction function = result.Functions
             .Should()
             .ContainSingle()
             .Which;
@@ -347,13 +347,13 @@ public class SourceSemanticAnalysisTests
             }
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
-        BoundFunction function = Result.Functions
+        BoundFunction function = result.Functions
             .Should()
             .ContainSingle()
             .Which;
@@ -391,13 +391,13 @@ public class SourceSemanticAnalysisTests
             }
             """;
 
-        (SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
-        Result.Functions
+        result.Functions
             .Should()
             .BeEmpty();
 
-        SushiDiagnostic diagnostic = Diagnostics
+        SushiDiagnostic diagnostic = diagnostics
             .Should()
             .ContainSingle()
             .Which;
@@ -422,6 +422,6 @@ public class SourceSemanticAnalysisTests
 
         diagnostic.Span.Snapshot
             .Should()
-            .BeSameAs(Result.Snapshot);
+            .BeSameAs(result.Snapshot);
     }
 }

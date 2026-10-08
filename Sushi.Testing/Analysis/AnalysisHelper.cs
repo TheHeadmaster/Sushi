@@ -9,7 +9,7 @@ namespace Sushi.Testing.Analysis;
 
 public static class AnalysisHelper
 {
-    public static Task<(ProjectAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeProject(string source, Uri uri)
+    public static Task<(ProjectAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> AnalyzeProject(string source, Uri uri)
         => AnalyzeProject(SourceSnapshot.FromText(uri, version: null, source));
 
     public static async Task<(ProjectAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeProject(SourceSnapshot snapshot)
@@ -25,7 +25,7 @@ public static class AnalysisHelper
         return (result, diagnosticReporter.ReportDiagnostics());
     }
 
-    public static Task<(SolutionAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeSolution(string source, Uri uri)
+    public static Task<(SolutionAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> AnalyzeSolution(string source, Uri uri)
         => AnalyzeSolution(SourceSnapshot.FromText(uri, version: null, source));
 
     public static async Task<(SolutionAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeSolution(SourceSnapshot snapshot)
@@ -41,10 +41,10 @@ public static class AnalysisHelper
         return (result, diagnosticReporter.ReportDiagnostics());
     }
 
-    public static Task<(SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeSource(string source, Uri uri)
+    public static Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> AnalyzeSource(string source, Uri uri)
         => AnalyzeSource(SourceSnapshot.FromText(uri, version: null, source));
 
-    public static async Task<(SourceAnalysisResult Result, IReadOnlyList<SushiDiagnostic> Diagnostics)> AnalyzeSource(SourceSnapshot snapshot)
+    public static async Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> AnalyzeSource(SourceSnapshot snapshot)
     {
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
         SourceAnalyzer analyzer = new();
