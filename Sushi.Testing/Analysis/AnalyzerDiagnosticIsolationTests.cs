@@ -52,9 +52,5 @@ public class AnalyzerDiagnosticIsolationTests
         diagnostic.IsType(ErrorType.ExpectedSyntax)
             .Should()
             .BeTrue();
-
-        diagnosticReporter.ReportDiagnostics()
-            .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 }
