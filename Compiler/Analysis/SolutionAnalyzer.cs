@@ -20,7 +20,7 @@ public sealed class SolutionAnalyzer : Analyzer
 
         if (!snapshot.IsValidUtf8)
         {
-            AccumulateEncodingDiagnostics(localDiagnostics, snapshot);       
+            AccumulateEncodingDiagnostics(localDiagnostics, snapshot);
             diagnosticReporter.CommitReporter(localDiagnostics);
             return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, null));
         }
