@@ -9,14 +9,14 @@ namespace Sushi.Semantics;
 /// </summary>
 public sealed class FunctionDeclarationBinder
 {
-    // Placeholder until diagnostic numbering is settled.
-    private const string IntegerConstantOutOfRangeCode = "SUSE012";
-
     /// <summary>
     /// Binds a function declaration when it belongs to the currently supported executable semantic subset.
     /// </summary>
     /// <param name="declaration">
     /// The declaration to bind.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// The diagnostic reporter used to accumulate diagnostics.
     /// </param>
     /// <param name="cancellationToken">
     /// The cancellation token used to cancel binding.
@@ -24,13 +24,11 @@ public sealed class FunctionDeclarationBinder
     /// <returns>
     /// The bound function declaration.
     /// </returns>
-    public FunctionBindResult Bind(FunctionDeclarationSyntax declaration, CancellationToken cancellationToken)
+    public FunctionBindResult Bind(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
 
         cancellationToken.ThrowIfCancellationRequested();
-
-        List<SushiDiagnostic> diagnostics = [];
 
         if (!TryBindAccessibility(declaration.AccessModifier, out Accessibility accessibility)
             || !TryBindInt32ReturnType(declaration.ReturnType)
@@ -39,24 +37,24 @@ public sealed class FunctionDeclarationBinder
             || !declaration.Body.OpenBraceToken.IsSourceBacked
             || !declaration.Body.CloseBraceToken.IsSourceBacked)
         {
-            return new FunctionBindResult(null, diagnostics);
+            return new FunctionBindResult(null);
         }
 
         string? name = IdentifierBinder.Bind(declaration.Name);
 
         if (name is null)
         {
-            return new FunctionBindResult(null, diagnostics);
+            return new FunctionBindResult(null);
         }
 
-        BoundBlock? body = this.BindBody(declaration.Body, diagnostics, cancellationToken);
+        BoundBlock? body = this.BindBody(declaration.Body, diagnosticReporter, cancellationToken);
 
         return body is null
-            ? new FunctionBindResult(null, diagnostics)
-            : new FunctionBindResult(new BoundFunction(accessibility, name, BoundIntegerType.Int32, body), diagnostics);
+            ? new FunctionBindResult(null)
+            : new FunctionBindResult(new BoundFunction(accessibility, name, BoundIntegerType.Int32, body));
     }
 
-    private BoundBlock? BindBody(BlockSyntax block, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private BoundBlock? BindBody(BlockSyntax block, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         List<BoundStatement> statements = [];
 
@@ -69,7 +67,7 @@ public sealed class FunctionDeclarationBinder
                 return null;
             }
 
-            BoundReturnStatement? boundReturn = this.BindReturnStatement(returnStatement, diagnostics);
+            BoundReturnStatement? boundReturn = this.BindReturnStatement(returnStatement, diagnosticReporter);
 
             if (boundReturn is null)
             {
@@ -82,7 +80,7 @@ public sealed class FunctionDeclarationBinder
         return new BoundBlock(statements);
     }
 
-    private BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, List<SushiDiagnostic> diagnostics)
+    private BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
     {
         if (!statement.ReturnKeyword.IsSourceBacked
             || !statement.SemicolonToken.IsSourceBacked
@@ -94,7 +92,7 @@ public sealed class FunctionDeclarationBinder
 
         if (exactValue > int.MaxValue)
         {
-            diagnostics.Add(new SushiDiagnostic(IntegerConstantOutOfRangeCode, "Integer constant is not representable as int32.", DiagnosticSeverity.Error, literal.Span));
+            diagnosticReporter.GenerateError(ErrorType.IntegerConstantOutOfRange, literal.Span);
 
             return null;
         }

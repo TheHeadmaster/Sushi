@@ -1,4 +1,3 @@
-using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -10,9 +9,6 @@ namespace Sushi.Analysis;
 /// </summary>
 /// <param name="Snapshot">
 /// The snapshot that was analyzed.
-/// </param>
-/// <param name="Diagnostics">
-/// The combined source-encoding, lexical, syntactic, and semantic diagnostics.
 /// </param>
 /// <param name="SyntaxTree">
 /// The concrete syntax tree produced from the analyzed source.
@@ -26,4 +22,4 @@ namespace Sushi.Analysis;
 /// <param name="Functions">
 /// The declared functions.
 /// </param>
-public record SourceAnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions) : AnalysisResult(Snapshot, Diagnostics);
+public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions) : AnalysisResult(Snapshot);

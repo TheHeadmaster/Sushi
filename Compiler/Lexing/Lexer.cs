@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Sushi.Diagnostics;
 using Sushi.Source;
 
@@ -9,5 +8,5 @@ namespace Sushi.Lexing;
 /// </summary>
 public abstract class Lexer
 {
-    public abstract LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken);
+    public abstract LexerResult Lex(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken);
 }

@@ -14,7 +14,4 @@ namespace Sushi.Semantics;
 /// <param name="Functions">
 /// The source file's bound function declarations.
 /// </param>
-/// <param name="Diagnostics">
-/// Semantic diagnostics produced while binding the source file.
-/// </param>
-public sealed record SourceFileBindResult(PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions, IReadOnlyList<SushiDiagnostic> Diagnostics);
+public sealed record SourceFileBindResult(PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions);

@@ -48,13 +48,13 @@ public sealed class MVPProjectCompiler
 
         SourceSnapshot projectSnapshot = await LoadSnapshot(projectPath, cancellationToken);
 
-        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await this.projectAnalyzer.Analyze(projectSnapshot, cancellationToken);
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        List<SushiDiagnostic> diagnostics = [.. projectResult.Diagnostics];
+        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await this.projectAnalyzer.Analyze(projectSnapshot, diagnosticReporter, cancellationToken);
 
-        if (HasErrors(diagnostics))
+        if (diagnosticReporter.HasErrors())
         {
-            return new MVPCompilationResult(diagnostics, executable: null);
+            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
         }
 
         ProjectDefinition project = projectResult.Project
@@ -75,15 +75,14 @@ public sealed class MVPProjectCompiler
 
             SourceSnapshot sourceSnapshot = await LoadSnapshot(sourcePath, cancellationToken);
 
-            SourceAnalysisResult sourceResult = (SourceAnalysisResult)await this.sourceAnalyzer.Analyze(sourceSnapshot, cancellationToken);
+            SourceAnalysisResult sourceResult = (SourceAnalysisResult)await this.sourceAnalyzer.Analyze(sourceSnapshot, diagnosticReporter, cancellationToken);
 
-            diagnostics.AddRange(sourceResult.Diagnostics);
             functions.AddRange(sourceResult.Functions);
         }
 
-        if (HasErrors(diagnostics))
+        if (diagnosticReporter.HasErrors())
         {
-            return new MVPCompilationResult(diagnostics, executable: null);
+            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
         }
 
         BoundFunction entryFunction = SelectMVPEntryFunction(functions);
@@ -95,7 +94,7 @@ public sealed class MVPProjectCompiler
 
         NativeExecutableArtifact executable = await this.executableBuilder.BuildAsync(loweredFunction, outputPath, cancellationToken);
 
-        return new MVPCompilationResult(diagnostics, executable);
+        return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable);
     }
 
     private static string ResolveProjectPath(string projectOrFolderPath)
@@ -192,7 +191,4 @@ public sealed class MVPProjectCompiler
 
         return SourceSnapshot.FromUtf8(new Uri(fullPath), version: null, bytes);
     }
-
-    private static bool HasErrors(IEnumerable<SushiDiagnostic> diagnostics)
-        => diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
 }

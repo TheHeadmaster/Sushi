@@ -5,6 +5,7 @@ using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
 using Sushi.Source;
 using Sushi.Lexing.Tokenization;
+using Sushi.Diagnostics;
 
 namespace Sushi.Testing.Parsing;
 
@@ -16,11 +17,12 @@ public class SourceParserTests
     [TestCase(TestName = "Parser Should Parse Dotted Package Declaration")]
     public void ParserShould_0()
     {
-        ParserResult result = Parse("package Sushi.StandardLibrary.Text;");
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
+        ParserResult result = Parse("package Sushi.StandardLibrary.Text;", diagnosticReporter);
 
-        result.Diagnostics
+        diagnosticReporter.HasErrors()
             .Should()
-            .BeEmpty();
+            .BeFalse();
 
         PackageDeclarationSyntax declaration = result.Tree.Root
             .Should()
@@ -73,19 +75,19 @@ public class SourceParserTests
             .Be("package Sushi.StandardLibrary.Text;".Length);
     }
     
-    private static ParserResult Parse(string source)
+    private static ParserResult Parse(string source, IDiagnosticReporter diagnosticReporter)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
 
         SourceLexer lexer = new();
-        LexerResult lexerResult = lexer.Lex(snapshot, CancellationToken.None);
+        LexerResult lexerResult = lexer.Lex(snapshot, diagnosticReporter, CancellationToken.None);
 
-        lexerResult.Diagnostics
+        diagnosticReporter.HasErrors()
             .Should()
-            .BeEmpty();
+            .BeFalse();
 
         SourceParser parser = new();
 
-        return parser.ParsePackageDeclaration(lexerResult, CancellationToken.None);
+        return parser.ParsePackageDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
     }
 }

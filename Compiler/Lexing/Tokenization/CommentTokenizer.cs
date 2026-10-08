@@ -8,8 +8,6 @@ namespace Sushi.Lexing.Tokenization;
 /// </summary>
 public sealed class CommentTokenizer : ILexTokenizer
 {
-    private const string UnterminatedBlockCommentCode = "SUSE001";
-
     /// <inheritdoc />
     public bool CanStart(byte firstByte) => firstByte == (byte)'/';
 
@@ -132,13 +130,10 @@ public sealed class CommentTokenizer : ILexTokenizer
             end++;
         }
 
-        SushiDiagnostic diagnostic = new(
-            UnterminatedBlockCommentCode,
-            "Unterminated block comment.",
-            DiagnosticSeverity.Error,
-            new SourceSpan(snapshot, position, position + 2));
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
+        diagnosticReporter.GenerateError(ErrorType.UnterminatedBlockComment, new SourceSpan(snapshot, position, position + 2));
 
-        return new LexTokenMatch(LexTokenType.BlockComment, end - position, [diagnostic]);
+        return new LexTokenMatch(LexTokenType.BlockComment, end - position, DiagnosticReporter: diagnosticReporter);
     }
 
     /// <summary>

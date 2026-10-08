@@ -7,29 +7,30 @@ namespace Sushi.Analysis;
 /// <summary>
 /// Coordinates compiler analysis for a solution source snapshot.
 /// </summary>
-public sealed class SolutionAnalyzer
+public sealed class SolutionAnalyzer : Analyzer
 {
     private readonly TomlConfigurationParser parser = new();
 
-    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        IReadOnlyList<SushiDiagnostic> encodingDiagnostics = SourceEncodingDiagnostics.Create(snapshot);
-
         if (!snapshot.IsValidUtf8)
         {
-            return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, encodingDiagnostics, null));
+            AccumulateEncodingDiagnostics(diagnosticReporter, snapshot);
+            return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, null));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        TomlConfigurationParseResult parseResult = this.parser.Parse(snapshot, cancellationToken);
+        // TODO: This result has a use later
+        TomlConfigurationParseResult _ = this.parser.Parse(snapshot, diagnosticReporter, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, parseResult.Diagnostics, new SolutionDefinition()));
+        return Task.FromResult<AnalysisResult>(new SolutionAnalysisResult(snapshot, new SolutionDefinition()));
     }
 }

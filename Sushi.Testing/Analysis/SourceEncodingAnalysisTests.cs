@@ -25,8 +25,11 @@ public class SourceEncodingAnalysisTests
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susproj"), version: null, source);
 
         ProjectAnalyzer analyzer = new();
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        AnalysisResult result = await analyzer.Analyze(snapshot, CancellationToken.None);
+        AnalysisResult result = await analyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
+
+        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
 
         ProjectAnalysisResult projectResult = result
             .Should()
@@ -37,11 +40,11 @@ public class SourceEncodingAnalysisTests
             .Should()
             .BeNull();
 
-        projectResult.Diagnostics
+        diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = projectResult.Diagnostics.Single();
+        SushiDiagnostic diagnostic = diagnostics.Single();
 
         diagnostic.Severity
             .Should()
@@ -75,8 +78,11 @@ public class SourceEncodingAnalysisTests
         SourceSnapshot snapshot = SourceSnapshot.FromUtf8(new Uri("file:///TestProject/Test.susln"), version: null, source);
 
         SolutionAnalyzer analyzer = new();
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        AnalysisResult result = await analyzer.Analyze(snapshot, CancellationToken.None);
+        AnalysisResult result = await analyzer.Analyze(snapshot, diagnosticReporter, CancellationToken.None);
+
+        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
 
         SolutionAnalysisResult solutionResult = result
             .Should()
@@ -87,11 +93,11 @@ public class SourceEncodingAnalysisTests
             .Should()
             .BeNull();
 
-        solutionResult.Diagnostics
+        diagnostics
             .Should()
             .ContainSingle();
 
-        SushiDiagnostic diagnostic = solutionResult.Diagnostics.Single();
+        SushiDiagnostic diagnostic = diagnostics.Single();
 
         diagnostic.Severity
             .Should()

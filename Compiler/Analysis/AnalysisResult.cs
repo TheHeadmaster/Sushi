@@ -1,4 +1,3 @@
-using Sushi.Diagnostics;
 using Sushi.Source;
 
 namespace Sushi.Analysis;
@@ -9,7 +8,4 @@ namespace Sushi.Analysis;
 /// <param name="Snapshot">
 /// The snapshot that was analyzed.
 /// </param>
-/// <param name="Diagnostics">
-/// The diagnostics produced by the analysis.
-/// </param>
-public abstract record AnalysisResult(SourceSnapshot Snapshot, IReadOnlyList<SushiDiagnostic> Diagnostics);
+public abstract record AnalysisResult(SourceSnapshot Snapshot);

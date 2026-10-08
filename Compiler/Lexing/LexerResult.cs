@@ -13,7 +13,4 @@ namespace Sushi.Lexing;
 /// <param name="Tokens">
 /// The <see cref="LexToken"/> objects produced while lexing.
 /// </param>
-/// <param name="Diagnostics">
-/// The diagnostics produced while lexing.
-/// </param>
-public sealed record LexerResult(SourceSnapshot Snapshot, IReadOnlyList<LexToken> Tokens, IReadOnlyList<SushiDiagnostic> Diagnostics);
+public sealed record LexerResult(SourceSnapshot Snapshot, IReadOnlyList<LexToken> Tokens);

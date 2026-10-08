@@ -3,7 +3,7 @@ using Sushi.Source;
 namespace Sushi.Diagnostics;
 
 /// <summary>
-/// Represents a diagnostic message from any point in the compiler pipeline that should be shown to the user while in an IDE.
+/// Represents a diagnostic message from any point in the compiler pipeline that should be reported.
 /// </summary>
 /// <param name="Code">
 /// The diagnostic code.
@@ -17,4 +17,4 @@ namespace Sushi.Diagnostics;
 /// <param name="Span">
 /// The <see cref="SourceSpan"/> that the diagnostic originated from.
 /// </param>
-public sealed record SushiDiagnostic(string Code, string Message, DiagnosticSeverity Severity, SourceSpan Span);
+public sealed record SushiDiagnostic(int Code, string Message, DiagnosticSeverity Severity, SourceSpan Span);

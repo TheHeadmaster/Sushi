@@ -7,64 +7,57 @@ namespace Sushi.Configuration;
 
 public sealed class ProjectConfigurationBinder
 {
-    // Placeholders
-    private const string MissingRequiredKeyDiagnosticCode = "SUSE1001";
-    private const string InvalidValueTypeDiagnosticCode = "SUSE1002";
-    private const string EmptyProjectNameDiagnosticCode = "SUSE1003";
-
-    private const string MissingBuildTargetsDiagnosticCode = "SUSE1004";
-    private const string UnknownDefaultBuildTargetDiagnosticCode = "SUSE1005";
-
-    public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, TomlConfigurationTable document, CancellationToken cancellationToken)
+    public ProjectConfigurationBindResult Bind(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, TomlConfigurationTable document, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
         ArgumentNullException.ThrowIfNull(document);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        List<SushiDiagnostic> diagnostics = [];
+        string? name = BindRequiredString(snapshot, document, diagnosticReporter, "name");
+        string? assembly = BindRequiredString(snapshot, document, diagnosticReporter, "assembly");
 
-        string? name = BindRequiredString(snapshot, document, "name", "name", diagnostics);
-        string? assembly = BindRequiredString(snapshot, document, "assembly", "assembly", diagnostics);
-
-        string? languageVersion = BindRequiredString(snapshot, document, "language-version", "language-version", diagnostics);
+        string? languageVersion = BindRequiredString(snapshot, document, diagnosticReporter, "language-version");
 
         if (name is { Length: 0 } && document.TryGetProperty("name", out TomlConfigurationProperty nameProperty))
         {
-            diagnostics.Add(CreateError(EmptyProjectNameDiagnosticCode, "Project name cannot be empty.", nameProperty.Value.Span));
+            diagnosticReporter.GenerateError(ErrorType.TomlEmptyProjectName, nameProperty.Value.Span);
         }
 
-        ProjectSourceDefinition source = BindSource(document, diagnostics, cancellationToken);
+        ProjectSourceDefinition source = BindSource(document, diagnosticReporter, cancellationToken);
 
-        ProjectBuildDefinition build = BindBuild(snapshot, document, diagnostics, cancellationToken);
-
-        bool hasErrors = diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        ProjectBuildDefinition build = BindBuild(snapshot, document, diagnosticReporter, cancellationToken);
 
         ProjectDefinition? project =
-            !hasErrors
+            !diagnosticReporter.HasErrors()
             && name is not null
             && assembly is not null
             && languageVersion is not null
                 ? new ProjectDefinition(name, assembly, languageVersion, source, build)
                 : null;
 
-        return new ProjectConfigurationBindResult(project, diagnostics);
+        return new ProjectConfigurationBindResult(project);
     }
 
-    private static string? BindRequiredString(SourceSnapshot snapshot, TomlConfigurationTable table, string propertyName, string diagnosticName, List<SushiDiagnostic> diagnostics)
+    private static string? BindRequiredString(SourceSnapshot snapshot, TomlConfigurationTable table, IDiagnosticReporter diagnosticReporter, string propertyName, string diagnosticPropertyName = "")
     {
+        if (string.IsNullOrWhiteSpace(diagnosticPropertyName))
+        {
+            diagnosticPropertyName = propertyName;
+        }
+
         if (!table.TryGetProperty(propertyName, out TomlConfigurationProperty property))
         {
-            diagnostics.Add(
-                CreateMissingKeyDiagnostic(snapshot, diagnosticName));
+            AccumulateMissingKeyDiagnostic(snapshot, diagnosticReporter, diagnosticPropertyName);
 
             return null;
         }
 
-        return BindStringValue(property, diagnosticName, diagnostics);
+        return BindStringValue(property, propertyName, diagnosticReporter);
     }
 
-    private static string? BindStringValue(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics)
+    private static string? BindStringValue(TomlConfigurationProperty property, string diagnosticName, IDiagnosticReporter diagnosticReporter)
     {
         if (property.Value is TomlConfigurationInvalid)
         {
@@ -76,12 +69,12 @@ public sealed class ProjectConfigurationBinder
             return stringValue.Value;
         }
 
-        diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must be a string.", property.Value.Span));
+        AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, diagnosticName, "string", property);
 
         return null;
     }
 
-    private static ProjectSourceDefinition BindSource(TomlConfigurationTable document, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static ProjectSourceDefinition BindSource(TomlConfigurationTable document, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -92,14 +85,12 @@ public sealed class ProjectConfigurationBinder
 
         if (sourceProperty.Value is TomlConfigurationInvalid)
         {
-            return new ProjectSourceDefinition(
-                DefaultNamespace: null,
-                Exclude: []);
+            return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
         }
 
         if (sourceProperty.Value is not TomlConfigurationTable sourceTable)
         {
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"source\" must be a table.", sourceProperty.Value.Span));
+            AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, "source", "table", sourceProperty);
 
             return new ProjectSourceDefinition(DefaultNamespace: null, Exclude: []);
         }
@@ -109,24 +100,24 @@ public sealed class ProjectConfigurationBinder
 
         if (sourceTable.TryGetProperty("default-namespace", out TomlConfigurationProperty defaultNamespaceProperty))
         {
-            defaultNamespace = BindStringValue(defaultNamespaceProperty, "source.default-namespace", diagnostics);
+            defaultNamespace = BindStringValue(defaultNamespaceProperty, "source.default-namespace", diagnosticReporter);
         }
 
         if (sourceTable.TryGetProperty("exclude", out TomlConfigurationProperty excludeProperty))
         {
-            exclude.AddRange(BindStringArray(excludeProperty, "source.exclude", diagnostics, cancellationToken));
+            exclude.AddRange(BindStringArray(excludeProperty, "source.exclude", diagnosticReporter, cancellationToken));
         }
 
         return new ProjectSourceDefinition(defaultNamespace, exclude);
     }
 
-    private static ProjectBuildDefinition BindBuild(SourceSnapshot snapshot, TomlConfigurationTable document, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static ProjectBuildDefinition BindBuild(SourceSnapshot snapshot, TomlConfigurationTable document, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!document.TryGetProperty("build", out TomlConfigurationProperty buildProperty))
         {
-            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "build"));
+            AccumulateMissingKeyDiagnostic(snapshot, diagnosticReporter, "build");
 
             return CreateEmptyBuild();
         }
@@ -138,7 +129,7 @@ public sealed class ProjectConfigurationBinder
 
         if (buildProperty.Value is not TomlConfigurationTable buildTable)
         {
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"build\" must be a table.", buildProperty.Value.Span));
+            AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, "build", "table", buildProperty);
 
             return CreateEmptyBuild();
         }
@@ -154,37 +145,37 @@ public sealed class ProjectConfigurationBinder
         {
             defaultProperty = foundDefaultProperty;
 
-            defaultTarget = BindStringValue(foundDefaultProperty, "build.default", diagnostics);
+            defaultTarget = BindStringValue(foundDefaultProperty, "build.default", diagnosticReporter);
         }
         else
         {
-            diagnostics.Add(CreateMissingKeyDiagnostic(snapshot, "build.default"));
+            AccumulateMissingKeyDiagnostic(snapshot, diagnosticReporter, "build.default");
         }
 
         if (buildTable.TryGetProperty("sources", out TomlConfigurationProperty sourcesProperty))
         {
-            sources.AddRange(BindStringArray(sourcesProperty, "build.sources", diagnostics, cancellationToken));
+            sources.AddRange(BindStringArray(sourcesProperty, "build.sources", diagnosticReporter, cancellationToken));
         }
 
         if (buildTable.TryGetProperty("targets", out TomlConfigurationProperty targetsProperty))
         {
-            BindBuildTargets(snapshot, targetsProperty, targets, declaredTargetNames, diagnostics, cancellationToken);
+            BindBuildTargets(snapshot, targetsProperty, targets, declaredTargetNames, diagnosticReporter, cancellationToken);
         }
 
         if (declaredTargetNames.Count == 0)
         {
-            diagnostics.Add(CreateError(MissingBuildTargetsDiagnosticCode, "Project configuration must define at least one build target.", buildTable.Span));
+            diagnosticReporter.GenerateError(ErrorType.TomlMissingBuildTargets, buildTable.Span);
         }
 
         if (defaultTarget is not null && defaultProperty is not null && !declaredTargetNames.Contains(defaultTarget))
         {
-            diagnostics.Add(CreateError(UnknownDefaultBuildTargetDiagnosticCode, $"Default build target \"{defaultTarget}\" is not declared in \"build.targets\".", defaultProperty.Value.Span));
+            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.TomlUnknownDefaultBuildTarget, $"Default build target \"{defaultTarget}\" is not declared in \"build.targets\".", defaultProperty.Value.Span);
         }
 
         return new ProjectBuildDefinition(defaultTarget, sources, targets);
     }
 
-    private static void BindBuildTargets(SourceSnapshot snapshot, TomlConfigurationProperty targetsProperty, Dictionary<string, ProjectBuildTargetDefinition> targets, HashSet<string> declaredTargetNames, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static void BindBuildTargets(SourceSnapshot snapshot, TomlConfigurationProperty targetsProperty, Dictionary<string, ProjectBuildTargetDefinition> targets, HashSet<string> declaredTargetNames, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -195,7 +186,7 @@ public sealed class ProjectConfigurationBinder
 
         if (targetsProperty.Value is not TomlConfigurationTable targetsTable)
         {
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, "Project configuration key \"build.targets\" must be a table.", targetsProperty.Value.Span));
+            AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, "build.targets", "table", targetsProperty);
 
             return;
         }
@@ -213,12 +204,12 @@ public sealed class ProjectConfigurationBinder
 
             if (targetProperty.Value is not TomlConfigurationTable targetTable)
             {
-                diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Build target \"{targetProperty.Name}\" must be a table.", targetProperty.Value.Span));
+                AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, targetProperty.Name, "table", targetProperty);
 
                 continue;
             }
 
-            string? type = BindRequiredString(snapshot, targetTable, "type", $"build.targets.{targetProperty.Name}.type", diagnostics);
+            string? type = BindRequiredString(snapshot, targetTable, diagnosticReporter, "type", $"build.targets.{targetProperty.Name}.type");
 
             if (type is null)
             {
@@ -229,7 +220,7 @@ public sealed class ProjectConfigurationBinder
         }
     }
 
-    private static IReadOnlyList<string> BindStringArray(TomlConfigurationProperty property, string diagnosticName, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private static IReadOnlyList<string> BindStringArray(TomlConfigurationProperty property, string diagnosticName, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         if (property.Value is TomlConfigurationInvalid)
         {
@@ -238,7 +229,7 @@ public sealed class ProjectConfigurationBinder
 
         if (property.Value is not TomlConfigurationArray array)
         {
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must be an array of strings.", property.Value.Span));
+            AccumulateInvalidValueTypeDiagnostic(diagnosticReporter, diagnosticName, "string array", property);
 
             return [];
         }
@@ -256,7 +247,7 @@ public sealed class ProjectConfigurationBinder
                 continue;
             }
 
-            diagnostics.Add(CreateError(InvalidValueTypeDiagnosticCode, $"Project configuration key \"{diagnosticName}\" must contain only strings.", item.Span));
+            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.TomlInvalidValueType, $"Project configuration key \"{diagnosticName}\" must contain only strings.", item.Span);
         }
 
         return values;
@@ -264,12 +255,15 @@ public sealed class ProjectConfigurationBinder
 
     private static ProjectBuildDefinition CreateEmptyBuild() => new(DefaultTarget: null, Sources: [], Targets: new Dictionary<string, ProjectBuildTargetDefinition>(StringComparer.Ordinal));
 
-    private static SushiDiagnostic CreateMissingKeyDiagnostic(SourceSnapshot snapshot, string keyName)
+    private static void AccumulateMissingKeyDiagnostic(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, string keyName)
     {
         int eof = snapshot.Bytes.Length;
-
-        return new SushiDiagnostic(MissingRequiredKeyDiagnosticCode, $"Required project configuration key \"{keyName}\" is missing.", DiagnosticSeverity.Error, new SourceSpan(snapshot, eof, eof));
+        diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.TomlMissingRequiredKey, $"Required project configuration key \"{keyName}\" is missing.", new SourceSpan(snapshot, eof, eof));
     }
-
-    private static SushiDiagnostic CreateError(string code, string message, SourceSpan span) => new(code, message, DiagnosticSeverity.Error, span);
+  
+    private static void AccumulateInvalidValueTypeDiagnostic(IDiagnosticReporter diagnosticReporter, string propertyName, string typeName, TomlConfigurationProperty sourceProperty)
+        => diagnosticReporter.GenerateErrorWithCustomMessage(
+            ErrorType.TomlInvalidValueType,
+            $"Project configuration key \"{propertyName}\" must be a {typeName}.",
+            sourceProperty.Value.Span);
 }

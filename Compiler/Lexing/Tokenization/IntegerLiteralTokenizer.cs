@@ -8,11 +8,6 @@ namespace Sushi.Lexing.Tokenization;
 /// </summary>
 public sealed class IntegerLiteralTokenizer : ILexTokenizer
 {
-    // Placeholder until diagnostic numbering is settled.
-    private const string MissingRadixDigitCode = "SUSE002";
-    private const string InvalidRadixDigitCode = "SUSE003";
-    private const string InvalidDigitSeparatorCode = "SUSE004";
-
     /// <inheritdoc />
     public bool CanStart(byte firstByte) => IsAsciiDecimalDigit(firstByte) || firstByte is (byte)'b' or (byte)'o' or (byte)'x';
 
@@ -113,6 +108,7 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
     {
         int bodyStart = position + 2;
         int end = bodyStart;
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
         while (end < bytes.Length && IsRadixBodyByte(bytes[end], radix))
         {
@@ -120,7 +116,6 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
             end++;
         }
 
-        List<SushiDiagnostic> diagnostics = [];
         bool hasDigitCharacter = false;
 
         for (int index = bodyStart; index < end; index++)
@@ -133,11 +128,7 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
             {
                 if (!IsValidSeparatorPlacement(bytes, bodyStart, end, index, radix))
                 {
-                    diagnostics.Add(new SushiDiagnostic(
-                        InvalidDigitSeparatorCode,
-                        "Integer digit separator must occur between two digits valid for the literal's radix.",
-                        DiagnosticSeverity.Error,
-                        new SourceSpan(snapshot, index, index + 1)));
+                    diagnosticReporter.GenerateError(ErrorType.InvalidDigitSeparator, new SourceSpan(snapshot, index, index + 1));
                 }
 
                 continue;
@@ -147,26 +138,18 @@ public sealed class IntegerLiteralTokenizer : ILexTokenizer
 
             if (!IsDigitForRadix(value, radix))
             {
-                diagnostics.Add(new SushiDiagnostic(
-                    InvalidRadixDigitCode,
-                    $"Digit '{(char)value}' is not valid in a {GetRadixName(radix)} integer literal.",
-                    DiagnosticSeverity.Error,
-                    new SourceSpan(snapshot, index, index + 1)));
+                diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.InvalidRadixDigit, $"Digit '{(char)value}' is not valid in a {GetRadixName(radix)} integer literal.", new SourceSpan(snapshot, index, index + 1));
             }
         }
 
         if (!hasDigitCharacter)
         {
-            diagnostics.Add(new SushiDiagnostic(
-                MissingRadixDigitCode,
-                "Radix-prefixed integer literal requires at least one digit.",
-                DiagnosticSeverity.Error,
-                new SourceSpan(snapshot, position, position + 2)));
+            diagnosticReporter.GenerateError(ErrorType.MissingRadixDigit, new SourceSpan(snapshot, position, position + 2));
         }
 
         bool diagnosesFollowingBoundary = end == bodyStart;
 
-        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnostics.Count == 0 ? null : diagnostics, diagnosesFollowingBoundary);
+        return new LexTokenMatch(LexTokenType.IntegerLiteral, end - position, diagnosesFollowingBoundary, diagnosticReporter.HasErrors() ? diagnosticReporter : null);
     }
 
     /// <summary>

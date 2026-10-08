@@ -1,7 +1,6 @@
 ﻿using Sushi.Configuration.Toml;
 using Sushi.Diagnostics;
 using Sushi.Source;
-using Tomlyn;
 using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 
@@ -9,12 +8,10 @@ namespace Sushi.Configuration;
 
 public sealed class TomlConfigurationParser
 {
-    // Placeholder for now, will change the code to pick between SUSE and SUSWARN later
-    private const string TomlSyntaxErrorDiagnosticCode = "SUSE1000";
-
-    public TomlConfigurationParseResult Parse(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    public TomlConfigurationParseResult Parse(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -26,9 +23,9 @@ public sealed class TomlConfigurationParser
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        SushiDiagnostic[] diagnostics = [.. syntax.Diagnostics.Select(diagnostic => ConvertDiagnostic(snapshot, diagnostic))];
+        ConvertDiagnostics(snapshot, diagnosticReporter, syntax.Diagnostics);
 
-        return new TomlConfigurationParseResult(snapshot, syntax, document, diagnostics);
+        return new TomlConfigurationParseResult(snapshot, syntax, document);
     }
 
     private static TomlConfigurationTable BuildDocument(SourceSnapshot snapshot, TomlParser parser, CancellationToken cancellationToken)
@@ -39,18 +36,23 @@ public sealed class TomlConfigurationParser
         );
     }
 
-    private static SushiDiagnostic ConvertDiagnostic(SourceSnapshot snapshot, DiagnosticMessage diagnostic)
+    private static void ConvertDiagnostics(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, DiagnosticsBag diagnostics)
     {
-        return new SushiDiagnostic(
-            TomlSyntaxErrorDiagnosticCode,
-            diagnostic.Message,
-            diagnostic.Kind switch
+        foreach (DiagnosticMessage diagnostic in diagnostics)
+        {
+            if (diagnostic.Kind is DiagnosticMessageKind.Error)
             {
-                DiagnosticMessageKind.Error => DiagnosticSeverity.Error,
-                DiagnosticMessageKind.Warning => DiagnosticSeverity.Warning,
-                _ => throw new ArgumentOutOfRangeException(nameof(diagnostic))
-            },
-            diagnostic.Span.ToSushiSpan(snapshot));
+                diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.TomlSyntaxError, diagnostic.Message, diagnostic.Span.ToSushiSpan(snapshot));
+            }
+            else if (diagnostic.Kind is DiagnosticMessageKind.Warning)
+            {
+                diagnosticReporter.GenerateWarningWithCustomMessage(WarningType.TomlSyntaxWarning, diagnostic.Message, diagnostic.Span.ToSushiSpan(snapshot));
+            }
+            else
+            {
+                throw new InvalidOperationException("Toml diagnostic kind must be either error or warning.");
+            }
+        }
     }
 
     private readonly record struct KeySegment(string Name, Source.SourceSpan Span);

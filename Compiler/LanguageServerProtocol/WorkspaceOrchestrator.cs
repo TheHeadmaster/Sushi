@@ -413,7 +413,9 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        AnalysisResult result = await this.analyzer.Analyze(snapshot, cancellationToken);
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
+
+        AnalysisResult result = await this.analyzer.Analyze(snapshot, diagnosticReporter, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -426,12 +428,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            if (!document.TryUpdateAnalysis(result))
+            if (!document.TryUpdateAnalysis(result, diagnosticReporter))
             {
                 return;
             }
 
-            this.PublishDiagnostics(result);
+            this.PublishDiagnostics(result, diagnosticReporter);
         }
         finally
         {
@@ -528,7 +530,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
     }
 
-    private void PublishDiagnostics(AnalysisResult result)
+    private void PublishDiagnostics(AnalysisResult result, IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(result);
 
@@ -539,7 +541,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         SourceSnapshot snapshot = result.Snapshot;
 
-        Diagnostic[] diagnostics = [.. result.Diagnostics.Select(diagnostic => ToLSPDiagnostic(diagnostic, snapshot))];
+        Diagnostic[] diagnostics = [.. diagnosticReporter.ReportDiagnostics().Select(diagnostic => ToLSPDiagnostic(diagnostic, snapshot))];
 
         this.languageServer.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
         {
@@ -581,12 +583,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!document.TryGetCurrentAnalysis(out AnalysisResult? analysis))
+            if (!document.TryGetCurrentAnalysis(out AnalysisResult? analysis, out IDiagnosticReporter? diagnosticReporter))
             {
                 continue;
             }
 
-            this.PublishDiagnostics(analysis);
+            this.PublishDiagnostics(analysis, diagnosticReporter);
         }
     }
 

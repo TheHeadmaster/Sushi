@@ -10,7 +10,7 @@ namespace Sushi.Analysis;
 /// <summary>
 /// Coordinates lexical, syntactic, and initial semantic analysis for a Sushi source snapshot.
 /// </summary>
-public sealed class SourceAnalyzer
+public sealed class SourceAnalyzer : Analyzer
 {
     private readonly SourceLexer lexer = new();
 
@@ -25,40 +25,38 @@ public sealed class SourceAnalyzer
     /// <param name="snapshot">
     /// The authoritative source snapshot to analyze.
     /// </param>
+    /// <param name="diagnosticReporter">
+    /// The diagnostic reporter used to accumulate diagnostics.
+    /// </param>
     /// <param name="cancellationToken">
     /// The token used to cancel analysis.
     /// </param>
     /// <returns>
     /// The source analysis result, including the recovered concrete syntax tree and combined diagnostics.
     /// </returns>
-    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        LexerResult lexerResult = this.lexer.Lex(snapshot, cancellationToken);
+        LexerResult lexerResult = this.lexer.Lex(snapshot, diagnosticReporter, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        ParserResult parserResult = this.parser.ParseSourceFile(lexerResult, cancellationToken);
+        ParserResult parserResult = this.parser.ParseSourceFile(lexerResult, diagnosticReporter, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
 
-        SourceFileBindResult bindResult = this.sourceFileBinder.Bind(sourceFile, cancellationToken);
+        SourceFileBindResult bindResult = this.sourceFileBinder.Bind(sourceFile, diagnosticReporter, cancellationToken);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        SushiDiagnostic[] diagnostics =
-        [
-            .. SourceEncodingDiagnostics.Create(snapshot),
-            .. lexerResult.Diagnostics,
-            .. parserResult.Diagnostics,
-            .. bindResult.Diagnostics
-        ];
+        AccumulateEncodingDiagnostics(diagnosticReporter, snapshot);
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, diagnostics, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions));
+        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions));
     }
 }

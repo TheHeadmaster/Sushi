@@ -9,9 +9,6 @@ namespace Sushi.Lexing;
 /// </summary>
 public sealed class SourceLexer : Lexer
 {
-    // Placeholder until diagnostic numbering is settled.
-    private const string MissingLexicalSeparationCode = "SUSE005";
-
     private static readonly ILexTokenizer[] tokenizers =
     [
         new CommentTokenizer(),
@@ -22,14 +19,13 @@ public sealed class SourceLexer : Lexer
     ];
 
     /// <inheritdoc />
-    public override LexerResult Lex(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    public override LexerResult Lex(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
         cancellationToken.ThrowIfCancellationRequested();
 
         List<LexToken> tokens = [];
-        List<SushiDiagnostic> diagnostics = [];
         HashSet<int> specificallyDiagnosedBoundaries = [];
 
         int position = 0;
@@ -49,7 +45,7 @@ public sealed class SourceLexer : Lexer
             {
                 int matchEnd = position + match.Length;
 
-                position = CommitMatch(snapshot, position, match, tokens, diagnostics, ref encodingIssueIndex);
+                position = CommitMatch(snapshot, position, match, tokens, diagnosticReporter, ref encodingIssueIndex);
 
                 if (match.DiagnosesFollowingBoundary)
                 {
@@ -65,9 +61,9 @@ public sealed class SourceLexer : Lexer
             position = unknownEnd;
         }
 
-        AddLexicalAdjacencyDiagnostics(snapshot, tokens, diagnostics, specificallyDiagnosedBoundaries);
+        AddLexicalAdjacencyDiagnostics(snapshot, tokens, diagnosticReporter, specificallyDiagnosedBoundaries);
 
-        return new LexerResult(snapshot, [.. tokens], [.. diagnostics]);
+        return new LexerResult(snapshot, [.. tokens]);
     }
 
     /// <summary>
@@ -126,7 +122,7 @@ public sealed class SourceLexer : Lexer
     }
 
     /// <summary>
-    /// Commits a recognized lexical match to the token and diagnostic streams.
+    /// Commits a recognized lexical match to the token stream.
     /// </summary>
     /// <param name="snapshot">
     /// The source snapshot containing the matched lexical element.
@@ -140,8 +136,8 @@ public sealed class SourceLexer : Lexer
     /// <param name="tokens">
     /// The token stream receiving the recognized lexical element.
     /// </param>
-    /// <param name="diagnostics">
-    /// The diagnostic collection receiving diagnostics associated with the recognized lexical element.
+    /// <param name="diagnosticReporter">
+    /// The diagnostic reporter that contains the accumulated diagnostics.
     /// </param>
     /// <param name="encodingIssueIndex">
     /// The index of the next uncommitted encoding issue.
@@ -149,7 +145,7 @@ public sealed class SourceLexer : Lexer
     /// <returns>
     /// The canonical byte position at which lexical analysis should continue.
     /// </returns>
-    private static int CommitMatch(SourceSnapshot snapshot, int position, LexTokenMatch match, List<LexToken> tokens, List<SushiDiagnostic> diagnostics, ref int encodingIssueIndex)
+    private static int CommitMatch(SourceSnapshot snapshot, int position, LexTokenMatch match, List<LexToken> tokens, IDiagnosticReporter diagnosticReporter, ref int encodingIssueIndex)
     {
         int matchEnd = position + match.Length;
         int segmentStart = position;
@@ -185,9 +181,9 @@ public sealed class SourceLexer : Lexer
             tokens.Add(new LexToken(match.Type, new SourceSpan(snapshot, segmentStart, matchEnd)));
         }
 
-        if (match.Diagnostics is not null)
+        if (match.DiagnosticReporter is not null && match.DiagnosticReporter.HasErrors())
         {
-            diagnostics.AddRange(match.Diagnostics);
+            diagnosticReporter.CommitReporter(match.DiagnosticReporter);
         }
 
         return Math.Max(matchEnd, segmentStart);
@@ -287,13 +283,13 @@ public sealed class SourceLexer : Lexer
     /// <param name="tokens">
     /// The completed top-level lexical and recovery stream in source order.
     /// </param>
-    /// <param name="diagnostics">
-    /// The diagnostic collection receiving lexical-adjacency errors.
+    /// <param name="diagnosticReporter">
+    /// The diagnostic reporter used to accumulate diagnostics.
     /// </param>
     /// <param name="specificallyDiagnosedBoundaries">
     /// Source positions whose lexical failure is already semantically explained by a more specific diagnostic.
     /// </param>
-    private static void AddLexicalAdjacencyDiagnostics(SourceSnapshot snapshot, IReadOnlyList<LexToken> tokens, List<SushiDiagnostic> diagnostics, HashSet<int> specificallyDiagnosedBoundaries)
+    private static void AddLexicalAdjacencyDiagnostics(SourceSnapshot snapshot, IReadOnlyList<LexToken> tokens, IDiagnosticReporter diagnosticReporter, HashSet<int> specificallyDiagnosedBoundaries)
     {
         for (int index = 1; index < tokens.Count; index++)
         {
@@ -312,7 +308,7 @@ public sealed class SourceLexer : Lexer
                 continue;
             }
 
-            diagnostics.Add(new SushiDiagnostic(MissingLexicalSeparationCode, "Separation is required between adjacent lexical elements.", DiagnosticSeverity.Error, new SourceSpan(snapshot, boundary, boundary)));
+            diagnosticReporter.GenerateError(ErrorType.MissingLexicalSeparation, new SourceSpan(snapshot, boundary, boundary));
         }
     }
 

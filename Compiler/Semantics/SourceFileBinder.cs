@@ -8,15 +8,6 @@ namespace Sushi.Semantics;
 /// </summary>
 public sealed class SourceFileBinder
 {
-    // Placeholders until diagnostic numbering is settled.
-    private const string MissingPackageDeclarationCode = "SUSE008";
-
-    private const string DuplicatePackageDeclarationCode = "SUSE009";
-
-    private const string MissingNamespaceDeclarationCode = "SUSE010";
-
-    private const string DuplicateNamespaceDeclarationCode = "SUSE011";
-
     private readonly PackageDeclarationBinder packageDeclarationBinder = new();
 
     private readonly NamespaceDeclarationBinder namespaceDeclarationBinder = new();
@@ -29,31 +20,30 @@ public sealed class SourceFileBinder
     /// <param name="sourceFile">
     /// The source-file syntax to bind.
     /// </param>
+    /// <param name="diagnosticReporter">
+    /// The diagnostic reporter used to accumulate diagnostics.
+    /// </param>
     /// <param name="cancellationToken">
     /// The token used to cancel binding.
     /// </param>
     /// <returns>
     /// The bound package and namespaces identities when unambiguous, together with file-level semantic diagnostics.
     /// </returns>
-    public SourceFileBindResult Bind(SourceFileSyntax sourceFile, CancellationToken cancellationToken)
+    public SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        List<SushiDiagnostic> diagnostics = [];
-
-        PackageIdentity? package = this.BindPackage(sourceFile, diagnostics, cancellationToken);
-        NamespaceIdentity? @namespace = this.BindNamespace(sourceFile, diagnostics, cancellationToken);
+        PackageIdentity? package = this.BindPackage(sourceFile, diagnosticReporter, cancellationToken);
+        NamespaceIdentity? @namespace = this.BindNamespace(sourceFile, diagnosticReporter, cancellationToken);
         List<BoundFunction> functions = [];
 
         foreach (FunctionDeclarationSyntax declaration in sourceFile.FunctionDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            FunctionBindResult result = this.functionDeclarationBinder.Bind(declaration, cancellationToken);
-
-            diagnostics.AddRange(result.Diagnostics);
+            FunctionBindResult result = this.functionDeclarationBinder.Bind(declaration, diagnosticReporter,  cancellationToken);
 
             if (result.Function is not null)
             {
@@ -61,10 +51,10 @@ public sealed class SourceFileBinder
             }
         }
 
-        return new SourceFileBindResult(package, @namespace, functions, diagnostics);
+        return new SourceFileBindResult(package, @namespace, functions);
     }
 
-    private PackageIdentity? BindPackage(SourceFileSyntax sourceFile, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private PackageIdentity? BindPackage(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {      
         if (sourceFile.PackageDeclarations.Count == 0)
         {
@@ -74,11 +64,7 @@ public sealed class SourceFileBinder
                 ? sourceFile.FunctionDeclarations[0].Span.Start
                 : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
 
-            diagnostics.Add(new SushiDiagnostic(
-                MissingPackageDeclarationCode,
-                "A Sushi source file must declare exactly one package.",
-                DiagnosticSeverity.Error,
-                new Source.SourceSpan(sourceFile.Snapshot, position, position)));
+            diagnosticReporter.GenerateError(ErrorType.MissingPackageDeclaration, new Source.SourceSpan(sourceFile.Snapshot, position, position));
 
             return null;
         }
@@ -89,11 +75,7 @@ public sealed class SourceFileBinder
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                diagnostics.Add(new SushiDiagnostic(
-                    DuplicatePackageDeclarationCode,
-                    "A Sushi source file may declare only one package.",
-                    DiagnosticSeverity.Error,
-                    sourceFile.PackageDeclarations[i].PackageKeyword.Span));
+                diagnosticReporter.GenerateError(ErrorType.DuplicatePackageDeclaration, sourceFile.PackageDeclarations[i].PackageKeyword.Span);
             }
        
             return null;
@@ -102,7 +84,7 @@ public sealed class SourceFileBinder
         return this.packageDeclarationBinder.Bind(sourceFile.PackageDeclarations[0], cancellationToken);
     }
 
-    private NamespaceIdentity? BindNamespace(SourceFileSyntax sourceFile, List<SushiDiagnostic> diagnostics, CancellationToken cancellationToken)
+    private NamespaceIdentity? BindNamespace(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         if (sourceFile.NamespaceDeclarations.Count == 0)
         {
@@ -110,11 +92,7 @@ public sealed class SourceFileBinder
                 ? sourceFile.FunctionDeclarations[0].Span.Start
                 : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
 
-            diagnostics.Add(new SushiDiagnostic(
-                MissingNamespaceDeclarationCode,
-                "A Sushi source file must declare exactly one namespace.",
-                DiagnosticSeverity.Error,
-                new Source.SourceSpan(sourceFile.Snapshot, position, position)));
+            diagnosticReporter.GenerateError(ErrorType.MissingNamespaceDeclaration, new Source.SourceSpan(sourceFile.Snapshot, position, position));
 
             return null;
         }
@@ -125,11 +103,7 @@ public sealed class SourceFileBinder
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                diagnostics.Add(new SushiDiagnostic(
-                    DuplicateNamespaceDeclarationCode,
-                    "A Sushi source file may declare only one namespace.",
-                    DiagnosticSeverity.Error,
-                    sourceFile.NamespaceDeclarations[i].NamespaceKeyword.Span));
+                diagnosticReporter.GenerateError(ErrorType.DuplicateNamespaceDeclaration, sourceFile.NamespaceDeclarations[i].NamespaceKeyword.Span);
             }
        
             return null;

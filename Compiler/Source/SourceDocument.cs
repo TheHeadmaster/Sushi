@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Sushi.Analysis;
+using Sushi.Diagnostics;
 
 namespace Sushi.Source;
 
@@ -33,6 +34,7 @@ public sealed class SourceDocument
     private SourceSnapshot? editorSnapshot;
 
     private AnalysisResult? analysis;
+    private IDiagnosticReporter? diagnosticReporter;
 
     /// <summary>
     /// True if the source document is open in the editor. False otherwise.
@@ -147,7 +149,7 @@ public sealed class SourceDocument
     /// True if the two snapshots are the same. False otherwise.
     /// </returns>
     public bool IsCurrent(SourceSnapshot snapshot) => ReferenceEquals(this.CurrentSnapshot, snapshot);
-    public bool TryUpdateAnalysis(AnalysisResult analysis)
+    public bool TryUpdateAnalysis(AnalysisResult analysis, IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(analysis);
 
@@ -161,24 +163,27 @@ public sealed class SourceDocument
             }
 
             this.analysis = analysis;
+            this.diagnosticReporter = diagnosticReporter;
 
             return true;
         }
     }
 
-    public bool TryGetCurrentAnalysis([NotNullWhen(true)] out AnalysisResult? result)
+    public bool TryGetCurrentAnalysis([NotNullWhen(true)] out AnalysisResult? result, [NotNullWhen(true)] out IDiagnosticReporter? diagnosticReporter)
     {
         lock (this.syncRoot)
         {
             SourceSnapshot currentSnapshot = this.editorSnapshot ?? this.diskSnapshot;
 
-            if (this.analysis is null || !ReferenceEquals(this.analysis.Snapshot, currentSnapshot))
+            if (this.analysis is null || this.diagnosticReporter is null || !ReferenceEquals(this.analysis.Snapshot, currentSnapshot))
             {
                 result = null;
+                diagnosticReporter = null;
                 return false;
             }
 
             result = this.analysis;
+            diagnosticReporter = this.diagnosticReporter;
 
             return true;
         }
