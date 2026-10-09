@@ -367,7 +367,7 @@ public class SourceParserFunctionTests
             public int32 value;
         """;
 
-        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseSourceFile(source, testUri);
 
         diagnostics
             .Should()

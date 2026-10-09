@@ -66,7 +66,7 @@ public class SourceParserAdjacencyTests
         int leftStart = source.IndexOf(" /*left*/ ", StringComparison.Ordinal);
         int rightStart = source.IndexOf(" /*right*/ ", StringComparison.Ordinal);
         
-        diagnostics.Select(diagnostic => (diagnostic.Span.Start, diagnostic.Span.End))
+        adjacencyDiagnostics.Select(diagnostic => (diagnostic.Span.Start, diagnostic.Span.End))
             .Should()
             .Equal(
                 (leftStart, leftStart + " /*left*/ ".Length),
