@@ -1,6 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
-using Sushi.Lexing;
+using Sushi.Diagnostics;
 using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
 using Sushi.Source;
@@ -17,9 +17,9 @@ public class SourceParserFunctionTests
     {
         const string source = "public int32 main() { return 42; }";
 
-        ParserResult result = ParseFunction(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -125,9 +125,9 @@ public class SourceParserFunctionTests
     {
         const string source = "public void log() {}";
 
-        ParserResult result = ParseFunction(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -151,9 +151,9 @@ public class SourceParserFunctionTests
     {
         const string source = "public int32 @return() { return 42; }";
 
-        ParserResult result = ParseFunction(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -173,9 +173,9 @@ public class SourceParserFunctionTests
     {
         const string source = "public @int32 main() { return 42; }";
 
-        ParserResult result = ParseFunction(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -195,11 +195,11 @@ public class SourceParserFunctionTests
     {
         const string source = "public int32 main() { return 42 }";
 
-        ParserResult result = ParseFunction(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
 
         FunctionDeclarationSyntax declaration = GetFunction(result);
 
@@ -241,9 +241,9 @@ public class SourceParserFunctionTests
         }
         """;
 
-        ParserResult result = ParseSourceFile(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseSourceFile(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -292,9 +292,9 @@ public class SourceParserFunctionTests
         }
         """;
 
-        ParserResult result = ParseSourceFile(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseSourceFile(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -327,9 +327,9 @@ public class SourceParserFunctionTests
         using Example.Other;
         """;
 
-        ParserResult result = ParseSourceFile(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseSourceFile(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -367,9 +367,9 @@ public class SourceParserFunctionTests
             public int32 value;
         """;
 
-        ParserResult result = ParseSourceFile(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -395,9 +395,11 @@ public class SourceParserFunctionTests
     [TestCase("private", TestName = "Parser Should Recognize Private Function Access Modifier")]
     public void ParserShould_9(string accessModifier)
     {
-        ParserResult result = ParseFunction($"{accessModifier} int32 test() {{ return 42; }}");
+        string source = $"{accessModifier} int32 test() {{ return 42; }}";
 
-        result.Diagnostics
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
+
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -418,36 +420,9 @@ public class SourceParserFunctionTests
             .BeOfType<FunctionDeclarationSyntax>()
             .Subject;
 
-    private static ParserResult ParseFunction(string source)
-    {
-        LexerResult lexerResult = Lex(source);
-
-        return new SourceParser().ParseFunctionDeclaration(lexerResult, CancellationToken.None);
-    }
-
     private static SourceFileSyntax GetSourceFile(ParserResult result)
         => result.Tree.Root
             .Should()
             .BeOfType<SourceFileSyntax>()
             .Subject;
-
-    private static ParserResult ParseSourceFile(string source)
-    {
-        LexerResult lexerResult = Lex(source);
-
-        return new SourceParser().ParseSourceFile(lexerResult, CancellationToken.None);
-    }
-
-    private static LexerResult Lex(string source)
-    {
-        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
-
-        LexerResult result = new SourceLexer().Lex(snapshot, CancellationToken.None);
-
-        result.Diagnostics
-            .Should()
-            .BeEmpty();
-
-        return result;
-    }
 }

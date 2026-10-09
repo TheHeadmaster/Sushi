@@ -1,10 +1,8 @@
 using FluentAssertions;
 using NUnit.Framework;
 using Sushi.Diagnostics;
-using Sushi.Lexing;
 using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
-using Sushi.Source;
 
 namespace Sushi.Testing.Parsing;
 
@@ -18,12 +16,11 @@ public class SourceParserNamespaceTests
     {
         const string source = "namespace Sushi.StandardLibrary.Text;";
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse(source, diagnosticReporter);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseNamespaceDeclaration(source, testUri);
 
-        diagnosticReporter.HasErrors()
+        diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
         NamespaceDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -75,22 +72,22 @@ public class SourceParserNamespaceTests
     [TestCase("namespace Sushi . Text;", 2, TestName = "Parser Should Diagnose Each Violated Namespace Dot Boundary")]
     public void ParserShould_1(string source, int expectedDiagnostics)
     {
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse(source, diagnosticReporter);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseNamespaceDeclaration(source, testUri);
 
         NamespaceDeclarationSyntax declaration = GetDeclaration(result);
 
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
-
         diagnostics
-            .Count(diagnostic => diagnostic.Code == 0)
+            .Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
             .Should()
             .Be(expectedDiagnostics);
 
         diagnostics
-            .Count(diagnostic => diagnostic.Code == 0)
             .Should()
-            .Be(0);
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+
+        diagnostics
+            .Should()
+            .HaveCount(expectedDiagnostics);
 
         declaration.Name.Segments
             .Should()
@@ -111,12 +108,12 @@ public class SourceParserNamespaceTests
 
     public void ParserShould_2()
     {
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse("namespace Sushi.@if;", diagnosticReporter);
+        const string source = "namespace Sushi.@if;";
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseNamespaceDeclaration(source, testUri);
 
-        diagnosticReporter.HasErrors()
+        diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
         NamespaceDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -134,9 +131,7 @@ public class SourceParserNamespaceTests
     [TestCase("namespace Sushi..Text;", 1, 3, 2, TestName = "Parser Should Synthesize Namespace Name Between Consecutive Dots")]
     public void ParserShould_3(string source, int missingIndex, int expectedSegments, int expectedSeparators)
     {
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse(source, diagnosticReporter);
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseNamespaceDeclaration(source, testUri);
         NamespaceDeclarationSyntax declaration = GetDeclaration(result);
 
         declaration.Name.Segments
@@ -158,9 +153,9 @@ public class SourceParserNamespaceTests
 
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == 0)
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax))
             .And
-            .NotContain(diagnostic => diagnostic.Code == 0);
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency));
 
         declaration.SemicolonToken.IsMissing
             .Should()
@@ -170,9 +165,8 @@ public class SourceParserNamespaceTests
     [TestCase(TestName = "Parser Should Synthesize Missing Namespace Semicolon")]
     public void ParserShould_4()
     {
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse("namespace Sushi.Text", diagnosticReporter);
-        IReadOnlyList<SushiDiagnostic> diagnostics = diagnosticReporter.ReportDiagnostics();
+        const string source = "namespace Sushi.Text";
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseNamespaceDeclaration(source, testUri);
 
         NamespaceDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -186,7 +180,7 @@ public class SourceParserNamespaceTests
 
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == 0);
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
     private static NamespaceDeclarationSyntax GetDeclaration(ParserResult result)
@@ -194,17 +188,4 @@ public class SourceParserNamespaceTests
             .Should()
             .BeOfType<NamespaceDeclarationSyntax>()
             .Subject;
-
-    private static ParserResult Parse(string source, IDiagnosticReporter diagnosticReporter)
-    {
-        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
-
-        LexerResult lexerResult = new SourceLexer().Lex(snapshot, diagnosticReporter, CancellationToken.None);
-
-        diagnosticReporter.HasErrors()
-            .Should()
-            .BeFalse();
-
-        return SourceParser.ParseNamespaceDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
-    }
 }

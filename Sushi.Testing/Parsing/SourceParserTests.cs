@@ -1,10 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
-using Sushi.Lexing;
 using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
-using Sushi.Source;
-using Sushi.Lexing.Tokenization;
 using Sushi.Diagnostics;
 
 namespace Sushi.Testing.Parsing;
@@ -17,12 +14,12 @@ public class SourceParserTests
     [TestCase(TestName = "Parser Should Parse Dotted Package Declaration")]
     public void ParserShould_0()
     {
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-        ParserResult result = Parse("package Sushi.StandardLibrary.Text;", diagnosticReporter);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) =
+            ParsingHelper.ParsePackageDeclaration("package Sushi.StandardLibrary.Text;", testUri);
 
-        diagnosticReporter.HasErrors()
+        diagnostics
             .Should()
-            .BeFalse();
+            .BeEmpty();
 
         PackageDeclarationSyntax declaration = result.Tree.Root
             .Should()
@@ -73,19 +70,5 @@ public class SourceParserTests
         declaration.Span.End
             .Should()
             .Be("package Sushi.StandardLibrary.Text;".Length);
-    }
-    
-    private static ParserResult Parse(string source, IDiagnosticReporter diagnosticReporter)
-    {
-        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
-
-        SourceLexer lexer = new();
-        LexerResult lexerResult = lexer.Lex(snapshot, diagnosticReporter, CancellationToken.None);
-
-        diagnosticReporter.HasErrors()
-            .Should()
-            .BeFalse();
-
-        return SourceParser.ParsePackageDeclaration(lexerResult, diagnosticReporter, CancellationToken.None);
     }
 }

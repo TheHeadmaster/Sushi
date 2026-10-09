@@ -2,11 +2,9 @@ using System.Diagnostics.CodeAnalysis;
 using FluentAssertions;
 using NUnit.Framework;
 using Sushi.Diagnostics;
-using Sushi.Lexing;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
-using Sushi.Source;
 
 namespace Sushi.Testing.Parsing;
 
@@ -25,17 +23,22 @@ public class SourceParserAdjacencyTests
     [TestCase("package Sushi. $ Text;", 1, TestName = "Parser Should Recover Across Unknown After Dot")]
     public void ParserShould_0([NotNull] string source, int expectedDiagnostics)
     {
-        ParserResult result = Parse(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
-        result.Diagnostics.Count(diagnostic => diagnostic.Code == "SUSE007")
+        diagnostics
+            .Count(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))
             .Should()
             .Be(expectedDiagnostics);
 
-        result.Diagnostics.Count(diagnostic => diagnostic.Code == "SUSE006")
+        diagnostics
             .Should()
-            .Be(0);
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+
+        diagnostics
+            .Should()
+            .HaveCount(expectedDiagnostics);
 
         declaration.Name.Segments
             .Should()
@@ -56,9 +59,9 @@ public class SourceParserAdjacencyTests
     {
         const string source = "package Sushi /*left*/ . /*right*/ Text;";
 
-        ParserResult result = Parse(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
-        SushiDiagnostic[] diagnostics = [.. result.Diagnostics.Where(diagnostic => diagnostic.Code == "SUSE007")];
+        SushiDiagnostic[] adjacencyDiagnostics = [.. diagnostics.Where(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency))];
 
         int leftStart = source.IndexOf(" /*left*/ ", StringComparison.Ordinal);
         int rightStart = source.IndexOf(" /*right*/ ", StringComparison.Ordinal);
@@ -81,7 +84,7 @@ public class SourceParserAdjacencyTests
     [TestCase("package Sushi..Text;", 1, 3, 2, TestName = "Parser Should Synthesize Name Between Consecutive Dots")]
     public void ParserShould_2([NotNull] string source, int missingIndex, int expectedSegments, int expectedSeparators)
     {
-        ParserResult result = Parse(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -102,10 +105,11 @@ public class SourceParserAdjacencyTests
             .Should()
             .HaveCount(expectedSeparators);
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006")
-            .And.NotContain(diagnostic => diagnostic.Code == "SUSE007");
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax))
+            .And
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency));
 
         declaration.SemicolonToken.IsMissing
             .Should()
@@ -117,7 +121,7 @@ public class SourceParserAdjacencyTests
     {
         const string source = "package Sushi.;";
         
-        ParserResult result = Parse(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> _) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -130,7 +134,7 @@ public class SourceParserAdjacencyTests
     [TestCase("package Sushi else .Text;", true, TestName = "Parser Should Stop At Recognized Keyword Before Later Dot")]
     public void ParserShould_4(string source, bool semicolonIsMissing)
     {
-        ParserResult result = Parse(source);
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> _) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -150,7 +154,9 @@ public class SourceParserAdjacencyTests
     [TestCase(TestName = "Parser Should Recover Missing Name Between Spaced Dots Without Spurious Adjacency Errors")]
     public void ParserShould_5()
     {
-        ParserResult result = Parse("package Sushi. /*gap*/ .Text;");
+        const string source = "package Sushi. /*gap*/ .Text;";
+
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
@@ -158,20 +164,21 @@ public class SourceParserAdjacencyTests
             .Should()
             .BeTrue();
 
-            result.Diagnostics
-                .Should()
-                .ContainSingle(diagnostic => diagnostic.Code == "SUSE006")
-                .And.NotContain(diagnostic => diagnostic.Code == "SUSE007");
+        diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax))
+            .And
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency));
     }
 
     [TestCase(TestName = "Parser Should Accept Escaped Qualified Name Component")]
     public void ParserShould_6()
     {
-        ParserResult result = Parse("package Sushi.@if;");
-
+        const string source = "package Sushi.@if;";
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
         PackageDeclarationSyntax declaration = GetDeclaration(result);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -183,37 +190,23 @@ public class SourceParserAdjacencyTests
     [TestCase(TestName = "Parser Should not Consume Unknown Without A Recoverable Dot")]
     public void ParserShould_7()
     {
-        ParserResult result = Parse("package Sushi $ Text;");
+        const string source = "package Sushi $ Text;";
+
+        (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParsePackageDeclaration(source, testUri);
 
         PackageDeclarationSyntax declaration = GetDeclaration(result);
-
-        result.Diagnostics
-            .Should()
-            .ContainSingle();
 
         declaration.SemicolonToken.IsMissing
             .Should()
             .BeTrue();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Code == "SUSE006")
-            .And.NotContain(diagnostic => diagnostic.Code == "SUSE007");   
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax))
+            .And
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.RequiredSyntacticAdjacency)); 
     }
 
     private static PackageDeclarationSyntax GetDeclaration(ParserResult result)
         => result.Tree.Root.Should().BeOfType<PackageDeclarationSyntax>().Subject;
-    
-    private static ParserResult Parse(string source)
-    {
-        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
-
-        LexerResult lexerResult = new SourceLexer().Lex(snapshot, CancellationToken.None);
-
-        lexerResult.Diagnostics
-            .Should()
-            .BeEmpty();
-
-        return new SourceParser().ParsePackageDeclaration(lexerResult, CancellationToken.None);
-    }
 }
