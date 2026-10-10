@@ -29,13 +29,19 @@ public class TomlConfigurationParserTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        (TomlConfigurationParseResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Parse(snapshot);
 
-        TomlConfigurationParseResult result = parser.Parse(snapshot, CancellationToken.None);
+        result.Snapshot
+            .Should()
+            .BeSameAs(snapshot);
 
-        result.Snapshot.Should().BeSameAs(snapshot);
-        result.Syntax.Should().NotBeNull();
-        result.Diagnostics.Should().BeEmpty();
+        result.Syntax
+            .Should()
+            .NotBeNull();
+
+        diagnostics
+            .Should()
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Parse Should Convert Invalid TOML Diagnostics To Sushi Diagnostics")]
@@ -49,17 +55,23 @@ public class TomlConfigurationParserTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        (TomlConfigurationParseResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Parse(snapshot);
 
-        TomlConfigurationParseResult result = parser.Parse(snapshot, CancellationToken.None);
-
-        result.Diagnostics.Should().NotBeEmpty();
-
-        result.Diagnostics
+        diagnostics
             .Should()
-            .Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            .NotBeEmpty();
 
-        result.Diagnostics
+        diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
+
+        diagnostics
+            .Should()
+            .OnlyContain(diagnostic =>
+                diagnostic.IsType(ErrorType.TomlSyntaxError)
+                || diagnostic.IsType(WarningType.TomlSyntaxWarning));
+
+        diagnostics
             .Should()
             .OnlyContain(diagnostic => ReferenceEquals(diagnostic.Span.Snapshot, snapshot));
     }
@@ -82,17 +94,15 @@ public class TomlConfigurationParserTests
         SourceSnapshot asciiSnapshot = CreateSnapshot(asciiText);
         SourceSnapshot unicodeSnapshot = CreateSnapshot(unicodeText);
 
-        TomlConfigurationParser parser = new();
+        (TomlConfigurationParseResult asciiResult, IReadOnlyList<SushiDiagnostic> asciiDiagnostics) = Parse(asciiSnapshot);
 
-        TomlConfigurationParseResult asciiResult = parser.Parse(asciiSnapshot, CancellationToken.None);
+        (TomlConfigurationParseResult unicodeResult, IReadOnlyList<SushiDiagnostic> unicodeDiagnostics) = Parse(asciiSnapshot);
 
-        TomlConfigurationParseResult unicodeResult = parser.Parse(unicodeSnapshot, CancellationToken.None);
+        SushiDiagnostic asciiDiagnostic = asciiDiagnostics
+            .First(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
 
-        SushiDiagnostic asciiDiagnostic = asciiResult.Diagnostics
-            .First(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-
-        SushiDiagnostic unicodeDiagnostic = unicodeResult.Diagnostics
-            .First(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        SushiDiagnostic unicodeDiagnostic = unicodeDiagnostics
+            .First(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
 
         int expectedByteOffsetDifference = Encoding.UTF8.GetByteCount("寿司") - Encoding.UTF8.GetByteCount("ab");
 
@@ -117,13 +127,23 @@ public class TomlConfigurationParserTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        (TomlConfigurationParseResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Parse(snapshot);
 
-        TomlConfigurationParseResult result = parser.Parse(snapshot, CancellationToken.None);
+        diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
 
-        result.Diagnostics.Should().NotBeEmpty();
+        diagnostics
+            .Should()
+            .OnlyContain(diagnostic =>
+                diagnostic.IsType(ErrorType.TomlSyntaxError)
+                || diagnostic.IsType(WarningType.TomlSyntaxWarning));
 
-        result.Diagnostics
+        diagnostics
+            .Should()
+            .OnlyContain(diagnostic => ReferenceEquals(diagnostic.Span.Snapshot, snapshot));
+
+        diagnostics
             .Should()
             .OnlyContain(diagnostic =>
                 diagnostic.Span.Start >= 0
@@ -146,13 +166,11 @@ public class TomlConfigurationParserTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        (TomlConfigurationParseResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Parse(snapshot);
 
-        TomlConfigurationParseResult result = parser.Parse(snapshot, CancellationToken.None);
-
-        result.Diagnostics
+        diagnostics
             .Should()
-            .Contain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
 
         result.Document
             .TryGetProperty("assembly", out TomlConfigurationProperty assemblyProperty)
@@ -187,4 +205,13 @@ public class TomlConfigurationParserTests
     }
 
     private static SourceSnapshot CreateSnapshot(string text) => SourceSnapshot.FromText(new Uri("file:///TestProject/Test.susproj"), version: null, text);
+ 
+    private static (TomlConfigurationParseResult result, IReadOnlyList<SushiDiagnostic> diagnostics) Parse(SourceSnapshot snapshot)
+    {
+        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
+    
+        TomlConfigurationParseResult result = TomlConfigurationParser.Parse(snapshot, diagnosticReporter, CancellationToken.None);
+    
+        return (result, diagnosticReporter.ReportDiagnostics());
+    }
 }

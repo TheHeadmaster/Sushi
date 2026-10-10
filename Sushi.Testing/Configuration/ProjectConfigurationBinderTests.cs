@@ -20,9 +20,9 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (SourceSnapshot _, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -41,9 +41,9 @@ public class ProjectConfigurationBinderTests
             "language-version" = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -62,10 +62,11 @@ public class ProjectConfigurationBinderTests
             language-version = "1\u002e0"
             """;
 
-        (_, ProjectConfigurationBindResult result) =
-            Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -82,19 +83,17 @@ public class ProjectConfigurationBinderTests
             language-version = 1.0
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .HaveCount(3);
-
-        result.Diagnostics
-            .Should()
-            .OnlyContain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            .HaveCount(3)
+            .And
+            .OnlyContain(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType));
     }
 
     [TestCase(TestName = "Bind Should Diagnose Missing Required Project Identity Keys")]
@@ -105,16 +104,19 @@ public class ProjectConfigurationBinderTests
             name = "Sushi Compiler"
             """;
 
-        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) = Bind(text);
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Project.Should().BeNull();
-
-        result.Diagnostics.Should().HaveCount(2);
-
-        result.Diagnostics
+        result.Project
             .Should()
-            .OnlyContain(diagnostic =>
-                diagnostic.Severity == DiagnosticSeverity.Error
+            .BeNull();
+
+        diagnostics
+            .Should()
+            .HaveCount(2);
+
+        diagnostics
+            .Should()
+            .OnlyContain(diagnostic => diagnostic.IsType(ErrorType.TomlMissingRequiredKey)
                 && diagnostic.Span.Start == snapshot.Bytes.Length
                 && diagnostic.Span.End == snapshot.Bytes.Length);
     }
@@ -129,20 +131,17 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle();
-
-        result.Diagnostics.Single()
-            .Message
-            .Should()
-            .Contain("Project name");
+            .ContainSingle()
+            .And
+            .OnlyContain(diagnostic => diagnostic.IsType(ErrorType.TomlEmptyProjectName));
     }
 
     [TestCase(TestName = "Bind Should Not Treat Dotted Keys As Required Root Keys")]
@@ -155,11 +154,17 @@ public class ProjectConfigurationBinderTests
             language-version.value = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Project.Should().BeNull();
+        result.Project
+            .Should()
+            .BeNull();
 
-        result.Diagnostics.Should().HaveCount(3);
+        diagnostics
+            .Should()
+            .HaveCount(3)
+            .And
+            .OnlyContain(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType));
     }
 
     [TestCase(TestName = "Bind Should Ignore Configuration Not Yet Bound By This Slice")]
@@ -177,9 +182,11 @@ public class ProjectConfigurationBinderTests
             value = "ignored for now"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -196,13 +203,16 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) = Bind(text);
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Project.Should().BeNull();
-        result.Diagnostics.Should().ContainSingle();
-
-        SushiDiagnostic diagnostic =
-            result.Diagnostics.Single();
+        result.Project
+            .Should()
+            .BeNull();
+        
+        SushiDiagnostic diagnostic = diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType))
+            .Which;
 
         int valueStart = System.Text.Encoding.UTF8.GetByteCount(text[..text.IndexOf("42", StringComparison.Ordinal)]);
 
@@ -221,9 +231,11 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -243,9 +255,11 @@ public class ProjectConfigurationBinderTests
             default-namespace = "Sushi.Compiler"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -270,9 +284,11 @@ public class ProjectConfigurationBinderTests
             ]
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -299,9 +315,11 @@ public class ProjectConfigurationBinderTests
             "exclude" = ["Generated\u002f**"]
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -324,14 +342,18 @@ public class ProjectConfigurationBinderTests
             exclude = "Generated/**"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Project.Should().BeNull();
+        result.Project
+            .Should()
+            .BeNull();
 
-        result.Diagnostics.Should().ContainSingle();
+        SushiDiagnostic diagnostic = diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType))
+            .Which;
 
-        result.Diagnostics.Single()
-            .Message
+        diagnostic.Message
             .Should()
             .Contain("source.exclude");
     }
@@ -353,22 +375,32 @@ public class ProjectConfigurationBinderTests
             ]
             """;
 
-        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) =
-            Bind(text);
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Project.Should().BeNull();
-        result.Diagnostics.Should().ContainSingle();
+        result.Project
+            .Should()
+            .BeNull();
 
-        SushiDiagnostic diagnostic =
-            result.Diagnostics.Single();
+        diagnostics
+            .Should()
+            .ContainSingle()
+            .And
+            .OnlyContain(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType));
 
-        int valueStart =
-            System.Text.Encoding.UTF8.GetByteCount(
-                text[..text.IndexOf("42", StringComparison.Ordinal)]);
+        SushiDiagnostic diagnostic = diagnostics.Single();
 
-        diagnostic.Span.Snapshot.Should().BeSameAs(snapshot);
-        diagnostic.Span.Start.Should().Be(valueStart);
-        diagnostic.Span.Length.Should().Be(2);
+        int valueStart = System.Text.Encoding.UTF8.GetByteCount(text[..text.IndexOf("42", StringComparison.Ordinal)]);
+
+        diagnostic.Span.Snapshot
+            .Should()
+            .BeSameAs(snapshot);
+
+        diagnostic.Span.Start
+            .Should()
+            .Be(valueStart);
+        diagnostic.Span.Length
+            .Should()
+            .Be(2);
     }
 
     [TestCase(TestName = "Bind Should Not Treat Nested Source Table As Source Configuration")]
@@ -384,9 +416,11 @@ public class ProjectConfigurationBinderTests
             default-namespace = "Wrong.Namespace"
             """;
     
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
     
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
     
         result.Project
             .Should()
@@ -406,9 +440,11 @@ public class ProjectConfigurationBinderTests
             source.exclude = ["Generated/**"]
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
 
         result.Project
             .Should()
@@ -433,9 +469,11 @@ public class ProjectConfigurationBinderTests
             }
             """;
     
-        (_, ProjectConfigurationBindResult result) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
     
-        result.Diagnostics.Should().BeEmpty();
+        diagnostics
+            .Should()
+            .BeEmpty();
     
         result.Project
             .Should()
@@ -463,23 +501,30 @@ public class ProjectConfigurationBinderTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        IDiagnosticReporter parserDiagnosticReporter = new DiagnosticReporter();
 
-        TomlConfigurationParseResult parseResult = parser.Parse(snapshot, CancellationToken.None);
+        TomlConfigurationParseResult parseResult = TomlConfigurationParser.Parse(snapshot, parserDiagnosticReporter, CancellationToken.None);
 
-        parseResult.Diagnostics
+        IReadOnlyList<SushiDiagnostic> parserDiagnostics = parserDiagnosticReporter.ReportDiagnostics();
+
+        parserDiagnostics
             .Should()
             .NotBeEmpty();
 
-        ProjectConfigurationBinder binder = new();
+        parserDiagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));
 
-        ProjectConfigurationBindResult bindResult = binder.Bind(snapshot, parseResult.Document, CancellationToken.None);
+        IDiagnosticReporter binderDiagnosticReporter = new DiagnosticReporter();
+
+        ProjectConfigurationBindResult bindResult = ProjectConfigurationBinder.Bind(snapshot, binderDiagnosticReporter, parseResult.Document, CancellationToken.None);
 
         bindResult.Project
             .Should()
             .BeNull();
 
-        bindResult.Diagnostics
+        binderDiagnosticReporter
+            .ReportDiagnostics()
             .Should()
             .BeEmpty();
     }
@@ -494,15 +539,17 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Message.Contains("\"build\"", StringComparison.Ordinal));
+            .ContainSingle(diagnostic =>
+                diagnostic.IsType(ErrorType.TomlMissingRequiredKey)
+                && diagnostic.Message.Contains("\"build\"", StringComparison.Ordinal));
     }
 
     [TestCase(TestName = "Bind Should Require At Least One Build Target")]
@@ -518,15 +565,15 @@ public class ProjectConfigurationBinderTests
             default = "debug"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .Contain(diagnostic => diagnostic.Message.Contains("at least one build target", StringComparison.OrdinalIgnoreCase));
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.TomlMissingBuildTargets));
     }
 
     [TestCase(TestName = "Bind Should Reject Unknown Default Build Target")]
@@ -545,16 +592,16 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.DebugTarget"
             """;
 
-        (SourceSnapshot snapshot, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        SushiDiagnostic diagnostic = result.Diagnostics
+        SushiDiagnostic diagnostic = diagnostics
             .Should()
-            .ContainSingle()
-            .Subject;
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlUnknownDefaultBuildTarget))
+            .Which;
 
         diagnostic.Message
             .Should()
@@ -591,15 +638,15 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.DebugTarget"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
         result.Project
             .Should()
             .BeNull();
 
-        result.Diagnostics
+        diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.Message.Contains("Debug", StringComparison.Ordinal));
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlUnknownDefaultBuildTarget) && diagnostic.Message.Contains("Debug", StringComparison.Ordinal));
     }
 
     [TestCase(TestName = "Bind Should Bind Build Configuration")]
@@ -625,9 +672,9 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.ReleaseTarget"
             """;
 
-        (_, ProjectConfigurationBindResult result) = Bind(text, addValidBuild: false);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
 
-        result.Diagnostics
+        diagnostics
             .Should()
             .BeEmpty();
 
@@ -647,7 +694,73 @@ public class ProjectConfigurationBinderTests
                     })));
     }
 
-    private static (SourceSnapshot Snapshot, ProjectConfigurationBindResult Result) Bind(string text, bool addValidBuild = true)
+    [TestCase(TestName = "Bind Should Fully Qualify Invalid Build Target Type Diagnostic")]
+    public void BindShould_24()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+
+            [build]
+            default = "debug"
+
+            [build.targets.debug]
+            type = 42
+            """;
+
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) =
+            Bind(text, addValidBuild: false);
+
+        result.Project
+            .Should()
+            .BeNull();
+
+        SushiDiagnostic diagnostic = diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType))
+            .Which;
+
+        diagnostic.Message
+            .Should()
+            .Contain("\"build.targets.debug.type\"");
+    }
+
+    [TestCase(TestName = "Bind Should Fully Qualify Invalid Build Target Diagnostic")]
+    public void BindShould_25()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+    
+            [build]
+            default = "debug"
+    
+            [build.targets]
+            debug = 42
+            """;
+    
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) =
+            Bind(text, addValidBuild: false);
+    
+        result.Project
+            .Should()
+            .BeNull();
+    
+        SushiDiagnostic diagnostic = diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType))
+            .Which;
+    
+        diagnostic.Message
+            .Should()
+            .Contain("\"build.targets.debug\"");
+    }
+
+    private static (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) Bind(string text, bool addValidBuild = true)
     {
         if (addValidBuild)
         {
@@ -661,17 +774,21 @@ public class ProjectConfigurationBinderTests
 
         SourceSnapshot snapshot = CreateSnapshot(text);
 
-        TomlConfigurationParser parser = new();
+        IDiagnosticReporter parserDiagnosticReporter = new DiagnosticReporter();
 
-        TomlConfigurationParseResult parseResult = parser.Parse(snapshot, CancellationToken.None);
+        TomlConfigurationParseResult parseResult =
+            TomlConfigurationParser.Parse(snapshot, parserDiagnosticReporter, CancellationToken.None);
 
-        parseResult.Diagnostics.Should().BeEmpty("binder tests require syntactically valid TOML");
+        parserDiagnosticReporter.ReportDiagnostics()
+            .Should()
+            .BeEmpty("binder tests require syntactically valid TOML");
 
-        ProjectConfigurationBinder binder = new();
+        IDiagnosticReporter binderDiagnosticReporter = new DiagnosticReporter();
 
-        ProjectConfigurationBindResult result = binder.Bind(snapshot, parseResult.Document, CancellationToken.None);
+        ProjectConfigurationBindResult result =
+            ProjectConfigurationBinder.Bind(snapshot, binderDiagnosticReporter, parseResult.Document, CancellationToken.None);
 
-        return (snapshot, result);
+        return (snapshot, result, binderDiagnosticReporter.ReportDiagnostics());
     }
 
     private static SourceSnapshot CreateSnapshot(string text)
