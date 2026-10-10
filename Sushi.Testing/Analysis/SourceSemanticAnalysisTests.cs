@@ -3,7 +3,6 @@ using NUnit.Framework;
 using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Semantics;
-using Sushi.Source;
 
 namespace Sushi.Testing.Analysis;
 
