@@ -14,7 +14,7 @@ public class BoundFunctionIRConverterTests
         BoundFunction boundFunction = new(Accessibility.Public, "main", BoundIntegerType.Int32, new BoundBlock(
         [ new BoundReturnStatement(new BoundIntegerLiteralExpression(42)) ]));
 
-        IRFunction function = new BoundFunctionIRConverter().Convert(boundFunction, CancellationToken.None);
+        IRFunction function = BoundFunctionIRConverter.Convert(boundFunction, CancellationToken.None);
 
         function.Accessibility
             .Should()

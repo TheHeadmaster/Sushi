@@ -20,7 +20,7 @@ public class IRFunctionLowererTests
                 new IRReturnStatement(new IRIntegerConstant(42))
             ]));
 
-        LoweredFunction loweredFunction = new IRFunctionLowerer().Lower(function, CancellationToken.None);
+        LoweredFunction loweredFunction = IRFunctionLowerer.Lower(function, CancellationToken.None);
 
         loweredFunction.Accessibility
             .Should()
