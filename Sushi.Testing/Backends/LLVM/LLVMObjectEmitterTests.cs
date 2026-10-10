@@ -31,7 +31,7 @@ public class LLVMObjectEmitterTests
 
         try
         {
-            NativeObjectArtifact objectArtifact = new LLVMObjectEmitter().EmitForHost(moduleArtifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectArtifact = LLVMObjectEmitter.EmitForHost(moduleArtifact, objectPath, CancellationToken.None);
 
             objectArtifact.FilePath
                 .Should()
