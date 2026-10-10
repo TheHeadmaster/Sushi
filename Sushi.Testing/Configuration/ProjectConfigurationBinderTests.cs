@@ -760,6 +760,46 @@ public class ProjectConfigurationBinderTests
             .Contain("\"build.targets.debug\"");
     }
 
+    [TestCase(TestName = "Bind Should Ignore Preexisting Caller Errors When Producing Project")]
+    public void BindShould_26()
+    {
+        const string text =
+            """
+            name = "Sushi Compiler"
+            assembly = "Sushi.Compiler"
+            language-version = "1.0"
+    
+            [build]
+            default = "debug"
+    
+            [build.targets.debug]
+            type = "Sushi.Compiler.Build.DebugTarget"
+            """;
+    
+        SourceSnapshot snapshot = CreateSnapshot(text);
+    
+        IDiagnosticReporter parserDiagnosticReporter = new DiagnosticReporter();
+        TomlConfigurationParseResult parseResult = TomlConfigurationParser.Parse(snapshot, parserDiagnosticReporter, CancellationToken.None);
+    
+        parserDiagnosticReporter
+            .ReportDiagnostics()
+            .Should()
+            .BeEmpty();
+    
+        IDiagnosticReporter binderDiagnosticReporter = new DiagnosticReporter();
+        binderDiagnosticReporter.GenerateError(ErrorType.ExpectedSyntax, new SourceSpan(snapshot, 0, 0));
+    
+        ProjectConfigurationBindResult result = ProjectConfigurationBinder.Bind(snapshot, binderDiagnosticReporter, parseResult.Document, CancellationToken.None);
+    
+        result.Project
+            .Should()
+            .BeEquivalentTo(CreateExpectedProject());
+    
+        binderDiagnosticReporter.ReportDiagnostics()
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+    }
+
     private static (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) Bind(string text, bool addValidBuild = true)
     {
         if (addValidBuild)
