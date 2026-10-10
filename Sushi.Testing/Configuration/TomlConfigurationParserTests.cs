@@ -94,9 +94,9 @@ public class TomlConfigurationParserTests
         SourceSnapshot asciiSnapshot = CreateSnapshot(asciiText);
         SourceSnapshot unicodeSnapshot = CreateSnapshot(unicodeText);
 
-        (TomlConfigurationParseResult asciiResult, IReadOnlyList<SushiDiagnostic> asciiDiagnostics) = Parse(asciiSnapshot);
+        (TomlConfigurationParseResult _, IReadOnlyList<SushiDiagnostic> asciiDiagnostics) = Parse(asciiSnapshot);
 
-        (TomlConfigurationParseResult unicodeResult, IReadOnlyList<SushiDiagnostic> unicodeDiagnostics) = Parse(asciiSnapshot);
+        (TomlConfigurationParseResult _, IReadOnlyList<SushiDiagnostic> unicodeDiagnostics) = Parse(unicodeSnapshot);
 
         SushiDiagnostic asciiDiagnostic = asciiDiagnostics
             .First(diagnostic => diagnostic.IsType(ErrorType.TomlSyntaxError));

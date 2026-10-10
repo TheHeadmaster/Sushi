@@ -539,7 +539,7 @@ public class ProjectConfigurationBinderTests
             language-version = "1.0"
             """;
 
-        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text, addValidBuild: false);
 
         result.Project
             .Should()
@@ -565,7 +565,7 @@ public class ProjectConfigurationBinderTests
             default = "debug"
             """;
 
-        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text, addValidBuild: false);
 
         result.Project
             .Should()
@@ -592,7 +592,7 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.DebugTarget"
             """;
 
-        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
+        (SourceSnapshot snapshot, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text, addValidBuild: false);
 
         result.Project
             .Should()
@@ -638,7 +638,7 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.DebugTarget"
             """;
 
-        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text, addValidBuild: false);
 
         result.Project
             .Should()
@@ -672,7 +672,7 @@ public class ProjectConfigurationBinderTests
             type = "Sushi.Compiler.Build.ReleaseTarget"
             """;
 
-        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text);
+        (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Bind(text, addValidBuild: false);
 
         diagnostics
             .Should()
@@ -735,26 +735,26 @@ public class ProjectConfigurationBinderTests
             name = "Sushi Compiler"
             assembly = "Sushi.Compiler"
             language-version = "1.0"
-    
+
             [build]
             default = "debug"
-    
+
             [build.targets]
             debug = 42
             """;
-    
+
         (_, ProjectConfigurationBindResult result, IReadOnlyList<SushiDiagnostic> diagnostics) =
             Bind(text, addValidBuild: false);
-    
+
         result.Project
             .Should()
             .BeNull();
-    
+
         SushiDiagnostic diagnostic = diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.TomlInvalidValueType))
             .Which;
-    
+
         diagnostic.Message
             .Should()
             .Contain("\"build.targets.debug\"");
