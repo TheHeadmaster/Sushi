@@ -15,27 +15,31 @@ public sealed class ProjectConfigurationBinder
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        string? name = BindRequiredString(snapshot, document, diagnosticReporter, "name");
-        string? assembly = BindRequiredString(snapshot, document, diagnosticReporter, "assembly");
+        IDiagnosticReporter localDIagnostics = new DiagnosticReporter();
 
-        string? languageVersion = BindRequiredString(snapshot, document, diagnosticReporter, "language-version");
+        string? name = BindRequiredString(snapshot, document, localDIagnostics, "name");
+        string? assembly = BindRequiredString(snapshot, document, localDIagnostics, "assembly");
+
+        string? languageVersion = BindRequiredString(snapshot, document, localDIagnostics, "language-version");
 
         if (name is { Length: 0 } && document.TryGetProperty("name", out TomlConfigurationProperty nameProperty))
         {
-            diagnosticReporter.GenerateError(ErrorType.TomlEmptyProjectName, nameProperty.Value.Span);
+            localDIagnostics.GenerateError(ErrorType.TomlEmptyProjectName, nameProperty.Value.Span);
         }
 
-        ProjectSourceDefinition source = BindSource(document, diagnosticReporter, cancellationToken);
+        ProjectSourceDefinition source = BindSource(document, localDIagnostics, cancellationToken);
 
-        ProjectBuildDefinition build = BindBuild(snapshot, document, diagnosticReporter, cancellationToken);
+        ProjectBuildDefinition build = BindBuild(snapshot, document, localDIagnostics, cancellationToken);
 
         ProjectDefinition? project =
-            !diagnosticReporter.HasErrors()
+            !localDIagnostics.HasErrors()
             && name is not null
             && assembly is not null
             && languageVersion is not null
                 ? new ProjectDefinition(name, assembly, languageVersion, source, build)
                 : null;
+
+        diagnosticReporter.CommitReporter(localDIagnostics);
 
         return new ProjectConfigurationBindResult(project);
     }
