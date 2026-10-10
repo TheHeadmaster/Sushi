@@ -34,7 +34,7 @@ public sealed class SourceDocument
     private SourceSnapshot? editorSnapshot;
 
     private AnalysisResult? analysis;
-    private IDiagnosticReporter? diagnosticReporter;
+    private IReadOnlyList<SushiDiagnostic>? diagnostics;
 
     /// <summary>
     /// True if the source document is open in the editor. False otherwise.
@@ -164,27 +164,27 @@ public sealed class SourceDocument
             }
 
             this.analysis = analysis;
-            this.diagnosticReporter = diagnosticReporter;
+            this.diagnostics = diagnosticReporter.ReportDiagnostics();
 
             return true;
         }
     }
 
-    public bool TryGetCurrentAnalysis([NotNullWhen(true)] out AnalysisResult? result, [NotNullWhen(true)] out IDiagnosticReporter? diagnosticReporter)
+    public bool TryGetCurrentAnalysis([NotNullWhen(true)] out AnalysisResult? result, [NotNullWhen(true)] out IReadOnlyList<SushiDiagnostic>? diagnostics)
     {
         lock (this.syncRoot)
         {
             SourceSnapshot currentSnapshot = this.editorSnapshot ?? this.diskSnapshot;
 
-            if (this.analysis is null || this.diagnosticReporter is null || !ReferenceEquals(this.analysis.Snapshot, currentSnapshot))
+            if (this.analysis is null || this.diagnostics is null || !ReferenceEquals(this.analysis.Snapshot, currentSnapshot))
             {
                 result = null;
-                diagnosticReporter = null;
+                diagnostics = null;
                 return false;
             }
 
             result = this.analysis;
-            diagnosticReporter = this.diagnosticReporter;
+            diagnostics = this.diagnostics;
 
             return true;
         }

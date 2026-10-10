@@ -433,7 +433,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            this.PublishDiagnostics(result, diagnosticReporter);
+            this.PublishDiagnostics(result, diagnosticReporter.ReportDiagnostics());
         }
         finally
         {
@@ -530,7 +530,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
     }
 
-    private void PublishDiagnostics(AnalysisResult result, IDiagnosticReporter diagnosticReporter)
+    private void PublishDiagnostics(AnalysisResult result, IReadOnlyList<SushiDiagnostic> sushiDiagnostics)
     {
         ArgumentNullException.ThrowIfNull(result);
 
@@ -541,7 +541,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         SourceSnapshot snapshot = result.Snapshot;
 
-        Diagnostic[] diagnostics = [.. diagnosticReporter.ReportDiagnostics().Select(diagnostic => ToLSPDiagnostic(diagnostic, snapshot))];
+        Diagnostic[] diagnostics = [.. sushiDiagnostics.Select(diagnostic => ToLSPDiagnostic(diagnostic, snapshot))];
 
         this.languageServer.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams
         {
@@ -583,12 +583,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (!document.TryGetCurrentAnalysis(out AnalysisResult? analysis, out IDiagnosticReporter? diagnosticReporter))
+            if (!document.TryGetCurrentAnalysis(out AnalysisResult? analysis, out IReadOnlyList<SushiDiagnostic>? diagnostics))
             {
                 continue;
             }
 
-            this.PublishDiagnostics(analysis, diagnosticReporter);
+            this.PublishDiagnostics(analysis, diagnostics);
         }
     }
 
