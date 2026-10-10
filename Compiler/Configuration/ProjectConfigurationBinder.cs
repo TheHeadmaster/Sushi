@@ -15,31 +15,31 @@ public sealed class ProjectConfigurationBinder
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        IDiagnosticReporter localDIagnostics = new DiagnosticReporter();
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
-        string? name = BindRequiredString(snapshot, document, localDIagnostics, "name");
-        string? assembly = BindRequiredString(snapshot, document, localDIagnostics, "assembly");
+        string? name = BindRequiredString(snapshot, document, localDiagnostics, "name");
+        string? assembly = BindRequiredString(snapshot, document, localDiagnostics, "assembly");
 
-        string? languageVersion = BindRequiredString(snapshot, document, localDIagnostics, "language-version");
+        string? languageVersion = BindRequiredString(snapshot, document, localDiagnostics, "language-version");
 
         if (name is { Length: 0 } && document.TryGetProperty("name", out TomlConfigurationProperty nameProperty))
         {
-            localDIagnostics.GenerateError(ErrorType.TomlEmptyProjectName, nameProperty.Value.Span);
+            localDiagnostics.GenerateError(ErrorType.TomlEmptyProjectName, nameProperty.Value.Span);
         }
 
-        ProjectSourceDefinition source = BindSource(document, localDIagnostics, cancellationToken);
+        ProjectSourceDefinition source = BindSource(document, localDiagnostics, cancellationToken);
 
-        ProjectBuildDefinition build = BindBuild(snapshot, document, localDIagnostics, cancellationToken);
+        ProjectBuildDefinition build = BindBuild(snapshot, document, localDiagnostics, cancellationToken);
 
         ProjectDefinition? project =
-            !localDIagnostics.HasErrors()
+            !localDiagnostics.HasErrors()
             && name is not null
             && assembly is not null
             && languageVersion is not null
                 ? new ProjectDefinition(name, assembly, languageVersion, source, build)
                 : null;
 
-        diagnosticReporter.CommitReporter(localDIagnostics);
+        diagnosticReporter.CommitReporter(localDiagnostics);
 
         return new ProjectConfigurationBindResult(project);
     }
