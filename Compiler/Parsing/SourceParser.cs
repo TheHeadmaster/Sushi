@@ -25,23 +25,19 @@ public sealed class SourceParser
     /// The token used to cancel parsing.
     /// </param>
     /// <returns>
-    /// A source file syntax containing recognized leading package declarations and its unparsed remainder.
+    /// A source file syntax containing recognized leading declarations and its unparsed remainder.
     /// </returns>
     public static ParserResult ParseSourceFile(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
-
         ParserState state = new(lexerResult, cancellationToken);
-
         SourceFileSyntax sourceFile = state.ParseSourceFile(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
-
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, sourceFile));
     }
 
@@ -62,18 +58,15 @@ public sealed class SourceParser
     /// </returns>
     public static ParserResult ParseFunctionDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(lexerResult);    
+        ArgumentNullException.ThrowIfNull(lexerResult);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
         ParserState state = new(lexerResult, cancellationToken);
-
         FunctionDeclarationSyntax declaration = state.ParseFunctionDeclaration(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
-
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
 
@@ -87,8 +80,8 @@ public sealed class SourceParser
     /// The diagnostic reporter used to accumulate diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel parsing.
-    /// </param>
+    /// The token used to cancel parsing
+    /// .</param>
     /// <returns>
     /// The parsed package declaration.
     /// </returns>
@@ -96,20 +89,16 @@ public sealed class SourceParser
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
-
         ParserState state = new(lexerResult, cancellationToken);
         PackageDeclarationSyntax declaration = state.ParsePackageDeclaration(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
-
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
 
-    
     /// <summary>
     /// Parses a namespace declaration beginning at the first significant lexical element.
     /// </summary>
@@ -129,50 +118,41 @@ public sealed class SourceParser
     {
         ArgumentNullException.ThrowIfNull(lexerResult);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
-
         ParserState state = new(lexerResult, cancellationToken);
         NamespaceDeclarationSyntax declaration = state.ParseNamespaceDeclaration(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
-
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
     }
 
     private sealed class ParserState(LexerResult lexerResult, CancellationToken cancellationToken)
     {
-        private readonly LexerResult lexerResult = lexerResult;
-
+        private readonly ParserCursor cursor = new(lexerResult, cancellationToken);
         private readonly CancellationToken cancellationToken = cancellationToken;
 
-        private int position;
-
         /// <summary>
-        /// Parses supported file-level syntax and identifies the remaining source without attempting recovery across grammar productions not yet implemented.
+        /// Parses supported file-level syntax and preserves the remaining source without interpreting unsupported productions.
         /// </summary>
         /// <param name="diagnosticReporter">
         /// The reporter used to accumulate diagnostics.
         /// </param>
         /// <returns>
-        /// A source file containing recognized leading package declarations and its unparsed remainder.
+        /// The parsed source file, including its unparsed remainder when present.
         /// </returns>
         public SourceFileSyntax ParseSourceFile(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
             this.cancellationToken.ThrowIfCancellationRequested();
 
             IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
-
             List<PackageDeclarationSyntax> packageDeclarations = [];
 
             while (this.IsPackageDeclarationAhead())
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-
                 packageDeclarations.Add(this.ParsePackageDeclaration(localDiagnostics));
             }
 
@@ -181,7 +161,6 @@ public sealed class SourceParser
             while (this.IsNamespaceDeclarationAhead())
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-
                 namespaceDeclarations.Add(this.ParseNamespaceDeclaration(localDiagnostics));
             }
 
@@ -190,23 +169,20 @@ public sealed class SourceParser
             while (this.IsFunctionDeclarationAhead())
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-
                 functionDeclarations.Add(this.ParseFunctionDeclaration(localDiagnostics));
             }
 
-            SourceSpan? unparsedContentSpan = this.TryPeekToken(skipUnknown: false, out LexToken next, out _)
-                ? new SourceSpan(this.lexerResult.Snapshot, next.Span.Start, this.lexerResult.Snapshot.SourceLength)
+            SourceSpan? unparsedContentSpan = this.cursor.TryPeek(out LexToken next)
+                ? new SourceSpan(this.cursor.Snapshot, next.Span.Start, this.cursor.Snapshot.SourceLength)
                 : null;
 
             diagnosticReporter.CommitReporter(localDiagnostics);
-
-            return new SourceFileSyntax(this.lexerResult.Snapshot, packageDeclarations, namespaceDeclarations, functionDeclarations, unparsedContentSpan);
+            return new SourceFileSyntax(this.cursor.Snapshot, packageDeclarations, namespaceDeclarations, functionDeclarations, unparsedContentSpan);
         }
 
         public FunctionDeclarationSyntax ParseFunctionDeclaration(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
             this.cancellationToken.ThrowIfCancellationRequested();
 
             IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
@@ -219,14 +195,12 @@ public sealed class SourceParser
             BlockSyntax body = this.ParseBlock(localDiagnostics);
 
             diagnosticReporter.CommitReporter(localDiagnostics);
-
             return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, closeParenthesis, body);
         }
 
         public NamespaceDeclarationSyntax ParseNamespaceDeclaration(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
             this.cancellationToken.ThrowIfCancellationRequested();
 
             IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
@@ -236,14 +210,12 @@ public sealed class SourceParser
             SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after namespace declaration.", localDiagnostics);
 
             diagnosticReporter.CommitReporter(localDiagnostics);
-
             return new NamespaceDeclarationSyntax(namespaceKeyword, name, semicolonToken);
         }
 
         public PackageDeclarationSyntax ParsePackageDeclaration(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
             this.cancellationToken.ThrowIfCancellationRequested();
 
             IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
@@ -253,7 +225,6 @@ public sealed class SourceParser
             SyntaxToken semicolonToken = this.ParseSemicolon("Expected \";\" after package declaration.", localDiagnostics);
 
             diagnosticReporter.CommitReporter(localDiagnostics);
-
             return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
         }
 
@@ -261,62 +232,55 @@ public sealed class SourceParser
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && this.IsAccessModifier(token))
+            if (this.cursor.TryPeek(out LexToken token) && this.IsAccessModifier(token))
             {
-                this.position = index + 1;
+                this.cursor.TryAdvance(out _);
                 return new SyntaxToken(SyntaxType.AccessModifierKeyword, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected access modifier.", position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.AccessModifierKeyword, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.AccessModifierKeyword, this.cursor.Snapshot, position);
         }
 
         private SyntaxToken ParseReturnType(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index))
+            if (this.cursor.TryPeek(out LexToken token))
             {
                 SyntaxType type = token.Type switch
                 {
                     LexTokenType.Identifier => SyntaxType.IdentifierToken,
                     LexTokenType.EscapedIdentifier => SyntaxType.EscapedIdentifierToken,
-                    LexTokenType.Keyword when this.TokenTextEquals(token, "void"u8) => SyntaxType.VoidKeyword,
+                    LexTokenType.Keyword when this.cursor.TokenTextEquals(token, "void"u8) => SyntaxType.VoidKeyword,
                     _ => default
                 };
 
                 if (type != default)
                 {
-                    this.position = index + 1;
-
+                    this.cursor.TryAdvance(out _);
                     return new SyntaxToken(type, token);
                 }
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected function return type.", position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
         }
 
         private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryConsumePunctuation(punctuation, type, skipUnknown: false, out SyntaxToken token))
+            if (this.cursor.TryConsumePunctuation(punctuation, out LexToken token))
             {
-                return token;
+                return new SyntaxToken(type, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
-
-            return SyntaxToken.Missing(type, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(type, this.cursor.Snapshot, position);
         }
 
         private BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
@@ -324,18 +288,15 @@ public sealed class SourceParser
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
             SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.", diagnosticReporter);
-
             List<StatementSyntax> statements = [];
 
             while (this.IsReturnStatementAhead())
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-
                 statements.Add(this.ParseReturnStatement(diagnosticReporter));
             }
 
             SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.", diagnosticReporter);
-
             return new BlockSyntax(openBrace, statements, closeBrace);
         }
 
@@ -345,7 +306,6 @@ public sealed class SourceParser
 
             SyntaxToken returnKeyword = this.ParseReturnKeyword(diagnosticReporter);
             IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression(diagnosticReporter);
-
             SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.", diagnosticReporter);
 
             return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
@@ -355,70 +315,57 @@ public sealed class SourceParser
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "return"u8))
+            if (this.cursor.TryConsumeKeyword("return"u8, out LexToken token))
             {
-                this.position = index + 1;
                 return new SyntaxToken(SyntaxType.ReturnKeyword, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected \"return\" keyword.", position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.cursor.Snapshot, position);
         }
 
         private IntegerLiteralExpressionSyntax ParseIntegerLiteralExpression(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.IntegerLiteral)
+            if (this.cursor.TryPeek(out LexToken token) && token.Type is LexTokenType.IntegerLiteral)
             {
-                this.position = index + 1;
+                this.cursor.TryAdvance(out _);
                 return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected integer literal expression.", position, diagnosticReporter);
-
-            return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.lexerResult.Snapshot, position));
+            return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, position));
         }
 
         private SyntaxToken ParseNamespaceKeyword(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "namespace"u8))
+            if (this.cursor.TryConsumeKeyword("namespace"u8, out LexToken token))
             {
-                this.position = index + 1;
-
                 return new SyntaxToken(SyntaxType.NamespaceKeyword, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected \"namespace\" keyword.", position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.NamespaceKeyword, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.NamespaceKeyword, this.cursor.Snapshot, position);
         }
 
         private SyntaxToken ParsePackageKeyword(IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown: false, out LexToken token, out int index) && token.Type is LexTokenType.Keyword && this.TokenTextEquals(token, "package"u8))
+            if (this.cursor.TryConsumeKeyword("package"u8, out LexToken token))
             {
-                this.position = index + 1;
-
                 return new SyntaxToken(SyntaxType.PackageKeyword, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic("Expected \"package\" keyword.", position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.PackageKeyword, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.PackageKeyword, this.cursor.Snapshot, position);
         }
 
         private QualifiedNameSyntax ParseQualifiedName(string declarationKind, IDiagnosticReporter diagnosticReporter)
@@ -428,9 +375,9 @@ public sealed class SourceParser
             List<SyntaxToken> segments = [this.ParseNameComponent($"Expected {declarationKind} name.", skipUnknown: false, diagnosticReporter)];
             List<SyntaxToken> separators = [];
 
-            while (this.TryConsumePunctuation((byte)'.', SyntaxType.DotToken, skipUnknown: true, out SyntaxToken separator))
+            while (this.cursor.TryConsumePunctuation((byte)'.', out LexToken dot, skipUnknown: true))
             {
-                // A source-backed name and dot may be separated only by a diagnosed recovery gap.
+                SyntaxToken separator = new(SyntaxType.DotToken, dot);
 
                 this.RequireSyntacticAdjacency(segments[^1], separator, $"\".\" must immediately follow the preceding {declarationKind}-name component.", diagnosticReporter);
 
@@ -449,168 +396,80 @@ public sealed class SourceParser
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-            if (this.TryPeekToken(skipUnknown, out LexToken token, out int index))
+            if (this.cursor.TryConsumeIdentifier(out LexToken token, skipUnknown))
             {
-                SyntaxType type = token.Type switch
-                {
-                    LexTokenType.Identifier => SyntaxType.IdentifierToken,
-                    LexTokenType.EscapedIdentifier => SyntaxType.EscapedIdentifierToken,
-                    _ => default
-                };
+                SyntaxType type = token.Type is LexTokenType.EscapedIdentifier
+                    ? SyntaxType.EscapedIdentifierToken
+                    : SyntaxType.IdentifierToken;
 
-                if (type != default)
-                {
-                    this.position = index + 1;
-
-                    return new SyntaxToken(type, token);
-                }
+                return new SyntaxToken(type, token);
             }
 
-            int position = this.GetCurrentPosition();
-
+            int position = this.cursor.Position;
             this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
-
-            return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.lexerResult.Snapshot, position);
+            return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
         }
 
         private SyntaxToken ParseSemicolon(string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
-        {
-            ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-            return this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage, diagnosticReporter);
-        }
-
-        /// <summary>
-        /// Looks ahead without advancing the parser. Unknown elements are skipped only
-        /// when the calling grammar production is attempting a supported recovery.
-        /// </summary>
-        /// <param name="skipUnknown">
-        /// Whether to skip unknown elements.
-        /// </param>
-        /// <param name="token">
-        /// If true is returned, this contains the token found from the lookahead. Otherwise, default.
-        /// </param>
-        /// <param name="index">
-        /// If true is returned, this contains the index that the token was found at. Otherwise, 0.
-        /// </param>
-        /// <returns>
-        /// True if the token was found. False otherwise.
-        /// </returns>
-        private bool TryPeekToken(bool skipUnknown, out LexToken token, out int index)
-        {
-            for (index = this.position; index < this.lexerResult.Tokens.Count; index++)
-            {
-                this.cancellationToken.ThrowIfCancellationRequested();
-
-                LexToken candidate = this.lexerResult.Tokens[index];
-
-                if (IsTrivia(candidate.Type) || (skipUnknown && candidate.Type is LexTokenType.Unknown))
-                {
-                    continue;
-                }
-
-                token = candidate;
-                return true;
-            }
-
-            token = default;
-            return false;
-        }
-
-        private bool TryPeekSignificantToken(int offset, out LexToken token)
-        {
-            int currentOffset = 0;
-
-            for (int index = this.position; index < this.lexerResult.Tokens.Count; index++)
-            {
-                this.cancellationToken.ThrowIfCancellationRequested();
-
-                LexToken candidate = this.lexerResult.Tokens[index];
-
-                if (IsTrivia(candidate.Type))
-                {
-                    continue;
-                }
-
-                if (currentOffset++ == offset)
-                {
-                    token = candidate;
-                    return true;
-                }
-            }
-
-            token = default;
-            return false;
-        }
+            => this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage, diagnosticReporter);
 
         private bool IsFunctionDeclarationAhead()
-        {
-            return this.TryPeekSignificantToken(0, out LexToken accessModifier)
+            => this.cursor.TryPeek(out LexToken accessModifier)
                 && this.IsAccessModifier(accessModifier)
-                && this.TryPeekSignificantToken(1, out LexToken returnType)
+                && this.cursor.TryPeek(out LexToken returnType, lookahead: 1)
                 && this.IsSupportedReturnType(returnType)
-                && this.TryPeekSignificantToken(2, out LexToken name)
+                && this.cursor.TryPeek(out LexToken name, lookahead: 2)
                 && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
-                && this.TryPeekSignificantToken(3, out LexToken openParenthesis)
+                && this.cursor.TryPeek(out LexToken openParenthesis, lookahead: 3)
                 && this.IsPunctuation(openParenthesis, (byte)'(');
-        }
 
         private bool IsAccessModifier(LexToken token)
             => token.Type is LexTokenType.Keyword
-                && (this.TokenTextEquals(token, "public"u8)
-                || this.TokenTextEquals(token, "internal"u8)
-                || this.TokenTextEquals(token, "package"u8)
-                || this.TokenTextEquals(token, "protected"u8)
-                || this.TokenTextEquals(token, "private"u8));
+                && (this.cursor.TokenTextEquals(token, "public"u8)
+                || this.cursor.TokenTextEquals(token, "internal"u8)
+                || this.cursor.TokenTextEquals(token, "package"u8)
+                || this.cursor.TokenTextEquals(token, "protected"u8)
+                || this.cursor.TokenTextEquals(token, "private"u8));
 
         private bool IsSupportedReturnType(LexToken token)
-            => token.Type is LexTokenType.Identifier
-                or LexTokenType.EscapedIdentifier
-                || (token.Type is LexTokenType.Keyword
-                && this.TokenTextEquals(token, "void"u8));
+            => token.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
+                || (token.Type is LexTokenType.Keyword && this.cursor.TokenTextEquals(token, "void"u8));
 
         private bool IsPunctuation(LexToken token, byte punctuation)
             => token.Type is LexTokenType.Punctuation
                 && token.Span.Length == 1
-                && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
+                && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
 
         private bool IsReturnStatementAhead()
-            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
-            && token.Type is LexTokenType.Keyword
-            && this.TokenTextEquals(token, "return"u8);
+            => this.cursor.TryPeek(out LexToken token)
+                && token.Type is LexTokenType.Keyword
+                && this.cursor.TokenTextEquals(token, "return"u8);
 
-        private bool TryConsumePunctuation(byte punctuation, SyntaxType type, bool skipUnknown, out SyntaxToken syntaxToken)
-        {
-            if (this.TryPeekToken(skipUnknown, out LexToken token, out int index)
-                && token.Type is LexTokenType.Punctuation
-                && token.Span.Length == 1
-                && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start] == punctuation)
-            {
-                this.position = index + 1;
+        private bool IsNamespaceDeclarationAhead()
+            => this.cursor.TryPeek(out LexToken token)
+                && token.Type is LexTokenType.Keyword
+                && this.cursor.TokenTextEquals(token, "namespace"u8);
 
-                syntaxToken = new SyntaxToken(type, token);
-                return true;
-            }
-
-            syntaxToken = default;
-            return false;
-        }
+        private bool IsPackageDeclarationAhead()
+            => this.cursor.TryPeek(out LexToken token)
+                && token.Type is LexTokenType.Keyword
+                && this.cursor.TokenTextEquals(token, "package"u8);
 
         /// <summary>
-        /// Diagnoses source-backed material separating two components whose grammar requires direct adjacency.
-        /// Synthetic missing components receive their own structural diagnostics and cannot cause adjacency errors.
+        /// Diagnoses source-backed material separating components whose grammar requires adjacency.
+        /// Missing components have their own diagnostics and do not generate adjacency errors.
         /// </summary>
         /// <param name="left">
-        /// The token on the left-hand side.
+        /// The preceding syntax token.
         /// </param>
         /// <param name="right">
-        /// The token on the right-hand side.
+        /// The following syntax token.
         /// </param>
         /// <param name="message">
-        /// The message to show if the adjacency rules are violated.
+        /// The diagnostic message when the tokens are separated.
         /// </param>
         /// <param name="diagnosticReporter">
-        /// The diagnostic reporter used to accumulate diagnostics.
+        /// The reporter used to accumulate the diagnostic.
         /// </param>
         private void RequireSyntacticAdjacency(SyntaxToken left, SyntaxToken right, string message, IDiagnosticReporter diagnosticReporter)
         {
@@ -634,38 +493,16 @@ public sealed class SourceParser
                 throw new InvalidOperationException("Adjacency participants must occur in source order without overlapping.");
             }
 
-            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.RequiredSyntacticAdjacency, message, new SourceSpan(this.lexerResult.Snapshot, leftSpan.End, rightSpan.Start));
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                ErrorType.RequiredSyntacticAdjacency,
+                message,
+                new SourceSpan(this.cursor.Snapshot, leftSpan.End, rightSpan.Start));
         }
-
-        private bool TokenTextEquals(LexToken token, ReadOnlySpan<byte> expected) => token.Span.Length == expected.Length && this.lexerResult.Snapshot.Bytes.Span[token.Span.Start..token.Span.End].SequenceEqual(expected);
-
-        private int GetCurrentPosition() => this.TryPeekToken(skipUnknown: false, out LexToken token, out _) ? token.Span.Start : this.lexerResult.Snapshot.SourceLength;
 
         private void AccumulateExpectedDiagnostic(string message, int position, IDiagnosticReporter diagnosticReporter)
         {
             ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-            diagnosticReporter.GenerateErrorWithCustomMessage(
-                        ErrorType.ExpectedSyntax,
-                        message,
-                        new SourceSpan(this.lexerResult.Snapshot, position, position));
+            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.ExpectedSyntax, message, new SourceSpan(this.cursor.Snapshot, position, position));
         }
-
-        private bool IsNamespaceDeclarationAhead()
-            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
-                && token.Type is LexTokenType.Keyword
-                && this.TokenTextEquals(token, "namespace"u8);
-
-        private bool IsPackageDeclarationAhead()
-            => this.TryPeekToken(skipUnknown: false, out LexToken token, out _)
-                && token.Type is LexTokenType.Keyword
-                && this.TokenTextEquals(token, "package"u8);
-
-        private static bool IsTrivia(LexTokenType type) =>
-            type is LexTokenType.Whitespace
-            or LexTokenType.LineTerminator
-            or LexTokenType.LineComment
-            or LexTokenType.DocumentationLineComment
-            or LexTokenType.BlockComment;
     }
 }
