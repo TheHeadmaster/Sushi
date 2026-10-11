@@ -80,8 +80,8 @@ public sealed class SourceParser
     /// The diagnostic reporter used to accumulate diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel parsing
-    /// .</param>
+    /// The token used to cancel parsing.
+    /// </param>
     /// <returns>
     /// The parsed package declaration.
     /// </returns>

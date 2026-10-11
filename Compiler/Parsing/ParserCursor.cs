@@ -35,7 +35,7 @@ internal sealed class ParserCursor(LexerResult lexerResult, CancellationToken ca
     public int Position => this.TryPeek(out LexToken token) ? token.Span.Start : this.Snapshot.SourceLength;
 
     /// <summary>
-    /// Inspectes a significant lexical element without advancing the cursor. Trivia is ignored,
+    /// Inspects a significant lexical element without advancing the cursor. Trivia is ignored,
     /// but Unknown recovery elements remain significant.
     /// </summary>
     /// <param name="token">
@@ -70,14 +70,14 @@ internal sealed class ParserCursor(LexerResult lexerResult, CancellationToken ca
     }
 
     /// <summary>
-    /// Consumes an identifier or escaped identifier. Unknown elmeents may be crossed
+    /// Consumes an identifier or escaped identifier. Unknown elements may be crossed
     /// only when explicitly permitted by the calling grammar production.
     /// </summary>
     /// <param name="token">
     /// The consumed identifier, if matched.
     /// </param>
     /// <param name="skipUnknown">
-    /// Whether to cross Unkown recovery elements.
+    /// Whether to cross Unknown recovery elements.
     /// </param>
     /// <returns>
     /// Whether an identifier was consumed.
@@ -143,6 +143,7 @@ internal sealed class ParserCursor(LexerResult lexerResult, CancellationToken ca
     public bool TryConsumePunctuation(byte punctuation, out LexToken token, bool skipUnknown = false)
     {
         if (this.TryFind(0, skipUnknown, out LexToken candidate, out int tokenIndex)
+            && candidate.Type is LexTokenType.Punctuation
             && candidate.Span.Length == 1
             && this.Snapshot.Bytes.Span[candidate.Span.Start] == punctuation)
         {
