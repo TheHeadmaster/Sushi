@@ -84,22 +84,29 @@ public sealed class FunctionDeclarationBinder
     private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (!statement.ReturnKeyword.IsSourceBacked
-            || !statement.SemicolonToken.IsSourceBacked
-            || statement.Expression is not IntegerLiteralExpressionSyntax literal
-            || !IntegerLiteralBinder.TryBindExactValue(literal, out BigInteger exactValue))
+    
+        if (!statement.ReturnKeyword.IsSourceBacked || !statement.SemicolonToken.IsSourceBacked)
         {
             return null;
         }
-
+    
+        if (statement.Expression is not IntegerLiteralExpressionSyntax literal)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Expression.Span);
+            return null;
+        }
+    
+        if (!IntegerLiteralBinder.TryBindExactValue(literal, out BigInteger exactValue))
+        {
+            return null;
+        }
+    
         if (exactValue > int.MaxValue)
         {
             diagnosticReporter.GenerateError(ErrorType.IntegerConstantOutOfRange, literal.Span);
-
             return null;
         }
-
+    
         return new BoundReturnStatement(new BoundIntegerLiteralExpression((int)exactValue));
     }
 

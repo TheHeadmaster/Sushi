@@ -33,5 +33,6 @@ public enum ErrorType
     DuplicatePackageDeclaration = 302,
     MissingNamespaceDeclaration = 303,
     DuplicateNamespaceDeclaration = 304,
+    UnsupportedMVPExpression = 305,
     #endregion
 }

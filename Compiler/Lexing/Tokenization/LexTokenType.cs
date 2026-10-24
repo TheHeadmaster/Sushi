@@ -13,5 +13,6 @@ public enum LexTokenType
     EscapedIdentifier,
     Keyword,
     IntegerLiteral,
-    BooleanLiteral
+    BooleanLiteral,
+    Operator
 }

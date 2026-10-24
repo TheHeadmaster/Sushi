@@ -14,6 +14,7 @@ public sealed class SourceLexer : Lexer
         new CommentTokenizer(),
         new WhitespaceTokenizer(),
         new PunctuationTokenizer(),
+        new OperatorTokenizer(),
         new WordTokenizer(),
         new IntegerLiteralTokenizer()
     ];

@@ -163,19 +163,19 @@ public class SourceLexerTests
             .BeEmpty();
     }
 
-    [TestCase(TestName = "Lex Should Keep Non Comment Slash Inside Unknown Run")]
+    [TestCase(TestName = "Lex Should Recognize Non Comment Slash As Operator")]
     public void LexShould_9()
     {
         const string source = "abc/def ";
-
+    
         (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);
-
-        AssertTokens(result, 
+    
+        AssertTokens(result,
             (LexTokenType.Identifier, 0, 3),
-            (LexTokenType.Unknown, 3, 4),
+            (LexTokenType.Operator, 3, 4),
             (LexTokenType.Identifier, 4, 7),
             (LexTokenType.Whitespace, 7, 8));
-
+    
         diagnostics
             .Should()
             .BeEmpty();

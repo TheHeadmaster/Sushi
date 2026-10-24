@@ -6,8 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses expressions using the cursor shared with statement and declaration parsing.
-/// Currently recognizes integer literals and preserves missing-expression recovery.
+/// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
+/// The current implementation supports integer literals, grouping, and binary arithmetic.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -21,29 +21,125 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     private readonly CancellationToken cancellationToken = cancellationToken;
 
     /// <summary>
-    /// Parses an expression at the current cursor position. Until more expression
-    /// forms are implemented, only an integer literal is recognized.
-    /// Unrecognized significant tokens remain unconsumed for the enclosing grammar.
+    /// Parses an expression at the current cursor position, leaving the first
+    /// significant element outside the recognized expression unconsumed.
     /// </summary>
     /// <param name="diagnosticReporter">
-    /// Receives diagnostics when expression syntax is missing.
+    /// Receives expression-syntax diagnostics.
     /// </param>
     /// <returns>
-    /// An integer-literal expression, potentially containing a missing literal token.
+    /// The parsed expression, including synthetic syntax required for recovery.
     /// </returns>
     public ExpressionSyntax ParseExpression(IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
         this.cancellationToken.ThrowIfCancellationRequested();
 
+        return this.ParseExpression(BindingPower.Primary, diagnosticReporter, out _);
+    }
+
+    private ExpressionSyntax ParseExpression(BindingPower minimumBindingPower, IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        this.cancellationToken.ThrowIfCancellationRequested();
+
+        ExpressionSyntax left = this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
+
+        if (incomplete)
+        {
+            return left;
+        }
+
+        while (this.cursor.TryPeek(out LexToken candidate)
+            && this.TryGetBinaryBindingPower(candidate, out BindingPower bindingPower)
+            && bindingPower >= minimumBindingPower)
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+            this.cursor.TryAdvance(out _);
+
+            SyntaxToken operatorToken = new(SyntaxType.OperatorToken, candidate);
+
+            ExpressionSyntax right = this.ParseExpression(bindingPower + 1, diagnosticReporter, out bool rightIncomplete);
+
+            left = new BinaryExpressionSyntax(left, operatorToken, right);
+
+            if (rightIncomplete)
+            {
+                incomplete = true;
+                return left;
+            }
+        }
+
+        return left;
+    }
+
+    private ExpressionSyntax ParsePrimaryExpression(IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        this.cancellationToken.ThrowIfCancellationRequested();
+
         if (this.cursor.TryPeek(out LexToken token) && token.Type is LexTokenType.IntegerLiteral)
         {
             this.cursor.TryAdvance(out _);
+            incomplete = false;
+
             return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
         }
 
-        int position = this.cursor.Position;
-        diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.ExpectedSyntax, "Expected integer literal expression.", new SourceSpan(this.cursor.Snapshot, position, position));
-        return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, position));
+        if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
+        {
+            SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, openingParenthesis);
+            ExpressionSyntax expression = this.ParseExpression(0, diagnosticReporter, out bool innerIncomplete);
+
+            SyntaxToken closeToken;
+
+            if (this.cursor.TryConsumePunctuation((byte)')', out LexToken closingParenthesis))
+            {
+                closeToken = new SyntaxToken(SyntaxType.CloseParenthesisToken, closingParenthesis);
+            }
+            else
+            {
+                int position = this.cursor.Position;
+                this.ReportExpectedSyntax("Expected \")\" after parenthesized expression.", position, diagnosticReporter);
+                closeToken = SyntaxToken.Missing(SyntaxType.CloseParenthesisToken, this.cursor.Snapshot, position);
+            }
+
+            incomplete = innerIncomplete || closeToken.IsMissing;
+            return new ParenthesizedExpressionSyntax(openToken, expression, closeToken);
+        }
+
+        int missingPosition = this.cursor.Position;
+
+        this.ReportExpectedSyntax("Expected integer literal expression.", missingPosition, diagnosticReporter);
+
+        incomplete = true;
+
+        return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, missingPosition));
+    }
+
+    private bool TryGetBinaryBindingPower(LexToken token, out BindingPower bindingPower)
+    {
+        if (token.Type is not LexTokenType.Operator || token.Span.Length != 1)
+        {
+            bindingPower = default;
+            return false;
+        }
+
+        byte spelling = this.cursor.Snapshot.Bytes.Span[token.Span.Start];
+
+        bindingPower = spelling switch
+        {
+            (byte)'+' or (byte)'-' => BindingPower.Addition,
+            (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplication,
+            _ => BindingPower.Primary
+        };
+
+        return bindingPower != BindingPower.Primary;
+    }
+
+    private void ReportExpectedSyntax(string message, int position, IDiagnosticReporter diagnosticReporter)
+    {
+        diagnosticReporter.GenerateErrorWithCustomMessage(
+            ErrorType.ExpectedSyntax,
+            message,
+            new SourceSpan(this.cursor.Snapshot, position, position));
     }
 }

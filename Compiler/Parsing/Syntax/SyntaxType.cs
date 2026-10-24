@@ -26,5 +26,8 @@ public enum SyntaxType
     CloseParenthesisToken,
     OpenBraceToken,
     CloseBraceToken,
-    IntegerLiteralToken
+    IntegerLiteralToken,
+    BinaryExpression,
+    ParenthesizedExpression,
+    OperatorToken
 }

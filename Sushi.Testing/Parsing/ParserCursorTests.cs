@@ -354,32 +354,32 @@ public class ParserCursorTests
             .BeTrue();
     }
 
-    [TestCase(TestName = "Cursor Should Not Accept Unknown Lexical Elements As Punctuation")]
+    [TestCase(TestName = "Cursor Should Not Accept Operators As Punctuation")]
     public void CursorShould_9()
     {
         ParserCursor cursor = CreateCursor("Sushi/Other");
-
+    
         cursor.TryConsumeIdentifier(out _)
             .Should()
             .BeTrue();
-
+    
         int index = cursor.Index;
-
+    
         cursor.TryConsumePunctuation((byte)'/', out _)
             .Should()
             .BeFalse();
-
+    
         cursor.Index
             .Should()
             .Be(index);
-
-        cursor.TryPeek(out LexToken unknown)
+    
+        cursor.TryPeek(out LexToken operatorToken)
             .Should()
             .BeTrue();
-
-        unknown.Type
+    
+        operatorToken.Type
             .Should()
-            .Be(LexTokenType.Unknown);
+            .Be(LexTokenType.Operator);
     }
 
     [TestCase("", TestName = "Cursor Should Report EOF For Empty Source")]
