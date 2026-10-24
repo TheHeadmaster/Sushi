@@ -11,7 +11,7 @@ using Sushi.Source;
 namespace Sushi.Testing.Parsing;
 
 [TestFixture]
-public class PrefixUnaryExpressionParserTests
+public class UnaryPrefixExpressionParserTests
 {
     private static readonly Uri testUri = new("file:///TestProject/Unary.sus");
 
