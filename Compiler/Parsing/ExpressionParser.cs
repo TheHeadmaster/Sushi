@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
-/// Supports integer literals, grouping, prefix unary operators, and binary arithmetic.
+/// Supports integer and Boolean literals, grouping, prefix unary operators, and binary arithmetic.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -57,7 +57,6 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
             this.cursor.TryAdvance(out _);
 
             SyntaxToken operatorToken = new(SyntaxType.OperatorToken, candidate);
-
             ExpressionSyntax right = this.ParseExpression(bindingPower + 1, diagnosticReporter, out bool rightIncomplete);
 
             left = new BinaryExpressionSyntax(left, operatorToken, right);
@@ -76,17 +75,14 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     {
         this.cancellationToken.ThrowIfCancellationRequested();
 
-        if (!this.cursor.TryPeek(out LexToken token) || !this.IsPrefixUnaryOperator(token))
+        if (!this.cursor.TryPeek(out LexToken token) || !this.TryGetPrefixUnarySyntaxType(token, out SyntaxType syntaxType))
         {
             return this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
         }
 
         this.cursor.TryAdvance(out _);
 
-        SyntaxToken operatorToken = new(SyntaxType.OperatorToken, token);
-
-        // Parsing the operand at the prefix tier excludes looser binary operators
-        // while still allowing another prefix operator to begin the operand.
+        SyntaxToken operatorToken = new(syntaxType, token);
         ExpressionSyntax operand = this.ParseExpression(BindingPower.UnaryPrefix, diagnosticReporter, out incomplete);
 
         return new UnaryExpressionSyntax(operatorToken, operand);
@@ -96,12 +92,23 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     {
         this.cancellationToken.ThrowIfCancellationRequested();
 
-        if (this.cursor.TryPeek(out LexToken token) && token.Type is LexTokenType.IntegerLiteral)
+        if (this.cursor.TryPeek(out LexToken token))
         {
-            this.cursor.TryAdvance(out _);
-            incomplete = false;
+            if (token.Type is LexTokenType.IntegerLiteral)
+            {
+                this.cursor.TryAdvance(out _);
+                incomplete = false;
 
-            return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
+                return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
+            }
+
+            if (token.Type is LexTokenType.BooleanLiteral)
+            {
+                this.cursor.TryAdvance(out _);
+                incomplete = false;
+
+                return new BooleanLiteralExpressionSyntax(new SyntaxToken(SyntaxType.BooleanLiteralToken, token));
+            }
         }
 
         if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
@@ -135,10 +142,25 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, missingPosition));
     }
 
-    private bool IsPrefixUnaryOperator(LexToken token)
-        => token.Type is LexTokenType.Operator
+    private bool TryGetPrefixUnarySyntaxType(LexToken token, out SyntaxType syntaxType)
+    {
+        if (token.Type is LexTokenType.Keyword && this.cursor.TokenTextEquals(token, "not"u8))
+        {
+            syntaxType = SyntaxType.NotKeyword;
+            return true;
+        }
+
+        if (token.Type is LexTokenType.Operator
             && token.Span.Length == 1
-            && this.cursor.Snapshot.Bytes.Span[token.Span.Start] is (byte)'+' or (byte)'-' or (byte)'~';
+            && this.cursor.Snapshot.Bytes.Span[token.Span.Start] is (byte)'+' or (byte)'-' or (byte)'~')
+        {
+            syntaxType = SyntaxType.OperatorToken;
+            return true;
+        }
+
+        syntaxType = default;
+        return false;
+    }
 
     private bool TryGetBinaryBindingPower(LexToken token, out BindingPower bindingPower)
     {

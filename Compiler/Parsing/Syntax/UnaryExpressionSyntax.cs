@@ -16,7 +16,7 @@ public sealed class UnaryExpressionSyntax : ExpressionSyntax
     public override SourceSpan Span => new(this.OperatorToken.Span.Snapshot, this.OperatorToken.Span.Start, this.Operand.Span.End);
 
     /// <summary>
-    /// Gets the source-backed prefix operator.
+    /// Gets the source-backed prefix operator, including keyword operators such as not.
     /// </summary>
     public SyntaxToken OperatorToken { get; }
 
@@ -29,7 +29,7 @@ public sealed class UnaryExpressionSyntax : ExpressionSyntax
     /// Creates a prefix unary expression, preserving its original source coordinates.
     /// </summary>
     /// <param name="operatorToken">
-    /// The source-backed unary operator, currently +, -, or ~.
+    /// The source-backed unary operator, currently +, -, ~, or not.
     /// </param>
     /// <param name="operand">
     /// The expression to which the operator applies.
@@ -38,19 +38,10 @@ public sealed class UnaryExpressionSyntax : ExpressionSyntax
     {
         ArgumentNullException.ThrowIfNull(operand);
 
-        if (operatorToken.Type is not SyntaxType.OperatorToken
-            || operatorToken.SourceToken is not LexToken sourceToken
-            || sourceToken.Type is not LexTokenType.Operator
-            || sourceToken.Span.Length != 1)
+        if (operatorToken.SourceToken is not LexToken sourceToken
+            || !IsSupportedPrefixOperator(operatorToken.Type, sourceToken))
         {
-            throw new ArgumentException("Unary expressions require a single-byte, source-backed operator token.", nameof(operatorToken));
-        }
-
-        byte spelling = sourceToken.Span.Snapshot.Bytes.Span[sourceToken.Span.Start];
-
-        if (spelling is not ((byte)'+' or (byte)'-' or (byte)'~'))
-        {
-            throw new ArgumentException("The supplied operator is not a supported prefix unary operator.", nameof(operatorToken));
+            throw new ArgumentException("Unary expressions require a supported source-backed prefix operator.", nameof(operatorToken));
         }
 
         SourceSpan operatorSpan = operatorToken.Span;
@@ -68,5 +59,22 @@ public sealed class UnaryExpressionSyntax : ExpressionSyntax
 
         this.OperatorToken = operatorToken;
         this.Operand = operand;
+    }
+
+    private static bool IsSupportedPrefixOperator(SyntaxType type, LexToken token)
+    {
+        ReadOnlySpan<byte> spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
+
+        return type switch
+        {
+            SyntaxType.OperatorToken => token.Type is LexTokenType.Operator
+                && spelling.Length == 1
+                && spelling[0] is (byte)'+' or (byte)'-' or (byte)'~',
+
+            SyntaxType.NotKeyword => token.Type is LexTokenType.Keyword
+                && spelling.SequenceEqual("not"u8),
+
+            _ => false
+        };
     }
 }

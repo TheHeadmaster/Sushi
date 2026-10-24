@@ -30,5 +30,8 @@ public enum SyntaxType
     BinaryExpression,
     ParenthesizedExpression,
     OperatorToken,
-    UnaryExpression
+    UnaryExpression,
+    BooleanLiteralExpression,
+    BooleanLiteralToken,
+    NotKeyword
 }
