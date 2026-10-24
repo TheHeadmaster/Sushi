@@ -29,5 +29,6 @@ public enum SyntaxType
     IntegerLiteralToken,
     BinaryExpression,
     ParenthesizedExpression,
-    OperatorToken
+    OperatorToken,
+    UnaryExpression
 }

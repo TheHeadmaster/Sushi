@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
-/// The current implementation supports integer literals, grouping, and binary arithmetic.
+/// Supports integer literals, grouping, prefix unary operators, and binary arithmetic.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -21,8 +21,8 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     private readonly CancellationToken cancellationToken = cancellationToken;
 
     /// <summary>
-    /// Parses an expression at the current cursor position, leaving the first
-    /// significant element outside the recognized expression unconsumed.
+    /// Parses an expression at the current cursor position, leaving significant
+    /// elements outside the recognized expression unconsumed.
     /// </summary>
     /// <param name="diagnosticReporter">
     /// Receives expression-syntax diagnostics.
@@ -42,7 +42,7 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     {
         this.cancellationToken.ThrowIfCancellationRequested();
 
-        ExpressionSyntax left = this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
+        ExpressionSyntax left = this.ParsePrefixExpression(diagnosticReporter, out incomplete);
 
         if (incomplete)
         {
@@ -72,6 +72,26 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         return left;
     }
 
+    private ExpressionSyntax ParsePrefixExpression(IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        this.cancellationToken.ThrowIfCancellationRequested();
+
+        if (!this.cursor.TryPeek(out LexToken token) || !this.IsPrefixUnaryOperator(token))
+        {
+            return this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
+        }
+
+        this.cursor.TryAdvance(out _);
+
+        SyntaxToken operatorToken = new(SyntaxType.OperatorToken, token);
+
+        // Parsing the operand at the prefix tier excludes looser binary operators
+        // while still allowing another prefix operator to begin the operand.
+        ExpressionSyntax operand = this.ParseExpression(BindingPower.UnaryPrefix, diagnosticReporter, out incomplete);
+
+        return new UnaryExpressionSyntax(operatorToken, operand);
+    }
+
     private ExpressionSyntax ParsePrimaryExpression(IDiagnosticReporter diagnosticReporter, out bool incomplete)
     {
         this.cancellationToken.ThrowIfCancellationRequested();
@@ -87,7 +107,7 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
         {
             SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, openingParenthesis);
-            ExpressionSyntax expression = this.ParseExpression(0, diagnosticReporter, out bool innerIncomplete);
+            ExpressionSyntax expression = this.ParseExpression(BindingPower.Lowest, diagnosticReporter, out bool innerIncomplete);
 
             SyntaxToken closeToken;
 
@@ -108,12 +128,17 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
 
         int missingPosition = this.cursor.Position;
 
-        this.ReportExpectedSyntax("Expected integer literal expression.", missingPosition, diagnosticReporter);
+        this.ReportExpectedSyntax("Expected expression.", missingPosition, diagnosticReporter);
 
         incomplete = true;
 
         return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, missingPosition));
     }
+
+    private bool IsPrefixUnaryOperator(LexToken token)
+        => token.Type is LexTokenType.Operator
+            && token.Span.Length == 1
+            && this.cursor.Snapshot.Bytes.Span[token.Span.Start] is (byte)'+' or (byte)'-' or (byte)'~';
 
     private bool TryGetBinaryBindingPower(LexToken token, out BindingPower bindingPower)
     {

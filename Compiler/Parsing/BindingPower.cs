@@ -7,5 +7,6 @@ internal enum BindingPower
 {
     Lowest = 0,
     Additive = 10,
-    Multiplicative = 20
+    Multiplicative = 20,
+    UnaryPrefix = 30,
 }

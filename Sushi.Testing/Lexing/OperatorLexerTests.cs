@@ -20,6 +20,7 @@ public class OperatorLexerTests
     [TestCase("1%2", "%", TestName = "Lex Should Recognize Remainder Operator")]
     [TestCase("1++2", "++", TestName = "Lex Should Keep Increment Operator Indivisible")]
     [TestCase("1--2", "--", TestName = "Lex Should Keep Decrement Operator Indivisible")]
+    [TestCase("1~2", "~", TestName = "Lex Should Recognize Bitwise Complement Operator")]
     public void LexShould_0(string source, [NotNull] string expectedOperator)
     {
         (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);
@@ -68,6 +69,33 @@ public class OperatorLexerTests
             .Should()
             .NotContain(token => token.Type == LexTokenType.Operator);
 
+        diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Recognize Consecutive Complement Operators Independently")]
+    public void LexShould_2()
+    {
+        (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex("~~42");
+    
+        result.Tokens
+            .Select(token => token.Type)
+            .Should()
+            .Equal(
+                LexTokenType.Operator,
+                LexTokenType.Operator,
+                LexTokenType.IntegerLiteral
+            );
+    
+        result.Tokens[0].Span.Length
+            .Should()
+            .Be(1);
+    
+        result.Tokens[1].Span.Start
+            .Should()
+            .Be(1);
+    
         diagnostics
             .Should()
             .BeEmpty();

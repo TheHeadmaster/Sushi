@@ -3,8 +3,9 @@
 namespace Sushi.Lexing.Tokenization;
 
 /// <summary>
-/// Recognizes the arithmetic operators supported by the initial expression parser,
-/// while retaining increment and decrement as indivisible lexical elements.
+/// Recognizes the currently supported arithmetic and bitwise-complement
+/// operator spellings, while retaining increment and decrement as
+/// indivisible lexical elements for future grammar support.
 /// </summary>
 public sealed class OperatorTokenizer : ILexTokenizer
 {
@@ -13,7 +14,8 @@ public sealed class OperatorTokenizer : ILexTokenizer
         (byte)'-',
         (byte)'*',
         (byte)'/',
-        (byte)'%'
+        (byte)'%',
+        (byte)'~'
     ];
 
     /// <inheritdoc />
