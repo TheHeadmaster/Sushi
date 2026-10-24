@@ -2,5 +2,5 @@
 namespace TestProject;
 
 public int32 launch() {
-    return 3 + 5;
+    return 42;
 }
