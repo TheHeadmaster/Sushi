@@ -93,7 +93,7 @@ public class ParserCursorTests
 
         (first.Span.Start, second.Span.Start, third.Span.Start)
             .Should()
-            .Be((0, source.IndexOf("Beta", StringComparison.Ordinal), source.IndexOf(';')));
+            .Be((0, source.IndexOf("Beta", StringComparison.Ordinal), source.IndexOf(';', StringComparison.Ordinal)));
 
         cursor.Index
             .Should()
@@ -138,7 +138,7 @@ public class ParserCursorTests
 
         unknown.Span.Start
             .Should()
-            .Be(source.IndexOf('$'));
+            .Be(source.IndexOf('$', StringComparison.Ordinal));
 
         cursor.TryPeek(out LexToken dot, lookahead: 1)
             .Should()
@@ -182,7 +182,7 @@ public class ParserCursorTests
 
         dot.Span.Start
             .Should()
-            .Be(source.IndexOf('.'));
+            .Be(source.IndexOf('.', StringComparison.Ordinal));
 
         cursor.TryConsumeIdentifier(out LexToken name)
             .Should()

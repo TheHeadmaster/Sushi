@@ -1,4 +1,4 @@
-﻿using Sushi.Diagnostics;
+using Sushi.Diagnostics;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
 using Sushi.Source;
@@ -7,7 +7,6 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses package, namespace, and function declarations from a shared lexical cursor.
-/// The supported function-body grammar remains here until statement parsing is extracted.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared with the source-file parser.
@@ -19,6 +18,7 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
 {
     private readonly ParserCursor cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
     private readonly CancellationToken cancellationToken = cancellationToken;
+    private readonly StatementParser statements = new(cursor, cancellationToken);
 
     /// <summary>
     /// Parses a function declaration at the current cursor position.
@@ -41,7 +41,7 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         SyntaxToken name = this.ParseNameComponent("Expected function name.", skipUnknown: false, localDiagnostics);
         SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after function name.", localDiagnostics);
         SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after function parameter list.", localDiagnostics);
-        BlockSyntax body = this.ParseBlock(localDiagnostics);
+        BlockSyntax body = this.statements.ParseBlock(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
         return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, closeParenthesis, body);
@@ -136,63 +136,6 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         int position = this.cursor.Position;
         this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
         return SyntaxToken.Missing(type, this.cursor.Snapshot, position);
-    }
-
-    private BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
-    {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.", diagnosticReporter);
-        List<StatementSyntax> statements = [];
-
-        while (this.IsReturnStatementAhead())
-        {
-            this.cancellationToken.ThrowIfCancellationRequested();
-            statements.Add(this.ParseReturnStatement(diagnosticReporter));
-        }
-
-        SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.", diagnosticReporter);
-        return new BlockSyntax(openBrace, statements, closeBrace);
-    }
-
-    private ReturnStatementSyntax ParseReturnStatement(IDiagnosticReporter diagnosticReporter)
-    {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        SyntaxToken returnKeyword = this.ParseReturnKeyword(diagnosticReporter);
-        IntegerLiteralExpressionSyntax expression = this.ParseIntegerLiteralExpression(diagnosticReporter);
-        SyntaxToken semicolon = this.ParseSemicolon("Expected \";\" after return statement.", diagnosticReporter);
-
-        return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
-    }
-
-    private SyntaxToken ParseReturnKeyword(IDiagnosticReporter diagnosticReporter)
-    {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (this.cursor.TryConsumeKeyword("return"u8, out LexToken token))
-        {
-            return new SyntaxToken(SyntaxType.ReturnKeyword, token);
-        }
-
-        int position = this.cursor.Position;
-        this.AccumulateExpectedDiagnostic("Expected \"return\" keyword.", position, diagnosticReporter);
-        return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.cursor.Snapshot, position);
-    }
-
-    private IntegerLiteralExpressionSyntax ParseIntegerLiteralExpression(IDiagnosticReporter diagnosticReporter)
-    {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (this.cursor.TryPeek(out LexToken token) && token.Type is LexTokenType.IntegerLiteral)
-        {
-            this.cursor.TryAdvance(out _);
-            return new IntegerLiteralExpressionSyntax(new SyntaxToken(SyntaxType.IntegerLiteralToken, token));
-        }
-
-        int position = this.cursor.Position;
-        this.AccumulateExpectedDiagnostic("Expected integer literal expression.", position, diagnosticReporter);
-        return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, position));
     }
 
     private SyntaxToken ParseNamespaceKeyword(IDiagnosticReporter diagnosticReporter)
@@ -300,11 +243,6 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         => token.Type is LexTokenType.Punctuation
             && token.Span.Length == 1
             && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
-
-    private bool IsReturnStatementAhead()
-        => this.cursor.TryPeek(out LexToken token)
-            && token.Type is LexTokenType.Keyword
-            && this.cursor.TokenTextEquals(token, "return"u8);
 
     /// <summary>
     /// Determines whether the next significant token introduces a namespace declaration.
