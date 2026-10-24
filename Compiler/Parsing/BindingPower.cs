@@ -1,8 +1,11 @@
 ﻿namespace Sushi.Parsing;
 
-public enum BindingPower
+/// <summary>
+/// Defines the precedence thresholds used by the expression parser.
+/// </summary>
+internal enum BindingPower
 {
-    Primary = 0,
-    Addition = 10,
-    Multiplication = 20
+    Lowest = 0,
+    Additive = 10,
+    Multiplicative = 20
 }

@@ -35,7 +35,7 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
         this.cancellationToken.ThrowIfCancellationRequested();
 
-        return this.ParseExpression(BindingPower.Primary, diagnosticReporter, out _);
+        return this.ParseExpression(BindingPower.Lowest, diagnosticReporter, out _);
     }
 
     private ExpressionSyntax ParseExpression(BindingPower minimumBindingPower, IDiagnosticReporter diagnosticReporter, out bool incomplete)
@@ -127,12 +127,12 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
 
         bindingPower = spelling switch
         {
-            (byte)'+' or (byte)'-' => BindingPower.Addition,
-            (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplication,
-            _ => BindingPower.Primary
+            (byte)'+' or (byte)'-' => BindingPower.Additive,
+            (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplicative,
+            _ => BindingPower.Lowest
         };
 
-        return bindingPower != BindingPower.Primary;
+        return bindingPower != BindingPower.Lowest;
     }
 
     private void ReportExpectedSyntax(string message, int position, IDiagnosticReporter diagnosticReporter)
