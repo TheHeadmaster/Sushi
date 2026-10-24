@@ -403,28 +403,33 @@ public class BooleanExpressionParserTests
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase("true and false", "and", TestName = "Expression Parser Should Leave Logical And Unconsumed")]
-    [TestCase("not false or true", "or", TestName = "Expression Parser Should Leave Logical Or Unconsumed")]
-    public void ParserShould_11(string source, string expectedKeyword)
+    [TestCase("true and false", "and", SyntaxType.AndKeyword, TestName = "Expression Parser Should Recognize Logical And Keyword")]
+    [TestCase("not false or true", "or", SyntaxType.OrKeyword, TestName = "Expression Parser Should Recognize Logical Or Keyword")]
+    public void ParserShould_11(string source, string expectedKeyword, SyntaxType expectedType)
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression(source);
-
-        expression
+    
+        BinaryExpressionSyntax binary = expression
             .Should()
-            .NotBeNull();
-
-        cursor.TryPeek(out LexToken token)
+            .BeOfType<BinaryExpressionSyntax>()
+            .Subject;
+    
+        binary.OperatorToken.Type
             .Should()
-            .BeTrue();
-
-        token.Type
+            .Be(expectedType);
+    
+        binary.OperatorToken.SourceToken!.Value.Type
             .Should()
             .Be(LexTokenType.Keyword);
-
-        GetSpelling(new SyntaxToken(SyntaxType.NotKeyword, token))
+    
+        GetSpelling(binary.OperatorToken)
             .Should()
             .Be(expectedKeyword);
-
+    
+        cursor.TryPeek(out _)
+            .Should()
+            .BeFalse();
+    
         diagnostics
             .Should()
             .BeEmpty();

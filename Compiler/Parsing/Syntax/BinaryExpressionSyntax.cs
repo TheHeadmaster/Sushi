@@ -4,7 +4,7 @@ using Sushi.Source;
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
-/// Represents a binary arithmetic expression with explicit left and right operands.
+/// Represents a binary expression with explicit left and right operands.
 /// </summary>
 public sealed class BinaryExpressionSyntax : ExpressionSyntax
 {
@@ -20,7 +20,7 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
     public ExpressionSyntax Left { get; }
 
     /// <summary>
-    /// Gets the source-backed arithmetic operator.
+    /// Gets the source-backed binary operator.
     /// </summary>
     public SyntaxToken OperatorToken { get; }
 
@@ -36,7 +36,7 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
     /// The left operand.
     /// </param>
     /// <param name="operatorToken">
-    /// The binary operator between the operands.
+    /// The source-backed binary operator.
     /// </param>
     /// <param name="right">
     /// The right operand.
@@ -46,11 +46,10 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
         ArgumentNullException.ThrowIfNull(left);
         ArgumentNullException.ThrowIfNull(right);
 
-        if (operatorToken.Type is not SyntaxType.OperatorToken
-            || operatorToken.SourceToken is not LexToken sourceToken
-            || sourceToken.Type is not LexTokenType.Operator)
+        if (operatorToken.SourceToken is not LexToken sourceToken
+            || !IsSupportedBinaryOperator(operatorToken.Type, sourceToken))
         {
-            throw new ArgumentException("Binary expressions require a source-backed operator token.", nameof(operatorToken));
+            throw new ArgumentException("Binary expressions require a supported source-backed binary operator.", nameof(operatorToken));
         }
 
         SourceSpan leftSpan = left.Span;
@@ -71,5 +70,23 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
         this.Left = left;
         this.OperatorToken = operatorToken;
         this.Right = right;
+    }
+
+    private static bool IsSupportedBinaryOperator(SyntaxType type, LexToken token)
+    {
+        ReadOnlySpan<byte> spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
+
+        return type switch
+        {
+            SyntaxType.OperatorToken => token.Type is LexTokenType.Operator,
+
+            SyntaxType.AndKeyword => token.Type is LexTokenType.Keyword
+                && spelling.SequenceEqual("and"u8),
+
+            SyntaxType.OrKeyword => token.Type is LexTokenType.Keyword
+                && spelling.SequenceEqual("or"u8),
+
+            _ => false
+        };
     }
 }

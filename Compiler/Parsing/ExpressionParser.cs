@@ -7,7 +7,8 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
-/// Supports integer and Boolean literals, grouping, prefix unary operators, and binary arithmetic.
+/// Supports integer and Boolean literals, grouping, prefix unary operators,
+/// binary arithmetic, and logical conjunction and disjunction.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -50,13 +51,13 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         }
 
         while (this.cursor.TryPeek(out LexToken candidate)
-            && this.TryGetBinaryBindingPower(candidate, out BindingPower bindingPower)
+            && this.TryGetBinaryOperator(candidate, out BindingPower bindingPower, out SyntaxType syntaxType)
             && bindingPower >= minimumBindingPower)
         {
             this.cancellationToken.ThrowIfCancellationRequested();
             this.cursor.TryAdvance(out _);
 
-            SyntaxToken operatorToken = new(SyntaxType.OperatorToken, candidate);
+            SyntaxToken operatorToken = new(syntaxType, candidate);
             ExpressionSyntax right = this.ParseExpression(bindingPower + 1, diagnosticReporter, out bool rightIncomplete);
 
             left = new BinaryExpressionSyntax(left, operatorToken, right);
@@ -162,24 +163,44 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         return false;
     }
 
-    private bool TryGetBinaryBindingPower(LexToken token, out BindingPower bindingPower)
+    private bool TryGetBinaryOperator(LexToken token, out BindingPower bindingPower, out SyntaxType syntaxType)
     {
-        if (token.Type is not LexTokenType.Operator || token.Span.Length != 1)
+        if (token.Type is LexTokenType.Keyword)
         {
-            bindingPower = default;
-            return false;
+            if (this.cursor.TokenTextEquals(token, "and"u8))
+            {
+                bindingPower = BindingPower.LogicalAnd;
+                syntaxType = SyntaxType.AndKeyword;
+                return true;
+            }
+
+            if (this.cursor.TokenTextEquals(token, "or"u8))
+            {
+                bindingPower = BindingPower.LogicalOr;
+                syntaxType = SyntaxType.OrKeyword;
+                return true;
+            }
         }
 
-        byte spelling = this.cursor.Snapshot.Bytes.Span[token.Span.Start];
-
-        bindingPower = spelling switch
+        if (token.Type is LexTokenType.Operator && token.Span.Length == 1)
         {
-            (byte)'+' or (byte)'-' => BindingPower.Additive,
-            (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplicative,
-            _ => BindingPower.Lowest
-        };
+            bindingPower = this.cursor.Snapshot.Bytes.Span[token.Span.Start] switch
+            {
+                (byte)'+' or (byte)'-' => BindingPower.Additive,
+                (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplicative,
+                _ => BindingPower.Lowest
+            };
 
-        return bindingPower != BindingPower.Lowest;
+            if (bindingPower != BindingPower.Lowest)
+            {
+                syntaxType = SyntaxType.OperatorToken;
+                return true;
+            }
+        }
+
+        bindingPower = BindingPower.Lowest;
+        syntaxType = default;
+        return false;
     }
 
     private void ReportExpectedSyntax(string message, int position, IDiagnosticReporter diagnosticReporter)

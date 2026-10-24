@@ -33,5 +33,7 @@ public enum SyntaxType
     UnaryExpression,
     BooleanLiteralExpression,
     BooleanLiteralToken,
-    NotKeyword
+    NotKeyword,
+    AndKeyword,
+    OrKeyword
 }
