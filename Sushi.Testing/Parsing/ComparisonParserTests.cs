@@ -460,33 +460,33 @@ public class ComparisonExpressionParserTests
     public void ParserShould_12()
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("1 << 2 < 3");
-    
+
         BinaryExpressionSyntax comparison = expression
             .Should()
             .BeOfType<BinaryExpressionSyntax>()
             .Subject;
-    
+
         BinaryExpressionSyntax shift = comparison.Left
             .Should()
             .BeOfType<BinaryExpressionSyntax>()
             .Subject;
-    
+
         GetSpelling(comparison.OperatorToken)
             .Should()
             .Be("<");
-    
+
         GetSpelling(shift.OperatorToken)
             .Should()
             .Be("<<");
-    
+
         comparison.Right
             .Should()
             .BeOfType<IntegerLiteralExpressionSyntax>();
-    
+
         cursor.TryPeek(out _)
             .Should()
             .BeFalse();
-    
+
         diagnostics
             .Should()
             .BeEmpty();
@@ -605,7 +605,7 @@ public class ComparisonExpressionParserTests
             .BeFalse();
     }
 
-    [TestCase(TestName = "Executable MVP Should Diagnose Unsupported Comparison Expression")]
+    [TestCase(TestName = "Executable MVP Should Reject Boolean Comparison Result In Int32 Function")]
     public void ParserShould_17()
     {
         const string source = "public int32 launch() { return 1 == 2; }";
@@ -649,6 +649,64 @@ public class ComparisonExpressionParserTests
         cursor.Index
             .Should()
             .Be(0);
+    }
+
+    [TestCase(TestName = "Executable MVP Should Bind Integer Comparison As Boolean Result")]
+    public void ParserShould_19()
+    {
+        const string source = "public bool launch() { return 1 + 2 < 3 * 4; }";
+    
+        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
+        IDiagnosticReporter reporter = new DiagnosticReporter();
+        LexerResult lexerResult = new SourceLexer().Lex(snapshot, reporter, CancellationToken.None);
+        ParserResult result = SourceParser.ParseFunctionDeclaration(lexerResult, reporter, CancellationToken.None);
+    
+        FunctionDeclarationSyntax declaration = result.Tree.Root
+            .Should()
+            .BeOfType<FunctionDeclarationSyntax>()
+            .Subject;
+    
+        ReturnStatementSyntax statement = declaration.Body.Statements[0]
+            .Should()
+            .BeOfType<ReturnStatementSyntax>()
+            .Subject;
+    
+        statement.Expression
+            .Should()
+            .BeOfType<BinaryExpressionSyntax>();
+    
+        FunctionBindResult bound = FunctionDeclarationBinder.Bind(declaration, reporter, CancellationToken.None);
+    
+        bound.Function
+            .Should()
+            .NotBeNull();
+    
+        BoundFunction function = bound.Function!;
+    
+        function.ReturnType
+            .Should()
+            .Be(BoundType.Bool);
+    
+        BoundReturnStatement boundReturn = function.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+    
+        BoundBooleanConstantExpression constant = boundReturn.Expression
+            .Should()
+            .BeOfType<BoundBooleanConstantExpression>()
+            .Subject;
+    
+        constant.Value
+            .Should()
+            .BeTrue();
+    
+        reporter.ReportDiagnostics()
+            .Should()
+            .BeEmpty();
     }
 
     private static string GetSpelling(SyntaxToken token)

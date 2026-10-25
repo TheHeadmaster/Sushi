@@ -1,11 +1,13 @@
-﻿using Sushi.Diagnostics;
+﻿using System.Numerics;
+using System.Text;
+using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Evaluates supported Boolean constant expressions without introducing
-/// implicit integer conversions or runtime Boolean evaluation.
+/// Evaluates supported Boolean constant expressions, including comparisons
+/// of exact integer constants, without introducing implicit integer conversions.
 /// </summary>
 internal static class BooleanConstantExpressionBinder
 {
@@ -13,23 +15,30 @@ internal static class BooleanConstantExpressionBinder
     /// Binds a Boolean constant expression in a bool result context.
     /// </summary>
     /// <param name="expression">
-    /// The parsed expression to evaluate.
+    /// The expression to evaluate.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives diagnostics for expression forms outside the executable MVP.
+    /// Receives diagnostics for invalid or unsupported expressions.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel recursive evaluation.
+    /// Cancels recursive evaluation.
     /// </param>
     /// <returns>
-    /// The bound Boolean constant, or null when binding fails.
+    /// The concrete Boolean constant, or null when binding fails.
     /// </returns>
     public static BoundBooleanConstantExpression? Bind(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-        return TryEvaluate(expression, diagnosticReporter, cancellationToken, out bool value) ? new BoundBooleanConstantExpression(value) : null;
+        if (ContainsInvalidComparisonChain(expression))
+        {
+            return null;
+        }
+
+        return TryEvaluate(expression, diagnosticReporter, cancellationToken, out bool value)
+            ? new BoundBooleanConstantExpression(value)
+            : null;
     }
 
     private static bool TryEvaluate(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
@@ -60,12 +69,64 @@ internal static class BooleanConstantExpressionBinder
                 value = !operand;
                 return true;
 
+            case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out string operation):
+                return TryEvaluateIntegerComparison(comparison, operation, diagnosticReporter, cancellationToken, out value);
+
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
                 value = default;
                 return false;
         }
     }
+
+    private static bool TryEvaluateIntegerComparison(BinaryExpressionSyntax expression, string operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
+    {
+        value = default;
+
+        if (!IntegerConstantExpressionBinder.TryEvaluateUntyped(expression.Left, diagnosticReporter, cancellationToken, out BigInteger left)
+            || !IntegerConstantExpressionBinder.TryEvaluateUntyped(expression.Right, diagnosticReporter, cancellationToken, out BigInteger right))
+        {
+            return false;
+        }
+
+        value = operation switch
+        {
+            "==" => left == right,
+            "!=" => left != right,
+            "<" => left < right,
+            "<=" => left <= right,
+            ">" => left > right,
+            ">=" => left >= right,
+            _ => throw new InvalidOperationException("Unexpected integer comparison operator.")
+        };
+
+        return true;
+    }
+
+    private static bool TryGetIntegerComparisonOperator(SyntaxToken token, out string operation)
+    {
+        operation = string.Empty;
+
+        if (token.Type is not SyntaxType.OperatorToken || !token.IsSourceBacked)
+        {
+            return false;
+        }
+
+        Source.SourceSpan span = token.Span;
+        operation = Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[span.Start..span.End]);
+
+        return operation is "==" or "!=" or "<" or "<=" or ">" or ">=";
+    }
+
+    private static bool ContainsInvalidComparisonChain(ExpressionSyntax expression)
+        => expression switch
+        {
+            InvalidComparisonChainSyntax => true,
+            ParenthesizedExpressionSyntax grouped => ContainsInvalidComparisonChain(grouped.Expression),
+            UnaryExpressionSyntax unary => ContainsInvalidComparisonChain(unary.Operand),
+            BinaryExpressionSyntax binary => ContainsInvalidComparisonChain(binary.Left) || ContainsInvalidComparisonChain(binary.Right),
+            _ => false
+        };
 
     private static bool IsTrueLiteral(BooleanLiteralExpressionSyntax expression)
     {

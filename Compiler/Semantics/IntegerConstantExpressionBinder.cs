@@ -38,6 +38,33 @@ internal static class IntegerConstantExpressionBinder
         return new BoundIntegerLiteralExpression((int)value);
     }
 
+    /// <summary>
+    /// Evaluates an integer expression without imposing a concrete integer result type.
+    /// Used when a consuming operation, such as integer comparison, accepts exact mathematical values.
+    /// </summary>
+    /// <param name="expression">
+    /// The expression to evaluate.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives diagnostics for invalid or unsupported expressions.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels recursive evaluation.
+    /// </param>
+    /// <param name="value">
+    /// The exact mathematical result when evaluation succeeds.
+    /// </param>
+    /// <returns>
+    /// Whether the expression was successfully evaluated.
+    /// </returns>
+    internal static bool TryEvaluateUntyped(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
+        return TryEvaluate(expression, requiresInt32: false, diagnosticReporter, cancellationToken, out value);
+    }
+
     private static bool TryEvaluate(ExpressionSyntax expression, bool requiresInt32, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
     {
         cancellationToken.ThrowIfCancellationRequested();
