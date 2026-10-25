@@ -30,6 +30,9 @@ public class OperatorLexerTests
     [TestCase("1<<2", "<<", TestName = "Lex Should Preserve Left Shift As One Token")]
     [TestCase("1>>2", ">>", TestName = "Lex Should Preserve Right Shift As One Token")]
     [TestCase("1=2", "=", TestName = "Lex Should Recognize Assignment Symbol")]
+    [TestCase("1&2", "&", TestName = "Lex Should Recognize Bitwise And")]
+    [TestCase("1^2", "^", TestName = "Lex Should Recognize Bitwise Xor")]
+    [TestCase("1|2", "|", TestName = "Lex Should Recognize Bitwise Or")]
     public void LexShould_0(string source, [NotNull] string expectedOperator)
     {
         (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);

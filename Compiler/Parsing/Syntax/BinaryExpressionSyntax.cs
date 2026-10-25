@@ -29,14 +29,18 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
     /// </summary>
     public ExpressionSyntax Right { get; }
 
-    private static readonly byte[] supportedBinaryOperators = [
+    private static readonly byte[] supportedBinaryOperators =
+    [
         (byte)'+',
         (byte)'-',
         (byte)'*',
         (byte)'/',
         (byte)'%',
         (byte)'<',
-        (byte)'>'
+        (byte)'>',
+        (byte)'&',
+        (byte)'^',
+        (byte)'|'
     ];
 
     /// <summary>

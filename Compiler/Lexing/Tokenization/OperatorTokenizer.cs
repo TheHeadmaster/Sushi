@@ -20,7 +20,10 @@ public sealed class OperatorTokenizer : ILexTokenizer
         (byte)'=',
         (byte)'!',
         (byte)'<',
-        (byte)'>'
+        (byte)'>',
+        (byte)'&',
+        (byte)'^',
+        (byte)'|'
     ];
 
     /// <inheritdoc />

@@ -8,7 +8,7 @@ namespace Sushi.Parsing;
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
 /// Supports integer and Boolean literals, grouping, prefix unary operators,
-/// arithmetic, shifts, relational and equality comparisons, and logical operators.
+/// arithmetic, shifts, bitwise operators, comparisons, and logical operators.
 /// Diagnoses non-associative comparison chains while preserving recovered syntax.
 /// </summary>
 /// <param name="cursor">
@@ -30,7 +30,10 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         { (byte)'/', BindingPower.Multiplicative },
         { (byte)'%', BindingPower.Multiplicative },
         { (byte)'<', BindingPower.Relational },
-        { (byte)'>', BindingPower.Relational }
+        { (byte)'>', BindingPower.Relational },
+        { (byte)'&', BindingPower.BitwiseAnd },
+        { (byte)'^', BindingPower.BitwiseXor },
+        { (byte)'|', BindingPower.BitwiseOr }
     };
 
     /// <summary>
