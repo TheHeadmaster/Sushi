@@ -47,16 +47,24 @@ public class BooleanConstantExpressionBinderTests
             .BeOfType<BoundReturnStatement>()
             .Subject;
 
-        BoundBooleanConstantExpression boundExpression = statement.Expression
-            .Should()
-            .BeOfType<BoundBooleanConstantExpression>()
-            .Subject;
-
-        boundExpression.Type
+        statement.Expression.Type
             .Should()
             .Be(BoundType.Bool);
 
-        boundExpression.Value
+        IRFunction structured = BoundFunctionIRConverter.Convert(function, CancellationToken.None);
+        LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
+
+        LoweredReturnTerminator terminator = lowered.EntryBlock.Terminator
+            .Should()
+            .BeOfType<LoweredReturnTerminator>()
+            .Subject;
+
+        LoweredBooleanConstant constant = terminator.Value
+            .Should()
+            .BeOfType<LoweredBooleanConstant>()
+            .Subject;
+
+        constant.Value
             .Should()
             .Be(expectedValue);
 
@@ -118,6 +126,28 @@ public class BooleanConstantExpressionBinderTests
             .ContainSingle()
             .Which;
 
+        BoundReturnStatement boundReturn = bound.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+
+        BoundBooleanNotExpression boundNegation = boundReturn.Expression
+            .Should()
+            .BeOfType<BoundBooleanNotExpression>()
+            .Subject;
+
+        BoundBooleanConstantExpression boundOperand = boundNegation.Operand
+            .Should()
+            .BeOfType<BoundBooleanConstantExpression>()
+            .Subject;
+
+        boundOperand.Value
+            .Should()
+            .BeFalse();
+
         IRFunction structured = BoundFunctionIRConverter.Convert(bound, CancellationToken.None);
 
         structured.ReturnType
@@ -132,18 +162,23 @@ public class BooleanConstantExpressionBinderTests
             .BeOfType<IRReturnStatement>()
             .Subject;
 
-        IRBooleanConstant constant = structuredReturn.Expression
+        IRBooleanNotExpression negation = structuredReturn.Expression
+            .Should()
+            .BeOfType<IRBooleanNotExpression>()
+            .Subject;
+        
+        negation.Type
+            .Should()
+            .Be(IRType.Bool);
+        
+        IRBooleanConstant operand = negation.Operand
             .Should()
             .BeOfType<IRBooleanConstant>()
             .Subject;
-
-        constant.Type
+        
+        operand.Value
             .Should()
-            .Be(IRType.Bool);
-
-        constant.Value
-            .Should()
-            .BeTrue();
+            .BeFalse();
 
         LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
 

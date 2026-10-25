@@ -92,7 +92,7 @@ public sealed class FunctionDeclarationBinder
         BoundExpression? expression = returnType switch
         {
             BoundType.Int32 => IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
-            BoundType.Bool => BooleanConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
+            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
             _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
         };
 
@@ -106,11 +106,11 @@ public sealed class FunctionDeclarationBinder
             case "int32":
                 type = BoundType.Int32;
                 return true;
-    
+
             case "bool":
                 type = BoundType.Bool;
                 return true;
-    
+
             default:
                 type = default;
                 return false;

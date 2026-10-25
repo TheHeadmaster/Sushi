@@ -65,9 +65,25 @@ public sealed class BoundFunctionIRConverter
         {
             BoundIntegerLiteralExpression integerLiteral => new IRIntegerConstant(integerLiteral.Value),
             BoundBooleanConstantExpression booleanConstant => new IRBooleanConstant(booleanConstant.Value),
+            BoundBooleanNotExpression negation => new IRBooleanNotExpression(ConvertExpression(negation.Operand, cancellationToken)),
+            BoundBooleanBinaryExpression binary => new IRBooleanBinaryExpression(
+                ConvertBooleanOperator(binary.Operator),
+                ConvertExpression(binary.Left, cancellationToken),
+                ConvertExpression(binary.Right, cancellationToken)),
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
+
+    private static IRBooleanBinaryOperator ConvertBooleanOperator(BooleanBinaryOperator operation)
+        => operation switch
+        {
+            BooleanBinaryOperator.LogicalAnd => IRBooleanBinaryOperator.LogicalAnd,
+            BooleanBinaryOperator.LogicalOr => IRBooleanBinaryOperator.LogicalOr,
+            BooleanBinaryOperator.EagerAnd => IRBooleanBinaryOperator.EagerAnd,
+            BooleanBinaryOperator.EagerOr => IRBooleanBinaryOperator.EagerOr,
+            BooleanBinaryOperator.EagerXor => IRBooleanBinaryOperator.EagerXor,
+            _ => throw new NotSupportedException($"Boolean operator \"{operation}\" is not supported by structured Sushi IR.")
+        };
 
     private static IRType ConvertType(BoundType type)
         => type switch

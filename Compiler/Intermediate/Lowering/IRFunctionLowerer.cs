@@ -1,7 +1,8 @@
 ﻿namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
-/// Lowers structured Sushi IR into explicit basic-block control flow.
+/// Lowers structured Sushi IR into explicit basic-block control flow,
+/// folding supported constant operations when their results are known.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -9,10 +10,10 @@ public sealed class IRFunctionLowerer
     /// Lowers a structured IR function into its control-flow representation.
     /// </summary>
     /// <param name="function">
-    /// The structured Sushi IR function to lower.
+    /// The structured function to lower.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel lowering.
+    /// Cancels lowering.
     /// </param>
     /// <returns>
     /// The equivalent lowered function.
@@ -45,12 +46,40 @@ public sealed class IRFunctionLowerer
     private static LoweredValue LowerExpression(IRExpression expression, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-    
+
         return expression switch
         {
             IRIntegerConstant integerConstant => new LoweredIntegerConstant(integerConstant.Value),
             IRBooleanConstant booleanConstant => new LoweredBooleanConstant(booleanConstant.Value),
+            IRBooleanNotExpression negation => new LoweredBooleanConstant(!LowerBooleanValue(negation.Operand, cancellationToken)),
+            IRBooleanBinaryExpression binary => LowerBooleanBinary(binary, cancellationToken),
             _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.")
         };
+    }
+
+    private static LoweredBooleanConstant LowerBooleanBinary(IRBooleanBinaryExpression expression, CancellationToken cancellationToken)
+    {
+        bool left = LowerBooleanValue(expression.Left, cancellationToken);
+
+        bool result = expression.Operator switch
+        {
+            IRBooleanBinaryOperator.LogicalAnd => left && LowerBooleanValue(expression.Right, cancellationToken),
+            IRBooleanBinaryOperator.LogicalOr => left || LowerBooleanValue(expression.Right, cancellationToken),
+            IRBooleanBinaryOperator.EagerAnd => left & LowerBooleanValue(expression.Right, cancellationToken),
+            IRBooleanBinaryOperator.EagerOr => left | LowerBooleanValue(expression.Right, cancellationToken),
+            IRBooleanBinaryOperator.EagerXor => left ^ LowerBooleanValue(expression.Right, cancellationToken),
+            _ => throw new NotSupportedException($"Boolean operator \"{expression.Operator}\" is not supported by lowering.")
+        };
+
+        return new LoweredBooleanConstant(result);
+    }
+
+    private static bool LowerBooleanValue(IRExpression expression, CancellationToken cancellationToken)
+    {
+        LoweredValue value = LowerExpression(expression, cancellationToken);
+
+        return value is LoweredBooleanConstant constant
+            ? constant.Value
+            : throw new InvalidOperationException("A typed Boolean operation did not lower to a Boolean value.");
     }
 }

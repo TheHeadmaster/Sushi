@@ -4,6 +4,8 @@ using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Semantics;
 using Sushi.Source;
+using Sushi.Intermediate;
+using Sushi.Intermediate.Lowering;
 
 namespace Sushi.Testing.Semantics;
 
