@@ -11,8 +11,8 @@ public class BoundFunctionIRConverterTests
     [TestCase(TestName = "IR Converter Should Convert Minimum Bound Function")]
     public void ConvertShould_0()
     {
-        BoundFunction boundFunction = new(Accessibility.Public, "main", BoundIntegerType.Int32, new BoundBlock(
-        [ new BoundReturnStatement(new BoundIntegerLiteralExpression(42)) ]));
+        BoundFunction boundFunction = new(Accessibility.Public, "main", BoundType.Int32, new BoundBlock(
+            [new BoundReturnStatement(new BoundIntegerLiteralExpression(42))]));
 
         IRFunction function = BoundFunctionIRConverter.Convert(boundFunction, CancellationToken.None);
 

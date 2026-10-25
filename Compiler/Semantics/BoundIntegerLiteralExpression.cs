@@ -6,4 +6,4 @@ namespace Sushi.Semantics;
 /// <param name="Value">
 /// The concrete int32 value.
 /// </param>
-public sealed record BoundIntegerLiteralExpression(int Value) : BoundExpression(BoundIntegerType.Int32);
+public sealed record BoundIntegerLiteralExpression(int Value) : BoundExpression(BoundType.Int32);

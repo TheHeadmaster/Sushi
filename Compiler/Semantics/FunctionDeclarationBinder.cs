@@ -31,7 +31,7 @@ public sealed class FunctionDeclarationBinder
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!TryBindAccessibility(declaration.AccessModifier, out Accessibility accessibility)
-            || !TryBindInt32ReturnType(declaration.ReturnType)
+            || !TryBindReturnType(declaration.ReturnType, out BoundType returnType)
             || !declaration.OpenParenthesisToken.IsSourceBacked
             || !declaration.CloseParenthesisToken.IsSourceBacked
             || !declaration.Body.OpenBraceToken.IsSourceBacked
@@ -47,14 +47,14 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        BoundBlock? body = BindBody(declaration.Body, diagnosticReporter, cancellationToken);
+        BoundBlock? body = BindBody(declaration.Body, returnType, diagnosticReporter, cancellationToken);
 
         return body is null
             ? new FunctionBindResult(null)
-            : new FunctionBindResult(new BoundFunction(accessibility, name, BoundIntegerType.Int32, body));
+            : new FunctionBindResult(new BoundFunction(accessibility, name, returnType, body));
     }
 
-    private static BoundBlock? BindBody(BlockSyntax block, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         List<BoundStatement> statements = [];
 
@@ -67,7 +67,7 @@ public sealed class FunctionDeclarationBinder
                 return null;
             }
 
-            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, diagnosticReporter, cancellationToken);
+            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, returnType, diagnosticReporter, cancellationToken);
 
             if (boundReturn is null)
             {
@@ -80,22 +80,42 @@ public sealed class FunctionDeclarationBinder
         return new BoundBlock(statements);
     }
 
-    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, BoundType returnType, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-    
+
         if (!statement.ReturnKeyword.IsSourceBacked || !statement.SemicolonToken.IsSourceBacked)
         {
             return null;
         }
-    
-        BoundIntegerLiteralExpression? expression = IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken);
-    
+
+        BoundExpression? expression = returnType switch
+        {
+            BoundType.Int32 => IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
+            BoundType.Bool => BooleanConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
+            _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
+        };
+
         return expression is null ? null : new BoundReturnStatement(expression);
     }
 
-    private static bool TryBindInt32ReturnType(SyntaxToken token)
-        => IdentifierBinder.Bind(token) is "int32";
+    private static bool TryBindReturnType(SyntaxToken token, out BoundType type)
+    {
+        switch (IdentifierBinder.Bind(token))
+        {
+            case "int32":
+                type = BoundType.Int32;
+                return true;
+    
+            case "bool":
+                type = BoundType.Bool;
+                return true;
+    
+            default:
+                type = default;
+                return false;
+        }
+    }
 
     private static bool TryBindAccessibility(SyntaxToken token, out Accessibility accessibility)
     {

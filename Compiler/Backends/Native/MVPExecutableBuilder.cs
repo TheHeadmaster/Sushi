@@ -45,7 +45,7 @@ public sealed class MVPExecutableBuilder
         {
             using LLVMModuleArtifact moduleArtifact = this.moduleEmitter.Emit("Sushi.MVP", entryFunction, cancellationToken);
 
-            TemporaryMVPEntryShim.Add(moduleArtifact, entryFunction.Name);
+            TemporaryMVPEntryShim.Add(moduleArtifact, entryFunction.Name, entryFunction.ReturnType);
 
             NativeObjectArtifact objectArtifact = LLVMObjectEmitter.EmitForHost(moduleArtifact, objectPath, cancellationToken);
 

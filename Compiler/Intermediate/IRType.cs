@@ -5,5 +5,6 @@ namespace Sushi.Intermediate;
 /// </summary>
 public enum IRType
 {
-    Int32
+    Int32,
+    Bool
 }

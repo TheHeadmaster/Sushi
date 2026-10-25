@@ -54,7 +54,7 @@ public class IntegerConstantExpressionBinderTests
 
         boundExpression.Type
             .Should()
-            .Be(BoundIntegerType.Int32);
+            .Be(BoundType.Int32);
 
         boundExpression.Value
             .Should()

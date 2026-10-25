@@ -1,9 +1,9 @@
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Represents a semantically bound expression with a concrete integer type.
+/// Represents a semantically bound expression with a concrete result type.
 /// </summary>
 /// <param name="Type">
-/// The concrete integer type established during semantic binding.
+/// The concrete result type established during semantic binding.
 /// </param>
-public abstract record BoundExpression(BoundIntegerType Type);
+public abstract record BoundExpression(BoundType Type);

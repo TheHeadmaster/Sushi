@@ -10,9 +10,9 @@ namespace Sushi.Semantics;
 /// The semantic function name with source escaping removed.
 /// </param>
 /// <param name="ReturnType">
-/// The concrete integer return type.
+/// The concrete return type.
 /// </param>
 /// <param name="Body">
 /// The bound function body.
 /// </param>
-public sealed record BoundFunction(Accessibility Accessibility, string Name, BoundIntegerType ReturnType, BoundBlock Body);
+public sealed record BoundFunction(Accessibility Accessibility, string Name, BoundType ReturnType, BoundBlock Body);

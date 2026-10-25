@@ -309,7 +309,7 @@ public class SourceSemanticAnalysisTests
 
         function.ReturnType
             .Should()
-            .Be(BoundIntegerType.Int32);
+            .Be(BoundType.Int32);
 
         BoundReturnStatement returnStatement = function.Body.Statements
             .Should()
@@ -326,7 +326,7 @@ public class SourceSemanticAnalysisTests
 
         expression.Type
         .Should()
-        .Be(BoundIntegerType.Int32);
+        .Be(BoundType.Int32);
 
         expression.Value
             .Should()
@@ -372,7 +372,7 @@ public class SourceSemanticAnalysisTests
 
         expression.Type
             .Should()
-            .Be(BoundIntegerType.Int32);
+            .Be(BoundType.Int32);
 
         expression.Value
             .Should()

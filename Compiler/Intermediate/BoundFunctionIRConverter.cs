@@ -64,14 +64,16 @@ public sealed class BoundFunctionIRConverter
         return expression switch
         {
             BoundIntegerLiteralExpression integerLiteral => new IRIntegerConstant(integerLiteral.Value),
+            BoundBooleanConstantExpression booleanConstant => new IRBooleanConstant(booleanConstant.Value),
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
 
-    private static IRType ConvertType(BoundIntegerType type)
+    private static IRType ConvertType(BoundType type)
         => type switch
         {
-            BoundIntegerType.Int32 => IRType.Int32,
+            BoundType.Int32 => IRType.Int32,
+            BoundType.Bool => IRType.Bool,
             _ => throw new NotSupportedException($"Bound type \"{type}\" is not supported by structured Sushi IR.")
         };
 

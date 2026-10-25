@@ -115,6 +115,11 @@ public sealed class LLVMModuleEmitter
             LoweredIntegerConstant integerConstant => LLVMValueRef.CreateConstInt(
                 ConvertType(context, integerConstant.Type),
                 unchecked((ulong)(uint)integerConstant.Value)),
+
+            LoweredBooleanConstant booleanConstant => LLVMValueRef.CreateConstInt(
+                ConvertType(context, booleanConstant.Type),
+                booleanConstant.Value ? 1UL : 0UL),
+
             _ => throw new NotSupportedException($"Lowered value type \"{value.GetType().Name}\" is not supported by the LLVM backend.")
         };
 
@@ -122,6 +127,7 @@ public sealed class LLVMModuleEmitter
         => type switch
         {
             IRType.Int32 => context.Int32Type,
+            IRType.Bool => context.Int1Type,
             _ => throw new NotSupportedException($"IR type \"{type}\" is not supported by the LLVM backend.")
         };
 

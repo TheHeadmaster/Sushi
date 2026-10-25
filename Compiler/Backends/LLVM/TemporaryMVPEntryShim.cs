@@ -1,4 +1,5 @@
 ﻿using LLVMSharp.Interop;
+using Sushi.Intermediate;
 
 namespace Sushi.Backends.LLVM;
 
@@ -13,7 +14,7 @@ internal static class TemporaryMVPEntryShim
 
     /// <summary>
     /// Converts one explicitly selected Sushi function into the target of a generated C-compatible
-    /// native entry function.
+    /// native entry function. Boolean results are widened to int32 solely for process-exit testing.
     /// </summary>
     /// <param name="artifact">
     /// The LLVM module containing the selected Sushi function.
@@ -21,7 +22,10 @@ internal static class TemporaryMVPEntryShim
     /// <param name="selectedFunctionName">
     /// The semantic name of the Sushi function selected by the MVP compiler pipeline.
     /// </param>
-    public static void Add(LLVMModuleArtifact artifact, string selectedFunctionName)
+    /// <param name="selectedReturnType">
+    /// The lowered return type of the selected function.
+    /// </param>
+    public static void Add(LLVMModuleArtifact artifact, string selectedFunctionName, IRType selectedReturnType)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentException.ThrowIfNullOrEmpty(selectedFunctionName);
@@ -41,6 +45,13 @@ internal static class TemporaryMVPEntryShim
             throw new InvalidOperationException($"The LLVM module already contains the reserved MVP symbol \"{SushiEntryTargetSymbol}\".");
         }
 
+        LLVMTypeRef sushiReturnType = selectedReturnType switch
+        {
+            IRType.Int32 => context.Int32Type,
+            IRType.Bool => context.Int1Type,
+            _ => throw new NotSupportedException($"MVP entry return type \"{selectedReturnType}\" is not supported.")
+        };
+
         selectedFunction.Name = SushiEntryTargetSymbol;
         selectedFunction.Linkage = LLVMLinkage.LLVMInternalLinkage;
 
@@ -49,7 +60,7 @@ internal static class TemporaryMVPEntryShim
             throw new InvalidOperationException($"The LLVM module already contains the reserved native entry symbol \"{NativeEntrySymbol}\".");
         }
 
-        LLVMTypeRef sushiFunctionType = LLVMTypeRef.CreateFunction(context.Int32Type, []);
+        LLVMTypeRef sushiFunctionType = LLVMTypeRef.CreateFunction(sushiReturnType, []);
         LLVMTypeRef nativeEntryType = LLVMTypeRef.CreateFunction(context.Int32Type, [context.Int32Type, context.CreatePointerType(0)]);
 
         LLVMValueRef nativeEntry = module.AddFunction(NativeEntrySymbol, nativeEntryType);
@@ -65,7 +76,11 @@ internal static class TemporaryMVPEntryShim
 
         LLVMValueRef result = builder.BuildCall2(sushiFunctionType, selectedFunction, Array.Empty<LLVMValueRef>(), "sushi.result");
 
-        builder.BuildRet(result);
+        LLVMValueRef exitCode = selectedReturnType is IRType.Bool
+            ? builder.BuildZExt(result, context.Int32Type, "sushi.exitcode")
+            : result;
+
+        builder.BuildRet(exitCode);
 
         if (!module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage))
         {

@@ -45,10 +45,11 @@ public sealed class IRFunctionLowerer
     private static LoweredValue LowerExpression(IRExpression expression, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-
+    
         return expression switch
         {
             IRIntegerConstant integerConstant => new LoweredIntegerConstant(integerConstant.Value),
+            IRBooleanConstant booleanConstant => new LoweredBooleanConstant(booleanConstant.Value),
             _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.")
         };
     }
