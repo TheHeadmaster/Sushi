@@ -80,7 +80,7 @@ public class ExpressionParserTests
 
         cursor.Position
             .Should()
-            .Be(source.IndexOf(';'));
+            .Be(source.IndexOf(';', StringComparison.Ordinal));
     }
 
     [TestCase("", TestName = "Expression Parser Should Synthesize Missing Literal At Empty Source EOF")]

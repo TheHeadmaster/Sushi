@@ -77,6 +77,7 @@ public class IntegerBitwiseShiftConstantTests
     [TestCase("1 << (1 << 5)", TestName = "Binder Should Reject Computed Count Equal To Width")]
     [TestCase("1 << (1 << 31)", TestName = "Binder Should Reject Oversized Untyped Shift Count")]
     [TestCase("1 << 2147483648", TestName = "Binder Should Reject Large Untyped Count Without Narrowing")]
+    [TestCase("1 >> (~0)", TestName = "Binder Should Reject Negative Count From Exact Complement")]
     public async Task BindShould_1(string expression)
     {
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression(expression);
