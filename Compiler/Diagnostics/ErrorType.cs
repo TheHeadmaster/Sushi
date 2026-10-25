@@ -35,5 +35,6 @@ public enum ErrorType
     MissingNamespaceDeclaration = 303,
     DuplicateNamespaceDeclaration = 304,
     UnsupportedMVPExpression = 305,
+    IntegerDivisionByZero = 306,
     #endregion
 }

@@ -1,4 +1,3 @@
-using System.Numerics;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
@@ -68,7 +67,7 @@ public sealed class FunctionDeclarationBinder
                 return null;
             }
 
-            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, diagnosticReporter);
+            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, diagnosticReporter, cancellationToken);
 
             if (boundReturn is null)
             {
@@ -81,7 +80,7 @@ public sealed class FunctionDeclarationBinder
         return new BoundBlock(statements);
     }
 
-    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
+    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
     
@@ -90,24 +89,9 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
     
-        if (statement.Expression is not IntegerLiteralExpressionSyntax literal)
-        {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Expression.Span);
-            return null;
-        }
+        BoundIntegerLiteralExpression? expression = IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken);
     
-        if (!IntegerLiteralBinder.TryBindExactValue(literal, out BigInteger exactValue))
-        {
-            return null;
-        }
-    
-        if (exactValue > int.MaxValue)
-        {
-            diagnosticReporter.GenerateError(ErrorType.IntegerConstantOutOfRange, literal.Span);
-            return null;
-        }
-    
-        return new BoundReturnStatement(new BoundIntegerLiteralExpression((int)exactValue));
+        return expression is null ? null : new BoundReturnStatement(expression);
     }
 
     private static bool TryBindInt32ReturnType(SyntaxToken token)
