@@ -3,19 +3,24 @@
 namespace Sushi.Lexing.Tokenization;
 
 /// <summary>
-/// Recognizes the currently supported arithmetic and bitwise-complement
-/// operator spellings, while retaining increment and decrement as
-/// indivisible lexical elements for future grammar support.
+/// Recognizes supported symbolic operators using longest-match tokenization.
+/// Also preserves shift, increment, and decrement spellings as indivisible
+/// lexical elements before their expression grammar is implemented.
 /// </summary>
 public sealed class OperatorTokenizer : ILexTokenizer
 {
-    private static readonly byte[] operatorTokens = [
+    private static readonly byte[] operatorTokens =
+    [
         (byte)'+',
         (byte)'-',
         (byte)'*',
         (byte)'/',
         (byte)'%',
-        (byte)'~'
+        (byte)'~',
+        (byte)'=',
+        (byte)'!',
+        (byte)'<',
+        (byte)'>'
     ];
 
     /// <inheritdoc />
@@ -25,7 +30,6 @@ public sealed class OperatorTokenizer : ILexTokenizer
     public bool TryRecognize(SourceSnapshot snapshot, int position, CancellationToken cancellationToken, out LexTokenMatch match)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
@@ -38,16 +42,36 @@ public sealed class OperatorTokenizer : ILexTokenizer
 
         byte current = bytes[position];
 
-        int length = IsIncrementOrDecrement(position, bytes, current) ? 2 : 1;
+        // A standalone ! is not a Sushi logical-negation operator.
+        // Logical negation uses the reserved keyword not.
+        if (current == (byte)'!' && (position + 1 >= bytes.Length || bytes[position + 1] != (byte)'='))
+        {
+            match = default;
+            return false;
+        }
+
+        int length = IsTwoCharacterOperator(bytes, position) ? 2 : 1;
 
         match = new LexTokenMatch(LexTokenType.Operator, length);
-
         return true;
     }
 
-    private static bool IsIncrementOrDecrement(int position, ReadOnlySpan<byte> bytes, byte current)
-        => position + 1 < bytes.Length
-            && current is (byte)'+' or (byte)'-'
-            && bytes[position + 1] == current;
+    private static bool IsTwoCharacterOperator(ReadOnlySpan<byte> bytes, int position)
+    {
+        if (position + 1 >= bytes.Length)
+        {
+            return false;
+        }
 
+        byte current = bytes[position];
+        byte next = bytes[position + 1];
+
+        return current switch
+        {
+            (byte)'+' or (byte)'-' => next == current,
+            (byte)'<' or (byte)'>' => next is (byte)'=' || next == current,
+            (byte)'=' or (byte)'!' => next == (byte)'=',
+            _ => false
+        };
+    }
 }

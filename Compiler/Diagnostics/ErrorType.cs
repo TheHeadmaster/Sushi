@@ -26,6 +26,7 @@ public enum ErrorType
     MissingLexicalSeparation = 205,
     RequiredSyntacticAdjacency = 206,
     ExpectedSyntax = 207,
+    NonAssociativeComparison = 208,
     #endregion
     #region Semantic Errors
     IntegerConstantOutOfRange = 300,

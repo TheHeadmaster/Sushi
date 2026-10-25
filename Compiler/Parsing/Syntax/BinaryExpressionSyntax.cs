@@ -29,6 +29,16 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
     /// </summary>
     public ExpressionSyntax Right { get; }
 
+    private static readonly byte[] supportedBinaryOperators = [
+        (byte)'+',
+        (byte)'-',
+        (byte)'*',
+        (byte)'/',
+        (byte)'%',
+        (byte)'<',
+        (byte)'>'
+    ];
+
     /// <summary>
     /// Creates a binary expression, retaining the original source spans and operand grouping.
     /// </summary>
@@ -78,7 +88,14 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
 
         return type switch
         {
-            SyntaxType.OperatorToken => token.Type is LexTokenType.Operator,
+            SyntaxType.OperatorToken => token.Type is LexTokenType.Operator
+                && (
+                    (spelling.Length == 1 && supportedBinaryOperators.Contains(spelling[0]))
+                    || spelling.SequenceEqual("=="u8)
+                    || spelling.SequenceEqual("!="u8)
+                    || spelling.SequenceEqual("<="u8)
+                    || spelling.SequenceEqual(">="u8)
+                ),
 
             SyntaxType.AndKeyword => token.Type is LexTokenType.Keyword
                 && spelling.SequenceEqual("and"u8),

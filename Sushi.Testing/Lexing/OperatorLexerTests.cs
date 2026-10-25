@@ -21,6 +21,15 @@ public class OperatorLexerTests
     [TestCase("1++2", "++", TestName = "Lex Should Keep Increment Operator Indivisible")]
     [TestCase("1--2", "--", TestName = "Lex Should Keep Decrement Operator Indivisible")]
     [TestCase("1~2", "~", TestName = "Lex Should Recognize Bitwise Complement Operator")]
+    [TestCase("1==2", "==", TestName = "Lex Should Recognize Equality")]
+    [TestCase("1!=2", "!=", TestName = "Lex Should Recognize Inequality")]
+    [TestCase("1<2", "<", TestName = "Lex Should Recognize Less Than")]
+    [TestCase("1<=2", "<=", TestName = "Lex Should Recognize Less Than Or Equal")]
+    [TestCase("1>2", ">", TestName = "Lex Should Recognize Greater Than")]
+    [TestCase("1>=2", ">=", TestName = "Lex Should Recognize Greater Than Or Equal")]
+    [TestCase("1<<2", "<<", TestName = "Lex Should Preserve Left Shift As One Token")]
+    [TestCase("1>>2", ">>", TestName = "Lex Should Preserve Right Shift As One Token")]
+    [TestCase("1=2", "=", TestName = "Lex Should Recognize Assignment Symbol")]
     public void LexShould_0(string source, [NotNull] string expectedOperator)
     {
         (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex(source);
@@ -96,6 +105,53 @@ public class OperatorLexerTests
             .Should()
             .Be(1);
     
+        diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Not Recognize Standalone Exclamation As Operator")]
+    public void LexShould_3()
+    {
+        (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex("1!2");
+
+        result.Tokens
+            .Select(token => token.Type)
+            .Should()
+            .Equal(
+                LexTokenType.IntegerLiteral,
+                LexTokenType.Unknown,
+                LexTokenType.IntegerLiteral
+            );
+
+        diagnostics
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase(TestName = "Lex Should Prefer Equality Operator Before Following Assignment Symbol")]
+    public void LexShould_4()
+    {
+        (LexerResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = Lex("1===2");
+
+        result.Tokens
+            .Select(token => token.Type)
+            .Should()
+            .Equal(
+                LexTokenType.IntegerLiteral,
+                LexTokenType.Operator,
+                LexTokenType.Operator,
+                LexTokenType.IntegerLiteral
+            );
+
+        result.Tokens[1].Span.Length
+            .Should()
+            .Be(2);
+
+        result.Tokens[2].Span.Length
+            .Should()
+            .Be(1);
+
         diagnostics
             .Should()
             .BeEmpty();

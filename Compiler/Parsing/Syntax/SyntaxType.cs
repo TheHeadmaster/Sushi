@@ -35,5 +35,6 @@ public enum SyntaxType
     BooleanLiteralToken,
     NotKeyword,
     AndKeyword,
-    OrKeyword
+    OrKeyword,
+    InvalidComparisonChain
 }

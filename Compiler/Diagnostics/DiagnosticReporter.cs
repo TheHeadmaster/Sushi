@@ -29,6 +29,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.MissingNamespaceDeclaration] = "A Sushi source file must declare exactly one namespace.",
         [ErrorType.DuplicateNamespaceDeclaration] = "A Sushi source file may declare only one namespace.",
         [ErrorType.UnsupportedMVPExpression] = "The executable MVP does not yet support this expression form.",
+        [ErrorType.NonAssociativeComparison] = "Comparison operators at the same precedence level cannot be chained without parentheses.",
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new(){

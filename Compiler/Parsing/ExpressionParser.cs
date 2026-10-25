@@ -8,7 +8,8 @@ namespace Sushi.Parsing;
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
 /// Supports integer and Boolean literals, grouping, prefix unary operators,
-/// binary arithmetic, and logical conjunction and disjunction.
+/// arithmetic, relational and equality comparisons, and logical operators.
+/// Diagnoses non-associative comparison chains while preserving recovered syntax.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -20,6 +21,17 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
 {
     private readonly ParserCursor cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
     private readonly CancellationToken cancellationToken = cancellationToken;
+
+    private static readonly Dictionary<byte, BindingPower> operatorBindingPowers = new()
+    {
+        { (byte)'+', BindingPower.Additive },
+        { (byte)'-', BindingPower.Additive },
+        { (byte)'*', BindingPower.Multiplicative },
+        { (byte)'/', BindingPower.Multiplicative },
+        { (byte)'%', BindingPower.Multiplicative },
+        { (byte)'<', BindingPower.Relational },
+        { (byte)'>', BindingPower.Relational }
+    };
 
     /// <summary>
     /// Parses an expression at the current cursor position, leaving significant
@@ -55,12 +67,23 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
             && bindingPower >= minimumBindingPower)
         {
             this.cancellationToken.ThrowIfCancellationRequested();
+
+            bool invalidChain = this.IsUnparenthesizedComparisonChain(left, bindingPower);
+
             this.cursor.TryAdvance(out _);
 
             SyntaxToken operatorToken = new(syntaxType, candidate);
             ExpressionSyntax right = this.ParseExpression(bindingPower + 1, diagnosticReporter, out bool rightIncomplete);
 
-            left = new BinaryExpressionSyntax(left, operatorToken, right);
+            if (invalidChain)
+            {
+                diagnosticReporter.GenerateError(ErrorType.NonAssociativeComparison, candidate.Span);
+                left = new InvalidComparisonChainSyntax(left, operatorToken, right);
+            }
+            else
+            {
+                left = new BinaryExpressionSyntax(left, operatorToken, right);
+            }
 
             if (rightIncomplete)
             {
@@ -182,14 +205,11 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
             }
         }
 
-        if (token.Type is LexTokenType.Operator && token.Span.Length == 1)
+        if (token.Type is LexTokenType.Operator)
         {
-            bindingPower = this.cursor.Snapshot.Bytes.Span[token.Span.Start] switch
-            {
-                (byte)'+' or (byte)'-' => BindingPower.Additive,
-                (byte)'*' or (byte)'/' or (byte)'%' => BindingPower.Multiplicative,
-                _ => BindingPower.Lowest
-            };
+            ReadOnlySpan<byte> spelling = this.cursor.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
+
+            bindingPower = GetBindingPowerForSpelling(spelling);
 
             if (bindingPower != BindingPower.Lowest)
             {
@@ -201,6 +221,66 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         bindingPower = BindingPower.Lowest;
         syntaxType = default;
         return false;
+    }
+
+    private static BindingPower GetBindingPowerForSpelling(ReadOnlySpan<byte> spelling)
+    {
+        if (spelling.Length > 1)
+        {
+            return GetMultiCharBindingPower(spelling);
+        }
+
+        if (spelling.Length == 1)
+        {
+            return GetSingleCharBindingPower(spelling[0]);
+        }
+
+        return BindingPower.Lowest;
+    }
+
+    private static BindingPower GetMultiCharBindingPower(ReadOnlySpan<byte> spelling)
+    {
+        if (spelling.SequenceEqual("<="u8) || spelling.SequenceEqual(">="u8))
+        {
+            return BindingPower.Relational;
+        }
+
+        if (spelling.SequenceEqual("=="u8) || spelling.SequenceEqual("!="u8))
+        {
+            return BindingPower.Equality;
+        }
+
+        return BindingPower.Lowest;
+    }
+
+    private static BindingPower GetSingleCharBindingPower(byte spelling)
+    {
+        if (operatorBindingPowers.TryGetValue(spelling, out BindingPower bindingPower))
+        {
+            return bindingPower;
+        }
+
+        return BindingPower.Lowest;
+    }
+
+    private bool IsUnparenthesizedComparisonChain(ExpressionSyntax left, BindingPower bindingPower)
+    {
+        if (bindingPower is not (BindingPower.Relational or BindingPower.Equality))
+        {
+            return false;
+        }
+
+        SyntaxToken? previousOperator = left switch
+        {
+            BinaryExpressionSyntax binary => binary.OperatorToken,
+            InvalidComparisonChainSyntax chain => chain.OperatorToken,
+            _ => null
+        };
+
+        return previousOperator is SyntaxToken previous
+            && previous.SourceToken is LexToken previousToken
+            && this.TryGetBinaryOperator(previousToken, out BindingPower previousPower, out _)
+            && previousPower == bindingPower;
     }
 
     private void ReportExpectedSyntax(string message, int position, IDiagnosticReporter diagnosticReporter)
