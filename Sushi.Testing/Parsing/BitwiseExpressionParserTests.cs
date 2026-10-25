@@ -127,7 +127,7 @@ public class BitwiseExpressionParserTests
     }
 
     [TestCase("1 << 2 & 3", true, TestName = "Parser Should Bind Left Shift More Tightly Than Bitwise And")]
-    [TestCase("1 & 2 << 3", false, TestName = "Parser Should Bind Right Shift Operand More Tightly Than Bitwise And")]
+    [TestCase("1 & 2 << 3", false, TestName = "Parser Should Bind Shift In Right Operand More Tightly Than Bitwise And")]
     public void ParserShould_2(string source, bool shiftOnLeft)
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression(source);
