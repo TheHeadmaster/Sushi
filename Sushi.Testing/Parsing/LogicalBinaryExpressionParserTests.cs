@@ -39,7 +39,7 @@ public class LogicalBinaryExpressionParserTests
         disjunction.OperatorToken.Type
             .Should()
             .Be(SyntaxType.OrKeyword);
-            
+
         conjunction.OperatorToken.Type
             .Should()
             .Be(SyntaxType.AndKeyword);
@@ -558,7 +558,7 @@ public class LogicalBinaryExpressionParserTests
             .BeEmpty();
     }
 
-    [TestCase(TestName = "Executable MVP Should Diagnose Unsupported Logical Binary Expression")]
+    [TestCase(TestName = "Executable MVP Should Reject Logical Boolean Result In Int32 Function")]
     public void ParserShould_14()
     {
         const string source = "public int32 main() { return true and false; }";

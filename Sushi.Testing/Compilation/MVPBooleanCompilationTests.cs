@@ -25,6 +25,16 @@ public class MVPBooleanCompilationTests
     [TestCase("2147483648 > 2147483647", 1, TestName = "Compiler Should Execute Comparison Beyond Int32 Range")]
     [TestCase("(1 << 100) > 0", 1, TestName = "Compiler Should Execute Exact Untyped Shift Comparison")]
     [TestCase("not (1 < 2)", 0, TestName = "Compiler Should Execute Negated Integer Comparison")]
+    [TestCase("true and true", 1, TestName = "Compiler Should Execute Logical And Returning True")]
+    [TestCase("true and false", 0, TestName = "Compiler Should Execute Logical And Returning False")]
+    [TestCase("true or false", 1, TestName = "Compiler Should Execute Logical Or Returning True")]
+    [TestCase("false or false", 0, TestName = "Compiler Should Execute Logical Or Returning False")]
+    [TestCase("true & false", 0, TestName = "Compiler Should Execute Eager Boolean And")]
+    [TestCase("true | false", 1, TestName = "Compiler Should Execute Eager Boolean Or")]
+    [TestCase("true ^ true", 0, TestName = "Compiler Should Execute Eager Boolean Xor")]
+    [TestCase("true ^ false", 1, TestName = "Compiler Should Execute Eager Boolean Xor Returning True")]
+    [TestCase("false or true and false", 0, TestName = "Compiler Should Execute Boolean Operator Precedence")]
+    [TestCase("(10 > 5 and 3 < 7) ^ false", 1, TestName = "Compiler Should Execute Mixed Boolean And Integer Comparison")]
     public async Task CompileShould_0(string expression, int expectedExitCode)
     {
         await WithProject("bool", expression, async compilation =>
@@ -69,9 +79,11 @@ public class MVPBooleanCompilationTests
 
     [TestCase("bool", "1", TestName = "Compiler Should Reject Integer Result From Boolean Function")]
     [TestCase("int32", "true", TestName = "Compiler Should Reject Boolean Result From Integer Function")]
-    [TestCase("bool", "true and false", TestName = "Compiler Should Reject Unsupported Logical Expression")]
+    [TestCase("bool", "false and 1", TestName = "Compiler Should Reject Integer Right Operand Of Logical And")]
+    [TestCase("bool", "true | 1", TestName = "Compiler Should Reject Integer Operand Of Eager Boolean Or")]
     [TestCase("bool", "true == false", TestName = "Compiler Should Retain Unsupported Boolean Equality Boundary")]
     [TestCase("int32", "1 < 2", TestName = "Compiler Should Reject Boolean Comparison Result In Integer Function")]
+    
     public async Task CompileShould_1(string returnType, string expression)
     {
         await WithProject(returnType, expression, compilation =>
@@ -91,7 +103,7 @@ public class MVPBooleanCompilationTests
             return Task.CompletedTask;
         });
     }
-    
+
     [TestCase("1 / 0 > 0", ErrorType.IntegerDivisionByZero, TestName = "Compiler Should Diagnose Division By Zero In Comparison")]
     [TestCase("1 << -1 > 0", ErrorType.InvalidIntegerShiftCount, TestName = "Compiler Should Diagnose Negative Shift Count In Comparison")]
     public async Task CompileShould_2(string expression, ErrorType expectedError)
@@ -101,20 +113,20 @@ public class MVPBooleanCompilationTests
             compilation.Succeeded
                 .Should()
                 .BeFalse();
-    
+
             compilation.Executable
                 .Should()
                 .BeNull();
-    
+
             SushiDiagnostic diagnostic = compilation.Diagnostics
                 .Should()
                 .ContainSingle()
                 .Which;
-    
+
             diagnostic.IsType(expectedError)
                 .Should()
                 .BeTrue();
-    
+
             return Task.CompletedTask;
         });
     }

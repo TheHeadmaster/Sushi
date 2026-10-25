@@ -6,22 +6,33 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Evaluates supported Boolean constant expressions, including comparisons
-/// of exact integer constants, without introducing implicit integer conversions.
+/// Validates and folds supported Boolean constant expressions, preserving the
+/// distinction between short-circuiting logical operators and eager Boolean operators.
 /// </summary>
 internal static class BooleanConstantExpressionBinder
 {
+    private enum BooleanBinaryOperator
+    {
+        LogicalAnd,
+        LogicalOr,
+        EagerAnd,
+        EagerOr,
+        EagerXor
+    }
+
     /// <summary>
     /// Binds a Boolean constant expression in a bool result context.
+    /// Both operands of a binary expression remain subject to static validation,
+    /// regardless of whether the result can be determined from the left operand.
     /// </summary>
     /// <param name="expression">
-    /// The expression to evaluate.
+    /// The expression to bind.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives diagnostics for invalid or unsupported expressions.
+    /// Receives semantic and constant-evaluation diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancels recursive evaluation.
+    /// Cancels recursive binding.
     /// </param>
     /// <returns>
     /// The concrete Boolean constant, or null when binding fails.
@@ -31,52 +42,94 @@ internal static class BooleanConstantExpressionBinder
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (ContainsInvalidComparisonChain(expression))
         {
             return null;
         }
 
-        return TryEvaluate(expression, diagnosticReporter, cancellationToken, out bool value)
-            ? new BoundBooleanConstantExpression(value)
-            : null;
+        Dictionary<BinaryExpressionSyntax, bool> comparisonValues = [];
+
+        if (!TryValidate(expression, comparisonValues, diagnosticReporter, cancellationToken))
+        {
+            return null;
+        }
+
+        return new BoundBooleanConstantExpression(Fold(expression, comparisonValues, cancellationToken));
     }
 
-    private static bool TryEvaluate(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
+    private static bool TryValidate(ExpressionSyntax expression, Dictionary<BinaryExpressionSyntax, bool> comparisonValues, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         switch (expression)
         {
-            case BooleanLiteralExpressionSyntax literal:
-                value = IsTrueLiteral(literal);
+            case BooleanLiteralExpressionSyntax:
                 return true;
 
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
-                return TryEvaluate(grouped.Expression, diagnosticReporter, cancellationToken, out value);
+                return TryValidate(grouped.Expression, comparisonValues, diagnosticReporter, cancellationToken);
 
             case ParenthesizedExpressionSyntax:
             case IntegerLiteralExpressionSyntax { LiteralToken.IsMissing: true }:
-                value = default;
                 return false;
 
             case UnaryExpressionSyntax unary when unary.OperatorToken.Type is SyntaxType.NotKeyword:
-                if (!TryEvaluate(unary.Operand, diagnosticReporter, cancellationToken, out bool operand))
+                return TryValidate(unary.Operand, comparisonValues, diagnosticReporter, cancellationToken);
+
+            case BinaryExpressionSyntax binary when TryGetBooleanBinaryOperator(binary.OperatorToken, out _):
+                bool leftValid = TryValidate(binary.Left, comparisonValues, diagnosticReporter, cancellationToken);
+                bool rightValid = TryValidate(binary.Right, comparisonValues, diagnosticReporter, cancellationToken);
+                return leftValid && rightValid;
+
+            case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out string operation):
+                if (!TryEvaluateIntegerComparison(comparison, operation, diagnosticReporter, cancellationToken, out bool result))
                 {
-                    value = default;
                     return false;
                 }
 
-                value = !operand;
+                comparisonValues.Add(comparison, result);
                 return true;
-
-            case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out string operation):
-                return TryEvaluateIntegerComparison(comparison, operation, diagnosticReporter, cancellationToken, out value);
 
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
-                value = default;
                 return false;
         }
+    }
+
+    private static bool Fold(ExpressionSyntax expression, Dictionary<BinaryExpressionSyntax, bool> comparisonValues, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return expression switch
+        {
+            BooleanLiteralExpressionSyntax literal => IsTrueLiteral(literal),
+            ParenthesizedExpressionSyntax grouped => Fold(grouped.Expression, comparisonValues, cancellationToken),
+            UnaryExpressionSyntax unary when unary.OperatorToken.Type is SyntaxType.NotKeyword => !Fold(unary.Operand, comparisonValues, cancellationToken),
+            BinaryExpressionSyntax binary => FoldBinary(binary, comparisonValues, cancellationToken),
+            _ => throw new InvalidOperationException("A Boolean expression passed validation without a supported folding operation.")
+        };
+    }
+
+    private static bool FoldBinary(BinaryExpressionSyntax expression, Dictionary<BinaryExpressionSyntax, bool> comparisonValues, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!TryGetBooleanBinaryOperator(expression.OperatorToken, out BooleanBinaryOperator operation))
+        {
+            return comparisonValues[expression];
+        }
+
+        return operation switch
+        {
+            BooleanBinaryOperator.LogicalAnd => Fold(expression.Left, comparisonValues, cancellationToken) && Fold(expression.Right, comparisonValues, cancellationToken),
+            BooleanBinaryOperator.LogicalOr => Fold(expression.Left, comparisonValues, cancellationToken) || Fold(expression.Right, comparisonValues, cancellationToken),
+            BooleanBinaryOperator.EagerAnd => Fold(expression.Left, comparisonValues, cancellationToken) & Fold(expression.Right, comparisonValues, cancellationToken),
+            BooleanBinaryOperator.EagerOr => Fold(expression.Left, comparisonValues, cancellationToken) | Fold(expression.Right, comparisonValues, cancellationToken),
+            BooleanBinaryOperator.EagerXor => Fold(expression.Left, comparisonValues, cancellationToken) ^ Fold(expression.Right, comparisonValues, cancellationToken),
+            _ => throw new InvalidOperationException("Unexpected Boolean binary operator.")
+        };
     }
 
     private static bool TryEvaluateIntegerComparison(BinaryExpressionSyntax expression, string operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
@@ -101,6 +154,53 @@ internal static class BooleanConstantExpressionBinder
         };
 
         return true;
+    }
+
+    private static bool TryGetBooleanBinaryOperator(SyntaxToken token, out BooleanBinaryOperator operation)
+    {
+        operation = default;
+
+        if (!token.IsSourceBacked)
+        {
+            return false;
+        }
+
+        if (token.Type is SyntaxType.AndKeyword)
+        {
+            operation = BooleanBinaryOperator.LogicalAnd;
+            return true;
+        }
+
+        if (token.Type is SyntaxType.OrKeyword)
+        {
+            operation = BooleanBinaryOperator.LogicalOr;
+            return true;
+        }
+
+        if (token.Type is not SyntaxType.OperatorToken || token.Span.Length != 1)
+        {
+            return false;
+        }
+
+        byte spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start];
+
+        switch (spelling)
+        {
+            case (byte)'&':
+                operation = BooleanBinaryOperator.EagerAnd;
+                return true;
+
+            case (byte)'|':
+                operation = BooleanBinaryOperator.EagerOr;
+                return true;
+
+            case (byte)'^':
+                operation = BooleanBinaryOperator.EagerXor;
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     private static bool TryGetIntegerComparisonOperator(SyntaxToken token, out string operation)

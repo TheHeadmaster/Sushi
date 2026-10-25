@@ -700,7 +700,7 @@ public class BitwiseExpressionParserTests
             .BeEmpty();
     }
 
-    [TestCase("true | false", TestName = "Executable MVP Should Diagnose Unsupported Boolean Bitwise Expression")]
+    [TestCase("true | false", TestName = "Executable MVP Should Reject Eager Boolean Result In Int32 Function")]
     public void ParserShould_18(string expression)
     {
         string source = $"public int32 launch() {{ return {expression}; }}";
@@ -763,34 +763,34 @@ public class BitwiseExpressionParserTests
     public void ParserShould_20(string expression, int expectedValue)
     {
         string source = $"public int32 launch() {{ return {expression}; }}";
-    
+
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
         IDiagnosticReporter reporter = new DiagnosticReporter();
         LexerResult lexerResult = new SourceLexer().Lex(snapshot, reporter, CancellationToken.None);
         ParserResult result = SourceParser.ParseFunctionDeclaration(lexerResult, reporter, CancellationToken.None);
-    
+
         FunctionDeclarationSyntax function = result.Tree.Root
             .Should()
             .BeOfType<FunctionDeclarationSyntax>()
             .Subject;
-    
+
         ReturnStatementSyntax statement = function.Body.Statements[0]
             .Should()
             .BeOfType<ReturnStatementSyntax>()
             .Subject;
-    
+
         statement.Expression
             .Should()
             .BeOfType<BinaryExpressionSyntax>();
-    
+
         FunctionBindResult bound = FunctionDeclarationBinder.Bind(function, reporter, CancellationToken.None);
-    
+
         bound.Function
             .Should()
             .NotBeNull();
-    
+
         BoundFunction boundFunction = bound.Function!;
-    
+
         BoundReturnStatement boundReturn = boundFunction.Body.Statements
             .Should()
             .ContainSingle()
@@ -798,16 +798,16 @@ public class BitwiseExpressionParserTests
             .Should()
             .BeOfType<BoundReturnStatement>()
             .Subject;
-    
+
         BoundIntegerLiteralExpression constant = boundReturn.Expression
             .Should()
             .BeOfType<BoundIntegerLiteralExpression>()
             .Subject;
-    
+
         constant.Value
             .Should()
             .Be(expectedValue);
-    
+
         reporter.ReportDiagnostics()
             .Should()
             .BeEmpty();

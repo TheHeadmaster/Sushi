@@ -67,11 +67,6 @@ public class BooleanConstantExpressionBinderTests
 
     [TestCase("1", TestName = "Binder Should Reject Integer Literal As Boolean Result")]
     [TestCase("not 1", TestName = "Binder Should Reject Integer Operand Of Logical Negation")]
-    [TestCase("true and false", TestName = "Binder Should Retain Unsupported Logical And Boundary")]
-    [TestCase("true or false", TestName = "Binder Should Retain Unsupported Logical Or Boundary")]
-    [TestCase("true & false", TestName = "Binder Should Retain Unsupported Eager Boolean And Boundary")]
-    [TestCase("true ^ false", TestName = "Binder Should Retain Unsupported Eager Boolean Xor Boundary")]
-    [TestCase("true | false", TestName = "Binder Should Retain Unsupported Eager Boolean Or Boundary")]
     public async Task BindShould_1(string expression)
     {
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression("bool", expression);
