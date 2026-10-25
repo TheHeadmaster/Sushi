@@ -499,7 +499,7 @@ public class UnaryPrefixExpressionParserTests
             .BeEmpty();
     }
 
-    [TestCase(TestName = "Executable MVP Should Diagnose Unsupported Prefix Unary Expression")]
+    [TestCase(TestName = "Executable MVP Should Bind Prefix Unary Negation")]
     public void ParserShould_14()
     {
         const string source = "public int32 main() { return -42; }";
@@ -524,14 +524,33 @@ public class UnaryPrefixExpressionParserTests
             .BeOfType<UnaryExpressionSyntax>();
 
         FunctionBindResult bound = FunctionDeclarationBinder.Bind(declaration, diagnosticReporter, CancellationToken.None);
-
+        
         bound.Function
             .Should()
-            .BeNull();
-
+            .NotBeNull();
+        
+        BoundFunction function = bound.Function!;
+        
+        BoundReturnStatement returnStatement = function.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+        
+        BoundIntegerLiteralExpression expression = returnStatement.Expression
+            .Should()
+            .BeOfType<BoundIntegerLiteralExpression>()
+            .Subject;
+        
+        expression.Value
+            .Should()
+            .Be(-42);
+        
         diagnosticReporter.ReportDiagnostics()
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.UnsupportedMVPExpression));
+            .BeEmpty();
     }
 
     private static string GetOperator(UnaryExpressionSyntax expression)

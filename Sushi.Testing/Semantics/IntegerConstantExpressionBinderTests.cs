@@ -122,7 +122,7 @@ public class IntegerConstantExpressionBinderTests
     [TestCase(TestName = "Binder Should Not Add Unsupported Expression Diagnostic For Recovered Missing Operand")]
     public async Task BindShould_4()
     {
-        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression("1 + ;");
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression("1 +");
 
         result.Functions
             .Should()

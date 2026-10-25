@@ -407,7 +407,7 @@ public class PrattExpressionParserTests
             .BeEmpty();
     }
 
-    [TestCase(TestName = "Executable MVP Should Diagnose Newly Parsed Arithmetic Expression")]
+    [TestCase(TestName = "Executable MVP Should Bind Parsed Arithmetic Expression")]
     public void ParserShould_11()
     {
         const string source = "public int32 main() { return 1 + 2 * 3; }";
@@ -426,11 +426,30 @@ public class PrattExpressionParserTests
 
         bound.Function
             .Should()
-            .BeNull();
+            .NotBeNull();
+
+        BoundFunction function = bound.Function!;
+
+        BoundReturnStatement statement = function.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+
+        BoundIntegerLiteralExpression expression = statement.Expression
+            .Should()
+            .BeOfType<BoundIntegerLiteralExpression>()
+            .Subject;
+
+        expression.Value
+            .Should()
+            .Be(7);
 
         diagnosticReporter.ReportDiagnostics()
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.UnsupportedMVPExpression));
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Expression Parser Should Honor Cancellation")]
