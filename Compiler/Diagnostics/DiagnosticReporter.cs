@@ -31,6 +31,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.UnsupportedMVPExpression] = "The executable MVP does not yet support this expression form.",
         [ErrorType.NonAssociativeComparison] = "Comparison operators at the same precedence level cannot be chained without parentheses.",
         [ErrorType.IntegerDivisionByZero] = "Integer division or remainder by zero.",
+        [ErrorType.InvalidIntegerShiftCount] = "Integer shift count is outside the valid range.",
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new(){

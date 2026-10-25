@@ -36,5 +36,6 @@ public enum ErrorType
     DuplicateNamespaceDeclaration = 304,
     UnsupportedMVPExpression = 305,
     IntegerDivisionByZero = 306,
+    InvalidIntegerShiftCount = 307,
     #endregion
 }

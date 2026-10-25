@@ -662,39 +662,58 @@ public class ShiftExpressionParserTests
             .BeEmpty();
     }
 
-    [TestCase(TestName = "Executable MVP Should Diagnose Unsupported Shift Expression")]
+    [TestCase(TestName = "Executable MVP Should Bind Constant Shift Expression")]
     public void ParserShould_17()
     {
         const string source = "public int32 launch() { return 1 << 2; }";
-
+    
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
         IDiagnosticReporter reporter = new DiagnosticReporter();
         LexerResult lexerResult = new SourceLexer().Lex(snapshot, reporter, CancellationToken.None);
         ParserResult result = SourceParser.ParseFunctionDeclaration(lexerResult, reporter, CancellationToken.None);
-
+    
         FunctionDeclarationSyntax function = result.Tree.Root
             .Should()
             .BeOfType<FunctionDeclarationSyntax>()
             .Subject;
-
+    
         ReturnStatementSyntax statement = function.Body.Statements[0]
             .Should()
             .BeOfType<ReturnStatementSyntax>()
             .Subject;
-
+    
         statement.Expression
             .Should()
             .BeOfType<BinaryExpressionSyntax>();
-
+    
         FunctionBindResult bound = FunctionDeclarationBinder.Bind(function, reporter, CancellationToken.None);
-
+    
         bound.Function
             .Should()
-            .BeNull();
-
+            .NotBeNull();
+    
+        BoundFunction boundFunction = bound.Function!;
+    
+        BoundReturnStatement boundReturn = boundFunction.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<BoundReturnStatement>()
+            .Subject;
+    
+        BoundIntegerLiteralExpression constant = boundReturn.Expression
+            .Should()
+            .BeOfType<BoundIntegerLiteralExpression>()
+            .Subject;
+    
+        constant.Value
+            .Should()
+            .Be(4);
+    
         reporter.ReportDiagnostics()
             .Should()
-            .ContainSingle(item => item.IsType(ErrorType.UnsupportedMVPExpression));
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Parser Should Honor Cancellation During Shift Parsing")]

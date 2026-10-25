@@ -1,53 +1,44 @@
 ﻿using System.Numerics;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
+using Sushi.Source;
 
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Evaluates supported integer constant expressions exactly and binds their
-/// final mathematical value to the executable MVP's int32 return type.
+/// Evaluates supported integer constant expressions, retaining exact arithmetic
+/// while applying contextual int32 rules to concrete bitwise and shift operations.
 /// </summary>
 internal static class IntegerConstantExpressionBinder
 {
+    private const int Int32Width = 32;
+
     /// <summary>
-    /// Binds an integer constant expression in an int32 result context.
-    /// Intermediate untyped constants retain their exact mathematical values.
+    /// Binds an integer constant expression against the executable MVP's int32 return contract.
     /// </summary>
-    /// <param name="expression">
-    /// The parsed expression to evaluate.
-    /// </param>
-    /// <param name="diagnosticReporter">
-    /// Receives unsupported-expression, zero-divisor, and range diagnostics.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The token used to cancel recursive constant evaluation.
-    /// </param>
-    /// <returns>
-    /// The concrete int32 constant, or null when binding fails.
-    /// </returns>
+    /// <param name="expression">The parsed integer expression.</param>
+    /// <param name="diagnosticReporter">Receives constant-evaluation and range diagnostics.</param>
+    /// <param name="cancellationToken">Cancels recursive evaluation.</param>
+    /// <returns>The concrete int32 result, or null when evaluation fails.</returns>
     public static BoundIntegerLiteralExpression? Bind(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-        if (!TryEvaluateExact(expression, diagnosticReporter, cancellationToken, out BigInteger value))
+        if (!TryEvaluate(expression, requiresInt32: true, diagnosticReporter, cancellationToken, out BigInteger value))
         {
             return null;
         }
 
-#pragma warning disable IDE0078 // Use pattern matching
-        if (value < int.MinValue || value > int.MaxValue)
+        if (!RequireInt32(value, expression.Span, diagnosticReporter))
         {
-            diagnosticReporter.GenerateError(ErrorType.IntegerConstantOutOfRange, expression.Span);
             return null;
         }
-#pragma warning restore IDE0078 // Use pattern matching
 
         return new BoundIntegerLiteralExpression((int)value);
     }
 
-    private static bool TryEvaluateExact(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
+    private static bool TryEvaluate(ExpressionSyntax expression, bool requiresInt32, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -57,17 +48,17 @@ internal static class IntegerConstantExpressionBinder
                 return IntegerLiteralBinder.TryBindExactValue(literal, out value);
 
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
-                return TryEvaluateExact(grouped.Expression, diagnosticReporter, cancellationToken, out value);
+                return TryEvaluate(grouped.Expression, requiresInt32, diagnosticReporter, cancellationToken, out value);
 
             case ParenthesizedExpressionSyntax:
                 value = default;
                 return false;
 
             case UnaryExpressionSyntax unary:
-                return TryEvaluateUnary(unary, diagnosticReporter, cancellationToken, out value);
+                return TryEvaluateUnary(unary, requiresInt32, diagnosticReporter, cancellationToken, out value);
 
             case BinaryExpressionSyntax binary:
-                return TryEvaluateBinary(binary, diagnosticReporter, cancellationToken, out value);
+                return TryEvaluateBinary(binary, requiresInt32, diagnosticReporter, cancellationToken, out value);
 
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
@@ -76,63 +67,165 @@ internal static class IntegerConstantExpressionBinder
         }
     }
 
-    private static bool TryEvaluateUnary(UnaryExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
+    private static bool TryEvaluateUnary(UnaryExpressionSyntax expression, bool requiresInt32, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
     {
         value = default;
 
-        if (!TryGetOperator(expression.OperatorToken, out byte spelling)
-            || spelling is not ((byte)'+' or (byte)'-'))
+        if (!TryGetSingleByteOperator(expression.OperatorToken, out byte spelling)
+            || spelling is not ((byte)'+' or (byte)'-' or (byte)'~'))
         {
             diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
             return false;
         }
 
-        if (!TryEvaluateExact(expression.Operand, diagnosticReporter, cancellationToken, out BigInteger operand))
+        if (!TryEvaluate(expression.Operand, requiresInt32, diagnosticReporter, cancellationToken, out BigInteger operand))
         {
             return false;
         }
 
-        value = spelling == (byte)'-' ? -operand : operand;
-        return true;
-    }
-
-    private static bool TryEvaluateBinary(BinaryExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
-    {
-        value = default;
-
-        if (!TryGetOperator(expression.OperatorToken, out byte spelling)
-            || spelling is not ((byte)'+' or (byte)'-' or (byte)'*' or (byte)'/' or (byte)'%'))
+        if (spelling == (byte)'~' && requiresInt32 && !RequireInt32(operand, expression.Operand.Span, diagnosticReporter))
         {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
-            return false;
-        }
-
-        if (!TryEvaluateExact(expression.Left, diagnosticReporter, cancellationToken, out BigInteger left)
-            || !TryEvaluateExact(expression.Right, diagnosticReporter, cancellationToken, out BigInteger right))
-        {
-            return false;
-        }
-
-        if (right.IsZero && spelling is (byte)'/' or (byte)'%')
-        {
-            diagnosticReporter.GenerateError(ErrorType.IntegerDivisionByZero, expression.OperatorToken.Span);
             return false;
         }
 
         value = spelling switch
+        {
+            (byte)'+' => operand,
+            (byte)'-' => -operand,
+            (byte)'~' => ~operand,
+            _ => throw new InvalidOperationException("Unexpected unary integer operator.")
+        };
+
+        return true;
+    }
+
+    private static bool TryEvaluateBinary(BinaryExpressionSyntax expression, bool requiresInt32, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
+    {
+        value = default;
+
+        SyntaxToken token = expression.OperatorToken;
+
+        if (token.Type is not SyntaxType.OperatorToken || !token.IsSourceBacked)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
+            return false;
+        }
+
+        ReadOnlySpan<byte> spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
+
+        if (spelling.SequenceEqual("<<"u8))
+        {
+            return TryEvaluateShift(expression, leftShift: true, requiresInt32, diagnosticReporter, cancellationToken, out value);
+        }
+
+        if (spelling.SequenceEqual(">>"u8))
+        {
+            return TryEvaluateShift(expression, leftShift: false, requiresInt32, diagnosticReporter, cancellationToken, out value);
+        }
+
+        if (spelling.Length != 1 || spelling[0] is not ((byte)'+' or (byte)'-' or (byte)'*' or (byte)'/' or (byte)'%' or (byte)'&' or (byte)'|' or (byte)'^'))
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
+            return false;
+        }
+
+        byte operation = spelling[0];
+
+        if (!TryEvaluate(expression.Left, requiresInt32, diagnosticReporter, cancellationToken, out BigInteger left)
+            || !TryEvaluate(expression.Right, requiresInt32, diagnosticReporter, cancellationToken, out BigInteger right))
+        {
+            return false;
+        }
+
+        if (operation is (byte)'&' or (byte)'|' or (byte)'^'
+            && requiresInt32
+            && (!RequireInt32(left, expression.Left.Span, diagnosticReporter)
+                || !RequireInt32(right, expression.Right.Span, diagnosticReporter)))
+        {
+            return false;
+        }
+
+        if (right.IsZero && operation is (byte)'/' or (byte)'%')
+        {
+            diagnosticReporter.GenerateError(ErrorType.IntegerDivisionByZero, token.Span);
+            return false;
+        }
+
+        value = operation switch
         {
             (byte)'+' => left + right,
             (byte)'-' => left - right,
             (byte)'*' => left * right,
             (byte)'/' => left / right,
             (byte)'%' => left % right,
-            _ => throw new InvalidOperationException("Unexpected arithmetic operator.")
+            (byte)'&' => left & right,
+            (byte)'|' => left | right,
+            (byte)'^' => left ^ right,
+            _ => throw new InvalidOperationException("Unexpected binary integer operator.")
         };
 
         return true;
     }
 
-    private static bool TryGetOperator(SyntaxToken token, out byte spelling)
+    private static bool TryEvaluateShift(BinaryExpressionSyntax expression, bool leftShift, bool requiresInt32, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out BigInteger value)
+    {
+        value = default;
+
+        if (!TryEvaluate(expression.Left, requiresInt32, diagnosticReporter, cancellationToken, out BigInteger left)
+            || !TryEvaluate(expression.Right, requiresInt32: false, diagnosticReporter, cancellationToken, out BigInteger count))
+        {
+            return false;
+        }
+
+        if (requiresInt32 && !RequireInt32(left, expression.Left.Span, diagnosticReporter))
+        {
+            return false;
+        }
+
+        if (count.Sign < 0 || (requiresInt32 && count >= Int32Width))
+        {
+            diagnosticReporter.GenerateError(ErrorType.InvalidIntegerShiftCount, expression.Right.Span);
+            return false;
+        }
+
+        if (count > int.MaxValue)
+        {
+            if (leftShift && left.IsZero)
+            {
+                value = BigInteger.Zero;
+                return true;
+            }
+
+            if (!leftShift)
+            {
+                value = left.Sign < 0 ? BigInteger.MinusOne : BigInteger.Zero;
+                return true;
+            }
+
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
+            return false;
+        }
+
+        int shiftCount = (int)count;
+        value = leftShift ? left << shiftCount : left >> shiftCount;
+
+        return !requiresInt32 || !leftShift || RequireInt32(value, expression.Span, diagnosticReporter);
+    }
+
+    private static bool RequireInt32(BigInteger value, SourceSpan span, IDiagnosticReporter diagnosticReporter)
+    {
+#pragma warning disable IDE0078 // Use pattern matching
+        if (value < int.MinValue || value > int.MaxValue)
+        {
+            diagnosticReporter.GenerateError(ErrorType.IntegerConstantOutOfRange, span);
+            return false;
+        }
+#pragma warning restore IDE0078 // Use pattern matching
+
+        return true;
+    }
+
+    private static bool TryGetSingleByteOperator(SyntaxToken token, out byte spelling)
     {
         if (token.Type is SyntaxType.OperatorToken && token.IsSourceBacked && token.Span.Length == 1)
         {

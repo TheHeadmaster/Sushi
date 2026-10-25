@@ -30,6 +30,7 @@ public class IntegerConstantExpressionBinderTests
     [TestCase("+42", 42, TestName = "Binder Should Evaluate Unary Plus")]
     [TestCase("x#2A", 42, TestName = "Binder Should Preserve Radix Integer Literal Support")]
     [TestCase("2 * (3 + 4)", 14, TestName = "Binder Should Respect Explicit Parentheses")]
+    [TestCase("1 << (2147483648 & 1)", 1, TestName = "Binder Should Permit Exact Untyped Bitwise Evaluation In Shift Count")]
     public async Task BindShould_0(string expression, int expectedValue)
     {
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression(expression);
@@ -70,6 +71,7 @@ public class IntegerConstantExpressionBinderTests
     [TestCase("2147483648", TestName = "Binder Should Preserve Existing Out Of Range Literal Diagnostic")]
     [TestCase("-(-2147483648)", TestName = "Binder Should Reject Negation Outside Int32 Range")]
     [TestCase("100000 * 100000", TestName = "Binder Should Reject Out Of Range Multiplication")]
+    [TestCase("1 >> (~0)", TestName = "Binder Should Reject Negative Count From Exact Complement")]
     public async Task BindShould_1(string expression)
     {
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalyzeExpression(expression);
@@ -105,6 +107,9 @@ public class IntegerConstantExpressionBinderTests
     [TestCase("1 & 2", TestName = "Binder Should Retain Unsupported Bitwise Boundary")]
     [TestCase("1 == 2", TestName = "Binder Should Retain Unsupported Comparison Boundary")]
     [TestCase("1 + true", TestName = "Binder Should Reject Unsupported Operand Within Arithmetic")]
+    [TestCase("~1", TestName = "Binder Should Retain Unsupported Complement Boundary")]
+    [TestCase("1 << 2", TestName = "Binder Should Retain Unsupported Shift Boundary")]
+    [TestCase("1 & 2", TestName = "Binder Should Retain Unsupported Bitwise Boundary")]
     [TestCase("~1", TestName = "Binder Should Retain Unsupported Complement Boundary")]
     public async Task BindShould_3(string expression)
     {
