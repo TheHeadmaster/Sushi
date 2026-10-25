@@ -64,19 +64,27 @@ public class BooleanBinaryConstantTests
             .BeOfType<BoundReturnStatement>()
             .Subject;
 
-        BoundBooleanConstantExpression constant = statement.Expression
-            .Should()
-            .BeOfType<BoundBooleanConstantExpression>()
-            .Subject;
-
-        constant.Type
+        statement.Expression.Type
             .Should()
             .Be(BoundType.Bool);
+
+        IRFunction structured = BoundFunctionIRConverter.Convert(function, CancellationToken.None);
+        LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
+
+        LoweredReturnTerminator terminator = lowered.EntryBlock.Terminator
+            .Should()
+            .BeOfType<LoweredReturnTerminator>()
+            .Subject;
+
+        LoweredBooleanConstant constant = terminator.Value
+            .Should()
+            .BeOfType<LoweredBooleanConstant>()
+            .Subject;
 
         constant.Value
             .Should()
             .Be(expectedValue);
-
+        
         diagnostics
             .Should()
             .BeEmpty();
