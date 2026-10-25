@@ -11,6 +11,7 @@ internal enum BindingPower
     LogicalAnd = 2,
     Equality = 3,
     Relational = 4,
+    Shift = 5,
     Additive = 10,
     Multiplicative = 20,
     UnaryPrefix = 30

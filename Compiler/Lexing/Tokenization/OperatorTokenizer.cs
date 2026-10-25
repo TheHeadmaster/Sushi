@@ -4,8 +4,8 @@ namespace Sushi.Lexing.Tokenization;
 
 /// <summary>
 /// Recognizes supported symbolic operators using longest-match tokenization.
-/// Also preserves shift, increment, and decrement spellings as indivisible
-/// lexical elements before their expression grammar is implemented.
+/// Also preserves increment and decrement as indivisible lexical elements
+/// before their expression grammar is implemented.
 /// </summary>
 public sealed class OperatorTokenizer : ILexTokenizer
 {

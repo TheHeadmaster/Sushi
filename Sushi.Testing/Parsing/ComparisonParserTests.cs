@@ -34,7 +34,7 @@ public class ComparisonExpressionParserTests
         comparison.OperatorToken.Type
             .Should()
             .Be(SyntaxType.OperatorToken);
-            
+
         GetSpelling(comparison.OperatorToken)
             .Should()
             .Be(expectedOperator);
@@ -456,27 +456,37 @@ public class ComparisonExpressionParserTests
             .ContainSingle(item => item.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase(TestName = "Parser Should Leave Unsupported Shift Operator Unconsumed")]
+    [TestCase(TestName = "Parser Should Bind Shift More Tightly Than Relational Comparison")]
     public void ParserShould_12()
     {
-        (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("1 << 2");
-
-        expression
+        (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("1 << 2 < 3");
+    
+        BinaryExpressionSyntax comparison = expression
+            .Should()
+            .BeOfType<BinaryExpressionSyntax>()
+            .Subject;
+    
+        BinaryExpressionSyntax shift = comparison.Left
+            .Should()
+            .BeOfType<BinaryExpressionSyntax>()
+            .Subject;
+    
+        GetSpelling(comparison.OperatorToken)
+            .Should()
+            .Be("<");
+    
+        GetSpelling(shift.OperatorToken)
+            .Should()
+            .Be("<<");
+    
+        comparison.Right
             .Should()
             .BeOfType<IntegerLiteralExpressionSyntax>();
-
-        cursor.TryPeek(out LexToken token)
+    
+        cursor.TryPeek(out _)
             .Should()
-            .BeTrue();
-
-        token.Type
-            .Should()
-            .Be(LexTokenType.Operator);
-
-        cursor.TokenTextEquals(token, "<<"u8)
-            .Should()
-            .BeTrue();
-
+            .BeFalse();
+    
         diagnostics
             .Should()
             .BeEmpty();

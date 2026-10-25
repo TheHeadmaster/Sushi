@@ -91,6 +91,8 @@ public sealed class BinaryExpressionSyntax : ExpressionSyntax
             SyntaxType.OperatorToken => token.Type is LexTokenType.Operator
                 && (
                     (spelling.Length == 1 && supportedBinaryOperators.Contains(spelling[0]))
+                    || spelling.SequenceEqual("<<"u8)
+                    || spelling.SequenceEqual(">>"u8)
                     || spelling.SequenceEqual("=="u8)
                     || spelling.SequenceEqual("!="u8)
                     || spelling.SequenceEqual("<="u8)
