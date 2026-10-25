@@ -4,10 +4,6 @@
 /// Defines the precedence thresholds used by the expression parser.
 /// Larger values bind more tightly.
 /// </summary>
-/// <summary>
-/// Defines the precedence thresholds used by the expression parser.
-/// Larger values bind more tightly.
-/// </summary>
 internal enum BindingPower
 {
     Lowest = 0,
