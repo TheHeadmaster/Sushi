@@ -5,7 +5,7 @@ using Sushi.Intermediate.Lowering;
 namespace Sushi.Backends.LLVM;
 
 /// <summary>
-/// Translates lowered Sushi control-flow IR into LLVM IR.
+/// Translates lowered Sushi control-flow IR into verified LLVM IR.
 /// </summary>
 public sealed class LLVMModuleEmitter
 {
@@ -74,40 +74,82 @@ public sealed class LLVMModuleEmitter
         foreach (LoweredBasicBlock block in function.Blocks)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            this.EmitBlock(module.Context, llvmFunction, function, builder, block, cancellationToken);
+            EmitBlock(module.Context, llvmFunction, function, builder, block, cancellationToken);
         }
     }
 
-    private void EmitBlock(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, LoweredBasicBlock block, CancellationToken cancellationToken)
+    private static void EmitBlock(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, LoweredBasicBlock block, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         LLVMBasicBlockRef llvmBlock = function.AppendBasicBlock(block.Name);
+        Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries = [];
 
         builder.PositionAtEnd(llvmBlock);
 
         foreach (LoweredInstruction instruction in block.Instructions)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
-            this.EmitInstruction(instruction);
+            EmitInstruction(context, function, loweredFunction, builder, temporaries, instruction);
         }
 
-        EmitTerminator(context, function, loweredFunction, builder, block.Terminator, cancellationToken);
+        EmitTerminator(context, function, loweredFunction, builder, temporaries, block.Terminator, cancellationToken);
     }
 
-    private void EmitInstruction(LoweredInstruction instruction)
-        => throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
+    private static void EmitInstruction(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries, LoweredInstruction instruction)
+    {
+        switch (instruction)
+        {
+            case LoweredBooleanNotInstruction negation:
+            {
+                LLVMValueRef operand = EmitValue(context, function, loweredFunction, temporaries, negation.Operand);
+                LLVMValueRef trueValue = LLVMValueRef.CreateConstInt(context.Int1Type, 1UL);
+                LLVMValueRef result = builder.BuildXor(operand, trueValue, $"sushi.bool.{negation.Destination.Index}");
 
-    private static void EmitTerminator(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, LoweredTerminator terminator, CancellationToken cancellationToken)
+                RegisterTemporary(temporaries, negation.Destination, result);
+                return;
+            }
+
+            case LoweredBooleanBinaryInstruction binary:
+            {
+                LLVMValueRef left = EmitValue(context, function, loweredFunction, temporaries, binary.Left);
+                LLVMValueRef right = EmitValue(context, function, loweredFunction, temporaries, binary.Right);
+
+                string name = $"sushi.bool.{binary.Destination.Index}";
+
+                LLVMValueRef result = binary.Operator switch
+                {
+                    IRBooleanBinaryOperator.EagerAnd => builder.BuildAnd(left, right, name),
+                    IRBooleanBinaryOperator.EagerOr => builder.BuildOr(left, right, name),
+                    IRBooleanBinaryOperator.EagerXor => builder.BuildXor(left, right, name),
+                    _ => throw new NotSupportedException($"Boolean operator \"{binary.Operator}\" requires different LLVM lowering.")
+                };
+
+                RegisterTemporary(temporaries, binary.Destination, result);
+                return;
+            }
+
+            default:
+                throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
+        }
+    }
+
+    private static void RegisterTemporary(Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries, LoweredTemporaryValue destination, LLVMValueRef value)
+    {
+        if (!temporaries.TryAdd(destination.Index, (value, destination.Type)))
+        {
+            throw new InvalidOperationException($"Temporary value {destination.Index} is defined more than once within the same basic block.");
+        }
+    }
+
+    private static void EmitTerminator(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries, LoweredTerminator terminator, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         switch (terminator)
         {
             case LoweredReturnTerminator returnTerminator:
-                builder.BuildRet(EmitValue(context, function, loweredFunction, returnTerminator.Value));
+                builder.BuildRet(EmitValue(context, function, loweredFunction, temporaries, returnTerminator.Value));
                 return;
 
             default:
@@ -115,7 +157,7 @@ public sealed class LLVMModuleEmitter
         }
     }
 
-    private static LLVMValueRef EmitValue(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LoweredValue value)
+    private static LLVMValueRef EmitValue(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries, LoweredValue value)
         => value switch
         {
             LoweredIntegerConstant integerConstant => LLVMValueRef.CreateConstInt(
@@ -127,6 +169,8 @@ public sealed class LLVMModuleEmitter
                 booleanConstant.Value ? 1UL : 0UL),
 
             LoweredParameterValue parameter => EmitParameterValue(function, loweredFunction, parameter),
+
+            LoweredTemporaryValue temporary => EmitTemporaryValue(temporaries, temporary),
 
             _ => throw new NotSupportedException($"Lowered value type \"{value.GetType().Name}\" is not supported by the LLVM backend.")
         };
@@ -146,6 +190,21 @@ public sealed class LLVMModuleEmitter
         }
 
         return argument;
+    }
+
+    private static LLVMValueRef EmitTemporaryValue(Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries, LoweredTemporaryValue temporary)
+    {
+        if (!temporaries.TryGetValue(temporary.Index, out (LLVMValueRef Value, IRType Type) resolved))
+        {
+            throw new InvalidOperationException($"Temporary value {temporary.Index} was used before being defined in its basic block.");
+        }
+
+        if (resolved.Type != temporary.Type)
+        {
+            throw new InvalidOperationException($"Temporary value {temporary.Index} was referenced with an inconsistent type.");
+        }
+
+        return resolved.Value;
     }
 
     private static LLVMTypeRef ConvertType(LLVMContextRef context, IRType type)

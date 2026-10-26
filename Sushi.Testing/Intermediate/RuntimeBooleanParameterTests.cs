@@ -26,22 +26,61 @@ public sealed class RuntimeBooleanParameterTests
         IRFunction structured = BoundFunctionIRConverter.Convert(bound, CancellationToken.None);
         LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
 
-        IRReturnStatement irReturn = structured.Body.Statements.Should().ContainSingle().Which.Should().BeOfType<IRReturnStatement>().Subject;
-        IRParameterReferenceExpression irReference = irReturn.Expression.Should().BeOfType<IRParameterReferenceExpression>().Subject;
-        irReference.Index.Should().Be(expectedIndex);
-        irReference.Type.Should().Be(IRType.Bool);
+        IRReturnStatement irReturn = structured.Body.Statements
+            .Should()
+            .ContainSingle()
+            .Which
+            .Should()
+            .BeOfType<IRReturnStatement>()
+            .Subject;
 
-        LoweredReturnTerminator terminator = lowered.EntryBlock.Terminator.Should().BeOfType<LoweredReturnTerminator>().Subject;
-        LoweredParameterValue runtimeValue = terminator.Value.Should().BeOfType<LoweredParameterValue>().Subject;
-        runtimeValue.Index.Should().Be(expectedIndex);
-        runtimeValue.Type.Should().Be(IRType.Bool);
-        lowered.EntryBlock.Instructions.Should().BeEmpty();
-        lowered.Parameters.Should().HaveCount(bound.Parameters.Count);
+        IRParameterReferenceExpression irReference = irReturn.Expression
+            .Should()
+            .BeOfType<IRParameterReferenceExpression>()
+            .Subject;
+
+        irReference.Index
+            .Should()
+            .Be(expectedIndex);
+        irReference.Type
+            .Should()
+            .Be(IRType.Bool);
+
+        LoweredReturnTerminator terminator = lowered.EntryBlock.Terminator
+            .Should()
+            .BeOfType<LoweredReturnTerminator>()
+            .Subject;
+
+        LoweredParameterValue runtimeValue = terminator.Value
+            .Should()
+            .BeOfType<LoweredParameterValue>()
+            .Subject;
+
+        runtimeValue.Index
+            .Should()
+            .Be(expectedIndex);
+
+        runtimeValue.Type
+            .Should()
+            .Be(IRType.Bool);
+
+        lowered.EntryBlock.Instructions
+            .Should()
+            .BeEmpty();
+
+        lowered.Parameters
+            .Should()
+            .HaveCount(bound.Parameters.Count);
 
         using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanParameters", lowered, CancellationToken.None);
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage).Should().BeTrue(verificationMessage);
-        string llvm = artifact.Module.PrintToString();
-        llvm.Should().Contain("ret i1 %");
+
+        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+            .Should()
+            .BeTrue(verificationMessage);
+            
+        artifact.Module.PrintToString()
+            .Should()
+            .Contain("ret i1 %");
     }
 
     [TestCase("public bool echo(bool value) { return value; }", false, false, 0, TestName = "Native Caller Should Return False Argument")]
@@ -52,6 +91,7 @@ public sealed class RuntimeBooleanParameterTests
     {
         BoundFunction bound = await Bind(declaration);
         LoweredFunction lowered = IRFunctionLowerer.Lower(BoundFunctionIRConverter.Convert(bound, CancellationToken.None), CancellationToken.None);
+
         using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeParameterNative", lowered, CancellationToken.None);
 
         AddTestOnlyCaller(artifact, lowered, firstArgument, secondArgument);
@@ -75,9 +115,16 @@ public sealed class RuntimeBooleanParameterTests
                 }
             };
 
-            process.Start().Should().BeTrue();
+            process
+                .Start()
+                .Should()
+                .BeTrue();
+
             await process.WaitForExitAsync();
-            process.ExitCode.Should().Be(expectedExitCode);
+
+            process.ExitCode
+                .Should()
+                .Be(expectedExitCode);
         }
         finally
         {
@@ -88,15 +135,19 @@ public sealed class RuntimeBooleanParameterTests
         }
     }
 
-    [TestCase("public bool echo(bool value) { return not value; }", TestName = "Runtime Negation Must Not Pretend To Be Constant")]
-    [TestCase("public bool echo(bool value) { return value and true; }", TestName = "Runtime Logical Operator Must Not Pretend To Be Constant")]
+    [TestCase("public bool echo(bool value) { return value and true; }", TestName = "Runtime Logical And Requires Conditional Control Flow")]
+    [TestCase("public bool echo(bool value) { return value or false; }", TestName = "Runtime Logical Or Requires Conditional Control Flow")]
     public async Task LowerShould_0(string declaration)
     {
         BoundFunction bound = await Bind(declaration);
         IRFunction structured = BoundFunctionIRConverter.Convert(bound, CancellationToken.None);
 
         Action action = () => IRFunctionLowerer.Lower(structured, CancellationToken.None);
-        action.Should().Throw<NotSupportedException>();
+
+        action
+            .Should()
+            .Throw<NotSupportedException>()
+            .WithMessage("*conditional control-flow lowering*");
     }
 
     [TestCase(TestName = "Native MVP Builder Should Reject Parameterized Function Entry")]
@@ -106,7 +157,10 @@ public sealed class RuntimeBooleanParameterTests
         LoweredFunction lowered = IRFunctionLowerer.Lower(BoundFunctionIRConverter.Convert(bound, CancellationToken.None), CancellationToken.None);
 
         Func<Task> action = async () => await new MVPExecutableBuilder().BuildAsync(lowered, "unused", CancellationToken.None);
-        await action.Should().ThrowAsync<NotSupportedException>();
+
+        await action
+            .Should()
+            .ThrowAsync<NotSupportedException>();
     }
 
     private static void AddTestOnlyCaller(LLVMModuleArtifact artifact, LoweredFunction function, bool firstArgument, bool secondArgument)
@@ -114,13 +168,19 @@ public sealed class RuntimeBooleanParameterTests
         LLVMModuleRef module = artifact.Module;
         LLVMContextRef context = module.Context;
         LLVMValueRef callee = module.GetNamedFunction(function.Name);
-        LLVMTypeRef[] parameters = [.. function.Parameters.Select(parameter => parameter.Type is IRType.Bool ? context.Int1Type : throw new NotSupportedException())];
+
+        LLVMTypeRef[] parameters =
+        [
+            .. function.Parameters.Select(parameter => parameter.Type is IRType.Bool ? context.Int1Type : throw new NotSupportedException())
+        ];
+
         LLVMTypeRef calleeType = LLVMTypeRef.CreateFunction(context.Int1Type, parameters);
         LLVMTypeRef mainType = LLVMTypeRef.CreateFunction(context.Int32Type, [context.Int32Type, context.CreatePointerType(0)]);
         LLVMValueRef main = module.AddFunction("main", mainType);
         LLVMBasicBlockRef entry = main.AppendBasicBlock("entry");
 
         using LLVMBuilderRef builder = context.CreateBuilder();
+
         builder.PositionAtEnd(entry);
 
         LLVMValueRef[] arguments = function.Parameters.Count switch
@@ -131,8 +191,12 @@ public sealed class RuntimeBooleanParameterTests
         };
 
         LLVMValueRef result = builder.BuildCall2(calleeType, callee, arguments, "sushi.test.result");
+
         builder.BuildRet(builder.BuildZExt(result, context.Int32Type, "sushi.test.exitcode"));
-        module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message).Should().BeTrue(message);
+
+        module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+            .Should()
+            .BeTrue(message);
     }
 
     private static async Task<BoundFunction> Bind(string declaration)
@@ -140,9 +204,16 @@ public sealed class RuntimeBooleanParameterTests
         string source = $"package Example; namespace Example; {declaration}";
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
         IDiagnosticReporter reporter = new DiagnosticReporter();
+
         SourceAnalysisResult result = (SourceAnalysisResult)await new SourceAnalyzer().Analyze(snapshot, reporter, CancellationToken.None);
 
-        reporter.ReportDiagnostics().Should().BeEmpty();
-        return result.Functions.Should().ContainSingle().Which;
+        reporter.ReportDiagnostics()
+            .Should()
+            .BeEmpty();
+
+        return result.Functions
+            .Should()
+            .ContainSingle()
+            .Which;
     }
 }
