@@ -32,6 +32,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.NonAssociativeComparison] = "Comparison operators at the same precedence level cannot be chained without parentheses.",
         [ErrorType.IntegerDivisionByZero] = "Integer division or remainder by zero.",
         [ErrorType.InvalidIntegerShiftCount] = "Integer shift count is outside the valid range.",
+        [ErrorType.UnknownIdentifier] = "The identifier does not resolve to a supported local binding.",
+        [ErrorType.DuplicateParameter] = "A function cannot declare multiple parameters with the same semantic name.",
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new(){

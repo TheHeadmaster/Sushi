@@ -495,7 +495,7 @@ public class LogicalBinaryExpressionParserTests
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase(TestName = "Expression Parser Should Not Treat Escaped Logical Keyword As Operand")]
+    [TestCase(TestName = "Expression Parser Should Parse Escaped Logical Keyword As Identifier Operand")]
     public void ParserShould_12()
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("true and @or");
@@ -504,27 +504,31 @@ public class LogicalBinaryExpressionParserTests
             .Should()
             .BeOfType<BinaryExpressionSyntax>()
             .Subject;
-        
-        IntegerLiteralExpressionSyntax missing = conjunction.Right
+
+        conjunction.OperatorToken.Type
             .Should()
-            .BeOfType<IntegerLiteralExpressionSyntax>()
+            .Be(SyntaxType.AndKeyword);
+
+        IdentifierExpressionSyntax identifier = conjunction.Right
+            .Should()
+            .BeOfType<IdentifierExpressionSyntax>()
             .Subject;
 
-        missing.LiteralToken.IsMissing
+        identifier.IdentifierToken.Type
             .Should()
-            .BeTrue();
+            .Be(SyntaxType.EscapedIdentifierToken);
 
-        cursor.TryPeek(out LexToken escaped)
-            .Should()
-            .BeTrue();
-
-        escaped.Type
+        identifier.IdentifierToken.SourceToken!.Value.Type
             .Should()
             .Be(LexTokenType.EscapedIdentifier);
 
+        cursor.TryPeek(out _)
+            .Should()
+            .BeFalse();
+
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Expression Parser Should Leave Logical Operand Typing To Semantic Analysis")]

@@ -138,6 +138,13 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
             }
         }
 
+        if (this.cursor.TryConsumeIdentifier(out LexToken identifier))
+        {
+            incomplete = false;
+            SyntaxType type = identifier.Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken;
+            return new IdentifierExpressionSyntax(new SyntaxToken(type, identifier));
+        }
+
         if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
         {
             SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, openingParenthesis);

@@ -84,6 +84,11 @@ public sealed class MVPProjectCompiler
 
         BoundFunction entryFunction = SelectMVPEntryFunction(functions);
 
+        if (entryFunction.Parameters.Count != 0)
+        {
+            throw new NotSupportedException("The executable MVP requires a parameterless entry function. Parameterized functions may be emitted as LLVM functions but cannot be selected as the temporary process entry.");
+        }
+
         IRFunction structuredFunction = BoundFunctionIRConverter.Convert(entryFunction, cancellationToken);
         LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structuredFunction, cancellationToken);
 

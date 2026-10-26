@@ -36,5 +36,8 @@ public enum SyntaxType
     NotKeyword,
     AndKeyword,
     OrKeyword,
-    InvalidComparisonChain
+    InvalidComparisonChain,
+    Parameter,
+    IdentifierExpression,
+    CommaToken
 }

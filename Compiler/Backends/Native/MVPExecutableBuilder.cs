@@ -34,6 +34,11 @@ public sealed class MVPExecutableBuilder
         ArgumentNullException.ThrowIfNull(entryFunction);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
 
+        if (entryFunction.Parameters.Count != 0)
+        {
+            throw new NotSupportedException("The executable MVP requires a parameterless entry function. Parameterized functions may be emitted as LLVM functions but cannot be selected as the temporary process entry.");
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
 
         string temporaryDirectory = Path.Combine(Path.GetTempPath(), "Sushi", Guid.NewGuid().ToString("N"));

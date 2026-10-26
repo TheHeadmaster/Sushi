@@ -377,30 +377,30 @@ public class BooleanExpressionParserTests
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression(source);
 
-        IntegerLiteralExpressionSyntax missing = expression
+        IdentifierExpressionSyntax identifier = expression
             .Should()
-            .BeOfType<IntegerLiteralExpressionSyntax>()
+            .BeOfType<IdentifierExpressionSyntax>()
             .Subject;
 
-        missing.LiteralToken.IsMissing
+        identifier.IdentifierToken.IsSourceBacked
             .Should()
             .BeTrue();
 
-        cursor.TryPeek(out LexToken token)
-            .Should()
-            .BeTrue();
-
-        token.Type
+        identifier.IdentifierToken.SourceToken!.Value.Type
             .Should()
             .Be(expectedType);
 
-        cursor.Index
+        identifier.IdentifierToken.Type
             .Should()
-            .Be(0);
+            .Be(expectedType is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken);
+
+        cursor.TryPeek(out _)
+            .Should()
+            .BeFalse();
 
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+            .BeEmpty();
     }
 
     [TestCase("true and false", "and", SyntaxType.AndKeyword, TestName = "Expression Parser Should Recognize Logical And Keyword")]

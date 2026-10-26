@@ -37,5 +37,7 @@ public enum ErrorType
     UnsupportedMVPExpression = 305,
     IntegerDivisionByZero = 306,
     InvalidIntegerShiftCount = 307,
+    UnknownIdentifier = 308,
+    DuplicateParameter = 309,
     #endregion
 }

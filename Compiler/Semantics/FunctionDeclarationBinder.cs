@@ -47,14 +47,66 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        BoundBlock? body = BindBody(declaration.Body, returnType, diagnosticReporter, cancellationToken);
+        IReadOnlyList<BoundParameter>? parameters = BindParameters(declaration.Parameters, diagnosticReporter, cancellationToken);
+
+        if (parameters is null)
+        {
+            return new FunctionBindResult(null);
+        }
+
+        BoundBlock? body = BindBody(declaration.Body, returnType, parameters, diagnosticReporter, cancellationToken);
 
         return body is null
             ? new FunctionBindResult(null)
-            : new FunctionBindResult(new BoundFunction(accessibility, name, returnType, body));
+            : new FunctionBindResult(new BoundFunction(accessibility, name, returnType, parameters, body));
     }
 
-    private static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static IReadOnlyList<BoundParameter>? BindParameters(IReadOnlyList<ParameterSyntax> declarations, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        List<BoundParameter> parameters = [];
+        HashSet<string> names = new(StringComparer.Ordinal);
+        bool valid = true;
+
+        foreach (ParameterSyntax declaration in declarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!declaration.TypeToken.IsSourceBacked || !declaration.NameToken.IsSourceBacked)
+            {
+                valid = false;
+                continue;
+            }
+
+            string? typeName = IdentifierBinder.Bind(declaration.TypeToken);
+            string? name = IdentifierBinder.Bind(declaration.NameToken);
+
+            if (typeName is not "bool")
+            {
+                diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.TypeToken.Span);
+                valid = false;
+                continue;
+            }
+
+            if (name is null)
+            {
+                valid = false;
+                continue;
+            }
+
+            if (!names.Add(name))
+            {
+                diagnosticReporter.GenerateError(ErrorType.DuplicateParameter, declaration.NameToken.Span);
+                valid = false;
+                continue;
+            }
+
+            parameters.Add(new BoundParameter(parameters.Count, name, BoundType.Bool));
+        }
+
+        return valid ? parameters : null;
+    }
+
+    private static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         List<BoundStatement> statements = [];
 
@@ -67,7 +119,7 @@ public sealed class FunctionDeclarationBinder
                 return null;
             }
 
-            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, returnType, diagnosticReporter, cancellationToken);
+            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken);
 
             if (boundReturn is null)
             {
@@ -80,7 +132,7 @@ public sealed class FunctionDeclarationBinder
         return new BoundBlock(statements);
     }
 
-    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, BoundType returnType, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
@@ -92,7 +144,7 @@ public sealed class FunctionDeclarationBinder
         BoundExpression? expression = returnType switch
         {
             BoundType.Int32 => IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
-            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
+            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
             _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
         };
 

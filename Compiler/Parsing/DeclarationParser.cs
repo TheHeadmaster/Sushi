@@ -40,11 +40,12 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         SyntaxToken returnType = this.ParseReturnType(localDiagnostics);
         SyntaxToken name = this.ParseNameComponent("Expected function name.", skipUnknown: false, localDiagnostics);
         SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after function name.", localDiagnostics);
+        (IReadOnlyList<ParameterSyntax> parameters, IReadOnlyList<SyntaxToken> separators) = this.ParseParameters(localDiagnostics);
         SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after function parameter list.", localDiagnostics);
         BlockSyntax body = this.statements.ParseBlock(localDiagnostics);
 
         diagnosticReporter.CommitReporter(localDiagnostics);
-        return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, closeParenthesis, body);
+        return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, parameters, separators, closeParenthesis, body);
     }
 
     /// <summary>Parses a namespace declaration at the current cursor position.</summary>
@@ -81,6 +82,71 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
 
         diagnosticReporter.CommitReporter(localDiagnostics);
         return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
+    }
+
+    private (IReadOnlyList<ParameterSyntax> Parameters, IReadOnlyList<SyntaxToken> Separators) ParseParameters(IDiagnosticReporter diagnosticReporter)
+    {
+        List<ParameterSyntax> parameters = [];
+        List<SyntaxToken> separators = [];
+
+        if (!this.cursor.TryPeek(out LexToken next) || this.IsPunctuation(next, (byte)')') || this.IsPunctuation(next, (byte)'{'))
+        {
+            return (parameters, separators);
+        }
+
+        while (true)
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+            SyntaxToken type = this.ParseParameterType(diagnosticReporter);
+            SyntaxToken name = this.ParseNameComponent("Expected parameter name.", skipUnknown: false, diagnosticReporter);
+            parameters.Add(new ParameterSyntax(type, name));
+
+            if (this.cursor.TryConsumePunctuation((byte)',', out LexToken comma))
+            {
+                separators.Add(new SyntaxToken(SyntaxType.CommaToken, comma));
+
+                if (!this.cursor.TryPeek(out next) || this.IsPunctuation(next, (byte)')') || this.IsPunctuation(next, (byte)'{'))
+                {
+                    int position = this.cursor.Position;
+                    this.AccumulateExpectedDiagnostic("Expected parameter declaration after comma.", position, diagnosticReporter);
+                    SyntaxToken missingType = SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
+                    SyntaxToken missingName = SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
+                    parameters.Add(new ParameterSyntax(missingType, missingName));
+                    break;
+                }
+
+                continue;
+            }
+
+            if (!this.cursor.TryPeek(out next) || this.IsPunctuation(next, (byte)')') || this.IsPunctuation(next, (byte)'{'))
+            {
+                break;
+            }
+
+            if (next.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier))
+            {
+                break;
+            }
+
+            int missingCommaPosition = this.cursor.Position;
+            this.AccumulateExpectedDiagnostic("Expected comma between parameters.", missingCommaPosition, diagnosticReporter);
+            separators.Add(SyntaxToken.Missing(SyntaxType.CommaToken, this.cursor.Snapshot, missingCommaPosition));
+        }
+
+        return (parameters, separators);
+    }
+
+    private SyntaxToken ParseParameterType(IDiagnosticReporter diagnosticReporter)
+    {
+        if (this.cursor.TryConsumeIdentifier(out LexToken token))
+        {
+            SyntaxType type = token.Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken;
+            return new SyntaxToken(type, token);
+        }
+
+        int position = this.cursor.Position;
+        this.AccumulateExpectedDiagnostic("Expected parameter type.", position, diagnosticReporter);
+        return SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
     }
 
     private SyntaxToken ParseAccessModifier(IDiagnosticReporter diagnosticReporter)

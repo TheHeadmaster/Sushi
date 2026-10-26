@@ -115,7 +115,6 @@ public class ExpressionParserTests
             .Be(0);
     }
 
-    [TestCase("Name;", LexTokenType.Identifier, TestName = "Expression Parser Should Preserve Unexpected Identifier")]
     [TestCase("return 42;", LexTokenType.Keyword, TestName = "Expression Parser Should Preserve Unexpected Keyword")]
     [TestCase(";42", LexTokenType.Punctuation, TestName = "Expression Parser Should Preserve Unexpected Punctuation")]
     [TestCase("$ 42", LexTokenType.Unknown, TestName = "Expression Parser Should Not Skip Unknown Element During Expression Recovery")]
@@ -155,6 +154,41 @@ public class ExpressionParserTests
         diagnostics
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+    }
+
+    [TestCase(TestName = "Expression Parser Should Consume An Identifier Expression Before The Semicolon")]
+    public void ParserShould_7()
+    {
+        (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("Name;");
+
+        IdentifierExpressionSyntax identifier = expression
+            .Should()
+            .BeOfType<IdentifierExpressionSyntax>()
+            .Subject;
+
+        identifier.IdentifierToken.Type
+            .Should()
+            .Be(SyntaxType.IdentifierToken);
+
+        identifier.IdentifierToken.IsSourceBacked
+            .Should()
+            .BeTrue();
+
+        cursor.TryConsumePunctuation((byte)';', out LexToken semicolon)
+            .Should()
+            .BeTrue();
+
+        semicolon.Span.End
+            .Should()
+            .Be(cursor.Snapshot.SourceLength);
+
+        cursor.TryPeek(out _)
+            .Should()
+            .BeFalse();
+
+        diagnostics
+            .Should()
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Expression Parser Should Use The Cursor Position After A Previous Grammar Token")]

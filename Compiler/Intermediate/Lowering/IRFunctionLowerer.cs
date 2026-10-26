@@ -26,7 +26,7 @@ public sealed class IRFunctionLowerer
 
         LoweredBasicBlock entryBlock = LowerEntryBlock(function.Body, cancellationToken);
 
-        return new LoweredFunction(function.Accessibility, function.Name, function.ReturnType, [entryBlock]);
+        return new LoweredFunction(function.Accessibility, function.Name, function.ReturnType, function.Parameters, [entryBlock]);
     }
 
     private static LoweredBasicBlock LowerEntryBlock(IRBlock block, CancellationToken cancellationToken)
@@ -51,6 +51,7 @@ public sealed class IRFunctionLowerer
         {
             IRIntegerConstant integerConstant => new LoweredIntegerConstant(integerConstant.Value),
             IRBooleanConstant booleanConstant => new LoweredBooleanConstant(booleanConstant.Value),
+            IRParameterReferenceExpression reference => new LoweredParameterValue(reference.Index, reference.Type),
             IRBooleanNotExpression negation => new LoweredBooleanConstant(!LowerBooleanValue(negation.Operand, cancellationToken)),
             IRBooleanBinaryExpression binary => LowerBooleanBinary(binary, cancellationToken),
             _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.")
@@ -80,6 +81,6 @@ public sealed class IRFunctionLowerer
 
         return value is LoweredBooleanConstant constant
             ? constant.Value
-            : throw new InvalidOperationException("A typed Boolean operation did not lower to a Boolean value.");
+            : throw new NotSupportedException("Runtime-dependent Boolean operations require the runtime Boolean lowering slice.");
     }
 }

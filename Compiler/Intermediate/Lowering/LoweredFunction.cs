@@ -1,17 +1,17 @@
 ﻿namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
-/// Represents a package-level function after structured Sushi IR has been lowered into explicit basic-block control flow.
+/// Represents a lowered package-level function with explicit basic blocks and a typed parameter signature.
 /// </summary>
 public sealed record LoweredFunction
 {
     /// <summary>
-    /// Gets the retained Sushi accessibility used by later backend visibility and linkage decisions.
+    /// Gets source-level accessibility.
     /// </summary>
     public IRAccessibility Accessibility { get; }
 
     /// <summary>
-    /// Gets the semantic function name.
+    /// Gets the semantic name.
     /// </summary>
     public string Name { get; }
 
@@ -21,40 +21,70 @@ public sealed record LoweredFunction
     public IRType ReturnType { get; }
 
     /// <summary>
-    /// Gets the function's basic blocks in deterministic order. The first block is the entry block.
+    /// Gets the ordered function parameters.
+    /// </summary>
+    public IReadOnlyList<IRParameter> Parameters { get; }
+
+    /// <summary>
+    /// Gets basic blocks in deterministic order.
     /// </summary>
     public IReadOnlyList<LoweredBasicBlock> Blocks { get; }
 
     /// <summary>
-    /// Gets the function's entry block.
+    /// Gets the entry basic block.
     /// </summary>
     public LoweredBasicBlock EntryBlock => this.Blocks[0];
 
     /// <summary>
-    /// Creates a lowered function.
+    /// Creates a lowered function with no parameters.
     /// </summary>
     /// <param name="accessibility">
-    /// The retained source-level accessibility.
+    /// Source-level accessibility.
     /// </param>
     /// <param name="name">
-    /// The semantic function name.
+    /// The semantic name.
     /// </param>
     /// <param name="returnType">
-    /// The concrete return type.
+    /// The return type.
     /// </param>
     /// <param name="blocks">
-    /// The function's basic blocks in deterministic order, beginning with its entry block.
+    /// The ordered basic blocks.
     /// </param>
     public LoweredFunction(IRAccessibility accessibility, string name, IRType returnType, IReadOnlyList<LoweredBasicBlock> blocks)
+        : this(accessibility, name, returnType, [], blocks)
+    {
+    }
+
+    /// <summary>
+    /// Creates a lowered function with ordered, typed parameters.
+    /// </summary>
+    /// <param name="accessibility">
+    /// Source-level accessibility.
+    /// </param>
+    /// <param name="name">
+    /// The semantic name.
+    /// </param>
+    /// <param name="returnType">
+    /// The return type.
+    /// </param>
+    /// <param name="parameters">
+    /// The ordered parameters.
+    /// </param>
+    /// <param name="blocks">
+    /// The ordered basic blocks.
+    /// </param>
+    public LoweredFunction(IRAccessibility accessibility, string name, IRType returnType, IReadOnlyList<IRParameter> parameters, IReadOnlyList<LoweredBasicBlock> blocks)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(blocks);
 
+        IRParameter[] parameterArray = [.. parameters];
         LoweredBasicBlock[] blockArray = [.. blocks];
 
-        if (blockArray.Length == 0)
+        if (blockArray.Length == 0 || blockArray.Any(block => block is null))
         {
-            throw new ArgumentException("A lowered function requires an entry basic block.", nameof(blocks));
+            throw new ArgumentException("A lowered function requires nonnull basic blocks, including an entry block.", nameof(blocks));
         }
 
         if (blockArray.Select(block => block.Name).Distinct(StringComparer.Ordinal).Count() != blockArray.Length)
@@ -62,9 +92,18 @@ public sealed record LoweredFunction
             throw new ArgumentException("Basic-block names must be unique within a lowered function.", nameof(blocks));
         }
 
+        for (int i = 0; i < parameterArray.Length; i++)
+        {
+            if (parameterArray[i] is null || parameterArray[i].Index != i)
+            {
+                throw new ArgumentException("Lowered parameter indices must be contiguous and start at zero.", nameof(parameters));
+            }
+        }
+
         this.Accessibility = accessibility;
         this.Name = name;
         this.ReturnType = returnType;
+        this.Parameters = parameterArray;
         this.Blocks = blockArray;
     }
 }

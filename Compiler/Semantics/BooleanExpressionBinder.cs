@@ -35,12 +35,40 @@ internal static class BooleanExpressionBinder
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        return ContainsInvalidComparisonChain(expression)
-            ? null
-            : BindExpression(expression, diagnosticReporter, cancellationToken);
+        return Bind(expression, [], diagnosticReporter, cancellationToken);
     }
 
-    private static BoundExpression? BindExpression(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    /// <summary>
+    /// Binds an expression with the named parameters of its enclosing function.
+    /// </summary>
+    /// <param name="expression">
+    /// The Boolean expression.
+    /// </param>
+    /// <param name="parameters">
+    /// The declared parameters in positional order.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives semantic diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels recursive binding.
+    /// </param>
+    /// <returns>
+    /// The typed Boolean expression, or null after a diagnostic.
+    /// </returns>
+    internal static BoundExpression? Bind(ExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(expression);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return ContainsInvalidComparisonChain(expression)
+            ? null
+            : BindExpression(expression, parameters, diagnosticReporter, cancellationToken);
+    }
+
+    private static BoundExpression? BindExpression(ExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -49,18 +77,21 @@ internal static class BooleanExpressionBinder
             case BooleanLiteralExpressionSyntax literal:
                 return new BoundBooleanConstantExpression(IsTrueLiteral(literal));
 
+            case IdentifierExpressionSyntax identifier:
+                return BindParameterReference(identifier, parameters, diagnosticReporter);
+
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
-                return BindExpression(grouped.Expression, diagnosticReporter, cancellationToken);
+                return BindExpression(grouped.Expression, parameters, diagnosticReporter, cancellationToken);
 
             case ParenthesizedExpressionSyntax:
             case IntegerLiteralExpressionSyntax { LiteralToken.IsMissing: true }:
                 return null;
 
             case UnaryExpressionSyntax unary when unary.OperatorToken.Type is SyntaxType.NotKeyword:
-                return BindNegation(unary, diagnosticReporter, cancellationToken);
+                return BindNegation(unary, parameters, diagnosticReporter, cancellationToken);
 
             case BinaryExpressionSyntax binary when TryGetBooleanBinaryOperator(binary.OperatorToken, out BooleanBinaryOperator operation):
-                return BindBooleanBinary(binary, operation, diagnosticReporter, cancellationToken);
+                return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, cancellationToken);
 
             case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out string comparisonOperator):
                 return TryEvaluateIntegerComparison(comparison, comparisonOperator, diagnosticReporter, cancellationToken, out bool result)
@@ -73,16 +104,30 @@ internal static class BooleanExpressionBinder
         }
     }
 
-    private static BoundExpression? BindNegation(UnaryExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindParameterReference(IdentifierExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter)
     {
-        BoundExpression? operand = BindExpression(expression.Operand, diagnosticReporter, cancellationToken);
+        string? name = IdentifierBinder.Bind(expression.IdentifierToken);
+        BoundParameter? parameter = name is null ? null : parameters.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Name, name));
+
+        if (parameter is not null)
+        {
+            return new BoundParameterReferenceExpression(parameter);
+        }
+
+        diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, expression.Span);
+        return null;
+    }
+
+    private static BoundExpression? BindNegation(UnaryExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, cancellationToken);
         return operand is null ? null : new BoundBooleanNotExpression(operand);
     }
 
-    private static BoundExpression? BindBooleanBinary(BinaryExpressionSyntax expression, BooleanBinaryOperator operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindBooleanBinary(BinaryExpressionSyntax expression, BooleanBinaryOperator operation, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
-        BoundExpression? left = BindExpression(expression.Left, diagnosticReporter, cancellationToken);
-        BoundExpression? right = BindExpression(expression.Right, diagnosticReporter, cancellationToken);
+        BoundExpression? left = BindExpression(expression.Left, parameters, diagnosticReporter, cancellationToken);
+        BoundExpression? right = BindExpression(expression.Right, parameters, diagnosticReporter, cancellationToken);
 
         return left is null || right is null ? null : new BoundBooleanBinaryExpression(operation, left, right);
     }

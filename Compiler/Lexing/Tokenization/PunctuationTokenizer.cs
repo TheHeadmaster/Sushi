@@ -9,6 +9,7 @@ public sealed class PunctuationTokenizer : ILexTokenizer
 {
     private static readonly byte[] punctuationTokens = [
         (byte)'.',
+        (byte)',',
         (byte)';',
         (byte)'(',
         (byte)')',

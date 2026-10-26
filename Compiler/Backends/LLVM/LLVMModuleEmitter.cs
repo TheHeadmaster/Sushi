@@ -62,18 +62,24 @@ public sealed class LLVMModuleEmitter
         cancellationToken.ThrowIfCancellationRequested();
 
         LLVMTypeRef returnType = ConvertType(module.Context, function.ReturnType);
-        LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(returnType, []);
+        LLVMTypeRef[] parameterTypes = [.. function.Parameters.Select(parameter => ConvertType(module.Context, parameter.Type))];
+        LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(returnType, parameterTypes);
         LLVMValueRef llvmFunction = module.AddFunction(function.Name, functionType);
+
+        foreach (IRParameter parameter in function.Parameters)
+        {
+            llvmFunction.GetParam((uint)parameter.Index).Name = parameter.Name;
+        }
 
         foreach (LoweredBasicBlock block in function.Blocks)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            this.EmitBlock(module.Context, llvmFunction, builder, block, cancellationToken);
+            this.EmitBlock(module.Context, llvmFunction, function, builder, block, cancellationToken);
         }
     }
 
-    private void EmitBlock(LLVMContextRef context, LLVMValueRef function, LLVMBuilderRef builder, LoweredBasicBlock block, CancellationToken cancellationToken)
+    private void EmitBlock(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, LoweredBasicBlock block, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -88,20 +94,20 @@ public sealed class LLVMModuleEmitter
             this.EmitInstruction(instruction);
         }
 
-        EmitTerminator(context, builder, block.Terminator, cancellationToken);
+        EmitTerminator(context, function, loweredFunction, builder, block.Terminator, cancellationToken);
     }
 
     private void EmitInstruction(LoweredInstruction instruction)
         => throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
 
-    private static void EmitTerminator(LLVMContextRef context, LLVMBuilderRef builder, LoweredTerminator terminator, CancellationToken cancellationToken)
+    private static void EmitTerminator(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, LoweredTerminator terminator, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         switch (terminator)
         {
             case LoweredReturnTerminator returnTerminator:
-                builder.BuildRet(EmitValue(context, returnTerminator.Value));
+                builder.BuildRet(EmitValue(context, function, loweredFunction, returnTerminator.Value));
                 return;
 
             default:
@@ -109,7 +115,7 @@ public sealed class LLVMModuleEmitter
         }
     }
 
-    private static LLVMValueRef EmitValue(LLVMContextRef context, LoweredValue value)
+    private static LLVMValueRef EmitValue(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LoweredValue value)
         => value switch
         {
             LoweredIntegerConstant integerConstant => LLVMValueRef.CreateConstInt(
@@ -120,8 +126,27 @@ public sealed class LLVMModuleEmitter
                 ConvertType(context, booleanConstant.Type),
                 booleanConstant.Value ? 1UL : 0UL),
 
+            LoweredParameterValue parameter => EmitParameterValue(function, loweredFunction, parameter),
+
             _ => throw new NotSupportedException($"Lowered value type \"{value.GetType().Name}\" is not supported by the LLVM backend.")
         };
+
+    private static LLVMValueRef EmitParameterValue(LLVMValueRef function, LoweredFunction loweredFunction, LoweredParameterValue parameter)
+    {
+        if (parameter.Index >= loweredFunction.Parameters.Count || loweredFunction.Parameters[parameter.Index].Type != parameter.Type)
+        {
+            throw new InvalidOperationException("The lowered parameter reference is outside its function signature or has the wrong type.");
+        }
+
+        LLVMValueRef argument = function.GetParam((uint)parameter.Index);
+
+        if (argument.Handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException("LLVM did not provide the requested function parameter.");
+        }
+
+        return argument;
+    }
 
     private static LLVMTypeRef ConvertType(LLVMContextRef context, IRType type)
         => type switch

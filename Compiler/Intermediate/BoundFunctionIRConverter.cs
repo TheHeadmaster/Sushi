@@ -29,6 +29,7 @@ public sealed class BoundFunctionIRConverter
             ConvertAccessibility(function.Accessibility),
             function.Name,
             ConvertType(function.ReturnType),
+            [.. function.Parameters.Select(parameter => new IRParameter(parameter.Index, parameter.Name, ConvertType(parameter.Type)))],
             ConvertBlock(function.Body, cancellationToken));
     }
 
@@ -65,6 +66,7 @@ public sealed class BoundFunctionIRConverter
         {
             BoundIntegerLiteralExpression integerLiteral => new IRIntegerConstant(integerLiteral.Value),
             BoundBooleanConstantExpression booleanConstant => new IRBooleanConstant(booleanConstant.Value),
+            BoundParameterReferenceExpression reference => new IRParameterReferenceExpression(reference.Parameter.Index, ConvertType(reference.Type)),
             BoundBooleanNotExpression negation => new IRBooleanNotExpression(ConvertExpression(negation.Operand, cancellationToken)),
             BoundBooleanBinaryExpression binary => new IRBooleanBinaryExpression(
                 ConvertBooleanOperator(binary.Operator),
