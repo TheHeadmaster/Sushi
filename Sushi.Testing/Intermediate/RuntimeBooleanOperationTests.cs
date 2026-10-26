@@ -231,7 +231,7 @@ public sealed class RuntimeBooleanOperationTests
         action
             .Should()
             .Throw<InvalidOperationException>()
-            .WithMessage("*before being defined*");
+            .WithMessage("*before its definition was emitted*");
     }
 
     [TestCase(TestName = "LLVM Should Reject Duplicate Temporary Definitions")]

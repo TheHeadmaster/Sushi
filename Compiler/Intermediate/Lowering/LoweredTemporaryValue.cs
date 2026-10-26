@@ -1,20 +1,20 @@
 ﻿namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
-/// Identifies a runtime value produced by an instruction within a lowered basic block.
+/// Identifies a runtime SSA value produced by an instruction within a lowered function.
 /// </summary>
 public sealed record LoweredTemporaryValue : LoweredValue
 {
     /// <summary>
-    /// Gets the stable, zero-based index identifying this temporary value.
+    /// Gets the stable, zero-based temporary index, unique within its function.
     /// </summary>
     public int Index { get; }
 
     /// <summary>
-    /// Creates a reference to an instruction-produced runtime value.
+    /// Creates a function-scoped reference to an instruction-produced runtime value.
     /// </summary>
     /// <param name="index">
-    /// The temporary's index within the lowered basic block.
+    /// The temporary's index within the lowered function.
     /// </param>
     /// <param name="type">
     /// The concrete type of the produced value.

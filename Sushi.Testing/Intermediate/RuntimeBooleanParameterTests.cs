@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
@@ -42,6 +42,7 @@ public sealed class RuntimeBooleanParameterTests
         irReference.Index
             .Should()
             .Be(expectedIndex);
+
         irReference.Type
             .Should()
             .Be(IRType.Bool);
@@ -77,7 +78,7 @@ public sealed class RuntimeBooleanParameterTests
         artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
-            
+
         artifact.Module.PrintToString()
             .Should()
             .Contain("ret i1 %");
@@ -115,8 +116,7 @@ public sealed class RuntimeBooleanParameterTests
                 }
             };
 
-            process
-                .Start()
+            process.Start()
                 .Should()
                 .BeTrue();
 
@@ -135,19 +135,39 @@ public sealed class RuntimeBooleanParameterTests
         }
     }
 
-    [TestCase("public bool echo(bool value) { return value and true; }", TestName = "Runtime Logical And Requires Conditional Control Flow")]
-    [TestCase("public bool echo(bool value) { return value or false; }", TestName = "Runtime Logical Or Requires Conditional Control Flow")]
+    [TestCase("public bool echo(bool value) { return value and true; }", TestName = "Runtime Logical And Should Generate Conditional Control Flow")]
+    [TestCase("public bool echo(bool value) { return value or false; }", TestName = "Runtime Logical Or Should Generate Conditional Control Flow")]
     public async Task LowerShould_0(string declaration)
     {
         BoundFunction bound = await Bind(declaration);
         IRFunction structured = BoundFunctionIRConverter.Convert(bound, CancellationToken.None);
+        LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
 
-        Action action = () => IRFunctionLowerer.Lower(structured, CancellationToken.None);
-
-        action
+        lowered.Blocks
             .Should()
-            .Throw<NotSupportedException>()
-            .WithMessage("*conditional control-flow lowering*");
+            .HaveCount(4);
+
+        lowered.EntryBlock.Terminator
+            .Should()
+            .BeOfType<LoweredConditionalBranchTerminator>();
+
+        lowered.Blocks
+            .SelectMany(block => block.Instructions)
+            .OfType<LoweredBooleanPhiInstruction>()
+            .Should()
+            .ContainSingle();
+
+        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("LogicalParameter", lowered, CancellationToken.None);
+
+        string llvm = artifact.Module.PrintToString();
+
+        llvm
+            .Should()
+            .Contain("br i1");
+
+        llvm
+            .Should()
+            .Contain("phi i1");
     }
 
     [TestCase(TestName = "Native MVP Builder Should Reject Parameterized Function Entry")]
@@ -169,11 +189,7 @@ public sealed class RuntimeBooleanParameterTests
         LLVMContextRef context = module.Context;
         LLVMValueRef callee = module.GetNamedFunction(function.Name);
 
-        LLVMTypeRef[] parameters =
-        [
-            .. function.Parameters.Select(parameter => parameter.Type is IRType.Bool ? context.Int1Type : throw new NotSupportedException())
-        ];
-
+        LLVMTypeRef[] parameters = [.. function.Parameters.Select(parameter => parameter.Type is IRType.Bool ? context.Int1Type : throw new NotSupportedException())];
         LLVMTypeRef calleeType = LLVMTypeRef.CreateFunction(context.Int1Type, parameters);
         LLVMTypeRef mainType = LLVMTypeRef.CreateFunction(context.Int32Type, [context.Int32Type, context.CreatePointerType(0)]);
         LLVMValueRef main = module.AddFunction("main", mainType);
