@@ -61,6 +61,7 @@ internal static class BooleanExpressionBinder
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
         cancellationToken.ThrowIfCancellationRequested();
 
         return ContainsInvalidComparisonChain(expression)
@@ -109,18 +110,25 @@ internal static class BooleanExpressionBinder
         string? name = IdentifierBinder.Bind(expression.IdentifierToken);
         BoundParameter? parameter = name is null ? null : parameters.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Name, name));
 
-        if (parameter is not null)
+        if (parameter is null)
         {
-            return new BoundParameterReferenceExpression(parameter);
+            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, expression.Span);
+            return null;
         }
 
-        diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, expression.Span);
-        return null;
+        if (parameter.Type is not BoundType.Bool)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
+            return null;
+        }
+
+        return new BoundParameterReferenceExpression(parameter);
     }
 
     private static BoundExpression? BindNegation(UnaryExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, cancellationToken);
+
         return operand is null ? null : new BoundBooleanNotExpression(operand);
     }
 

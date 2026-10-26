@@ -77,10 +77,9 @@ public sealed class FunctionDeclarationBinder
                 continue;
             }
 
-            string? typeName = IdentifierBinder.Bind(declaration.TypeToken);
             string? name = IdentifierBinder.Bind(declaration.NameToken);
 
-            if (typeName is not "bool")
+            if (!TryBindReturnType(declaration.TypeToken, out BoundType type))
             {
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.TypeToken.Span);
                 valid = false;
@@ -100,7 +99,7 @@ public sealed class FunctionDeclarationBinder
                 continue;
             }
 
-            parameters.Add(new BoundParameter(parameters.Count, name, BoundType.Bool));
+            parameters.Add(new BoundParameter(parameters.Count, name, type));
         }
 
         return valid ? parameters : null;
@@ -143,7 +142,7 @@ public sealed class FunctionDeclarationBinder
 
         BoundExpression? expression = returnType switch
         {
-            BoundType.Int32 => IntegerConstantExpressionBinder.Bind(statement.Expression, diagnosticReporter, cancellationToken),
+            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
             BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
             _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
         };
@@ -174,7 +173,6 @@ public sealed class FunctionDeclarationBinder
         if (!token.IsSourceBacked)
         {
             accessibility = default;
-            
             return false;
         }
 

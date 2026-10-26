@@ -72,6 +72,13 @@ public sealed class BoundFunctionIRConverter
                 ConvertBooleanOperator(binary.Operator),
                 ConvertExpression(binary.Left, cancellationToken),
                 ConvertExpression(binary.Right, cancellationToken)),
+            BoundIntegerUnaryExpression unary => new IRIntegerUnaryExpression(
+                ConvertIntegerUnaryOperator(unary.Operator),
+                ConvertExpression(unary.Operand, cancellationToken)),
+            BoundIntegerBinaryExpression integerBinary => new IRIntegerBinaryExpression(
+                ConvertIntegerBinaryOperator(integerBinary.Operator),
+                ConvertExpression(integerBinary.Left, cancellationToken),
+                ConvertExpression(integerBinary.Right, cancellationToken)),
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
@@ -85,6 +92,31 @@ public sealed class BoundFunctionIRConverter
             BooleanBinaryOperator.EagerOr => IRBooleanBinaryOperator.EagerOr,
             BooleanBinaryOperator.EagerXor => IRBooleanBinaryOperator.EagerXor,
             _ => throw new NotSupportedException($"Boolean operator \"{operation}\" is not supported by structured Sushi IR.")
+        };
+
+    private static IRIntegerUnaryOperator ConvertIntegerUnaryOperator(IntegerUnaryOperator operation)
+        => operation switch
+        {
+            IntegerUnaryOperator.Plus => IRIntegerUnaryOperator.Plus,
+            IntegerUnaryOperator.Negate => IRIntegerUnaryOperator.Negate,
+            IntegerUnaryOperator.Complement => IRIntegerUnaryOperator.Complement,
+            _ => throw new NotSupportedException($"Integer unary operator \"{operation}\" is not supported by structured Sushi IR.")
+        };
+
+    private static IRIntegerBinaryOperator ConvertIntegerBinaryOperator(IntegerBinaryOperator operation)
+        => operation switch
+        {
+            IntegerBinaryOperator.Add => IRIntegerBinaryOperator.Add,
+            IntegerBinaryOperator.Subtract => IRIntegerBinaryOperator.Subtract,
+            IntegerBinaryOperator.Multiply => IRIntegerBinaryOperator.Multiply,
+            IntegerBinaryOperator.Divide => IRIntegerBinaryOperator.Divide,
+            IntegerBinaryOperator.Remainder => IRIntegerBinaryOperator.Remainder,
+            IntegerBinaryOperator.BitwiseAnd => IRIntegerBinaryOperator.BitwiseAnd,
+            IntegerBinaryOperator.BitwiseOr => IRIntegerBinaryOperator.BitwiseOr,
+            IntegerBinaryOperator.BitwiseXor => IRIntegerBinaryOperator.BitwiseXor,
+            IntegerBinaryOperator.ShiftLeft => IRIntegerBinaryOperator.ShiftLeft,
+            IntegerBinaryOperator.ShiftRight => IRIntegerBinaryOperator.ShiftRight,
+            _ => throw new NotSupportedException($"Integer binary operator \"{operation}\" is not supported by structured Sushi IR.")
         };
 
     private static IRType ConvertType(BoundType type)
