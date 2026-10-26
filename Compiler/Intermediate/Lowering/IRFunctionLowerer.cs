@@ -50,26 +50,15 @@ public sealed class IRFunctionLowerer
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        switch (expression)
+        return expression switch
         {
-            case IRIntegerConstant integerConstant:
-                return new LoweredIntegerConstant(integerConstant.Value);
-
-            case IRBooleanConstant booleanConstant:
-                return new LoweredBooleanConstant(booleanConstant.Value);
-
-            case IRParameterReferenceExpression reference:
-                return new LoweredParameterValue(reference.Index, reference.Type);
-
-            case IRBooleanNotExpression negation:
-                return LowerBooleanNegation(negation, instructions, ref nextTemporaryIndex, cancellationToken);
-
-            case IRBooleanBinaryExpression binary:
-                return LowerBooleanBinary(binary, instructions, ref nextTemporaryIndex, cancellationToken);
-
-            default:
-                throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.");
-        }
+            IRIntegerConstant integerConstant => new LoweredIntegerConstant(integerConstant.Value),
+            IRBooleanConstant booleanConstant => new LoweredBooleanConstant(booleanConstant.Value),
+            IRParameterReferenceExpression reference => new LoweredParameterValue(reference.Index, reference.Type),
+            IRBooleanNotExpression negation => LowerBooleanNegation(negation, instructions, ref nextTemporaryIndex, cancellationToken),
+            IRBooleanBinaryExpression binary => LowerBooleanBinary(binary, instructions, ref nextTemporaryIndex, cancellationToken),
+            _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering."),
+        };
     }
 
     private static LoweredValue LowerBooleanNegation(IRBooleanNotExpression expression, List<LoweredInstruction> instructions, ref int nextTemporaryIndex, CancellationToken cancellationToken)
