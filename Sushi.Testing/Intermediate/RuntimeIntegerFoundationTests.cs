@@ -317,10 +317,12 @@ public sealed class RuntimeIntegerFoundationTests
             .Contain("ret i32 %second");
     }
 
-    [TestCase("+value", TestName = "Runtime Unary Plus Requires Integer Runtime Lowering")]
-    [TestCase("-value", TestName = "Runtime Unary Negation Requires Integer Runtime Lowering")]
-    [TestCase("value + 1", TestName = "Runtime Addition Requires Integer Runtime Lowering")]
-    [TestCase("value << 1", TestName = "Runtime Shifting Requires Integer Runtime Lowering")]
+    [TestCase("~value", TestName = "Runtime Bitwise Complement Awaits Slice XII")]
+    [TestCase("value & 1", TestName = "Runtime Bitwise And Awaits Slice XII")]
+    [TestCase("value | 1", TestName = "Runtime Bitwise Or Awaits Slice XII")]
+    [TestCase("value ^ 1", TestName = "Runtime Bitwise Xor Awaits Slice XII")]
+    [TestCase("value << 1", TestName = "Runtime Left Shift Awaits Slice XII")]
+    [TestCase("value >> 1", TestName = "Runtime Right Shift Awaits Slice XII")]
     public async Task LowerShould_0(string expression)
     {
         BoundFunction bound = await Bind($"public int32 calculate(int32 value) {{ return {expression}; }}");

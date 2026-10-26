@@ -1,8 +1,8 @@
 ﻿namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
-/// Lowers structured Sushi IR into explicit control flow, preserving conditional
-/// evaluation and folding operations whose results are compile-time constants.
+/// Lowers structured Sushi IR into explicit control flow while preserving
+/// conditional evaluation, checked arithmetic, and constant results.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -16,7 +16,7 @@ public sealed class IRFunctionLowerer
     /// Cancels lowering.
     /// </param>
     /// <returns>
-    /// A function containing ordered basic blocks, SSA values, and explicit control-flow edges.
+    /// A function containing ordered basic blocks, typed SSA values, and explicit control-flow edges.
     /// </returns>
     public static LoweredFunction Lower(IRFunction function, CancellationToken cancellationToken)
     {
@@ -67,13 +67,15 @@ public sealed class IRFunctionLowerer
                 IRIntegerConstant integer => new LoweredIntegerConstant(integer.Value),
                 IRBooleanConstant boolean => new LoweredBooleanConstant(boolean.Value),
                 IRParameterReferenceExpression parameter => new LoweredParameterValue(parameter.Index, parameter.Type),
-                IRBooleanNotExpression negation => this.LowerNegation(negation),
-                IRBooleanBinaryExpression binary => this.LowerBinary(binary),
+                IRBooleanNotExpression negation => this.LowerBooleanNegation(negation),
+                IRBooleanBinaryExpression binary => this.LowerBooleanBinary(binary),
+                IRIntegerUnaryExpression unary => this.LowerIntegerUnary(unary),
+                IRIntegerBinaryExpression binary => this.LowerIntegerBinary(binary),
                 _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.")
             };
         }
 
-        private LoweredValue LowerNegation(IRBooleanNotExpression expression)
+        private LoweredValue LowerBooleanNegation(IRBooleanNotExpression expression)
         {
             LoweredValue operand = this.LowerExpression(expression.Operand);
 
@@ -82,13 +84,13 @@ public sealed class IRFunctionLowerer
                 return new LoweredBooleanConstant(!constant.Value);
             }
 
-            LoweredTemporaryValue destination = this.CreateTemporary();
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Bool);
             this.current.Instructions.Add(new LoweredBooleanNotInstruction(destination, operand));
 
             return destination;
         }
 
-        private LoweredValue LowerBinary(IRBooleanBinaryExpression expression)
+        private LoweredValue LowerBooleanBinary(IRBooleanBinaryExpression expression)
             => expression.Operator switch
             {
                 IRBooleanBinaryOperator.LogicalAnd or IRBooleanBinaryOperator.LogicalOr => this.LowerLogical(expression),
@@ -133,10 +135,9 @@ public sealed class IRFunctionLowerer
             BlockBuilder rightPredecessor = this.current;
 
             rightPredecessor.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
-
             this.current = mergeBlock;
 
-            LoweredTemporaryValue destination = this.CreateTemporary();
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Bool);
 
             this.current.Instructions.Add(new LoweredBooleanPhiInstruction(destination,
             [
@@ -165,14 +166,50 @@ public sealed class IRFunctionLowerer
                 return new LoweredBooleanConstant(value);
             }
 
-            LoweredTemporaryValue destination = this.CreateTemporary();
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Bool);
             this.current.Instructions.Add(new LoweredBooleanBinaryInstruction(destination, expression.Operator, left, right));
 
             return destination;
         }
 
-        private LoweredTemporaryValue CreateTemporary()
-            => new(this.nextTemporaryIndex++, IRType.Bool);
+        private LoweredValue LowerIntegerUnary(IRIntegerUnaryExpression expression)
+        {
+            if (expression.Operator is IRIntegerUnaryOperator.Plus)
+            {
+                return this.LowerExpression(expression.Operand);
+            }
+
+            if (expression.Operator is not IRIntegerUnaryOperator.Negate)
+            {
+                throw new NotSupportedException($"Integer unary operator \"{expression.Operator}\" is not supported by lowering.");
+            }
+
+            LoweredValue operand = this.LowerExpression(expression.Operand);
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Int32);
+
+            this.current.Instructions.Add(new LoweredIntegerNegateInstruction(destination, operand));
+
+            return destination;
+        }
+
+        private LoweredValue LowerIntegerBinary(IRIntegerBinaryExpression expression)
+        {
+            if (expression.Operator is not (IRIntegerBinaryOperator.Add or IRIntegerBinaryOperator.Subtract or IRIntegerBinaryOperator.Multiply or IRIntegerBinaryOperator.Divide or IRIntegerBinaryOperator.Remainder))
+            {
+                throw new NotSupportedException($"Integer binary operator \"{expression.Operator}\" is not supported by lowering.");
+            }
+
+            LoweredValue left = this.LowerExpression(expression.Left);
+            LoweredValue right = this.LowerExpression(expression.Right);
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Int32);
+
+            this.current.Instructions.Add(new LoweredIntegerArithmeticInstruction(destination, expression.Operator, left, right));
+
+            return destination;
+        }
+
+        private LoweredTemporaryValue CreateTemporary(IRType type)
+            => new(this.nextTemporaryIndex++, type);
 
         private BlockBuilder CreateBlock(string prefix)
         {

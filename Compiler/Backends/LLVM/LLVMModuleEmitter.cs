@@ -6,7 +6,7 @@ namespace Sushi.Backends.LLVM;
 
 /// <summary>
 /// Translates lowered Sushi functions into verified LLVM IR, including
-/// SSA values, conditional control flow, and PHI-based value merging.
+/// checked integer arithmetic, conditional control flow, and SSA merging.
 /// </summary>
 public sealed class LLVMModuleEmitter
 {
@@ -73,7 +73,7 @@ public sealed class LLVMModuleEmitter
             llvmFunction.GetParam((uint)parameter.Index).Name = parameter.Name;
         }
 
-        FunctionEmitter emitter = new(module.Context, llvmFunction, function, builder, cancellationToken);
+        FunctionEmitter emitter = new(module, llvmFunction, function, builder, cancellationToken);
         emitter.Emit();
     }
 
@@ -97,18 +97,23 @@ public sealed class LLVMModuleEmitter
 
     private sealed class FunctionEmitter
     {
+        private readonly LLVMModuleRef module;
         private readonly LLVMContextRef context;
         private readonly LLVMValueRef function;
         private readonly LoweredFunction loweredFunction;
         private readonly LLVMBuilderRef builder;
         private readonly CancellationToken cancellationToken;
         private readonly Dictionary<string, LLVMBasicBlockRef> blocks = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, LLVMBasicBlockRef> exitBlocks = new(StringComparer.Ordinal);
         private readonly Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries = [];
         private readonly List<(LLVMValueRef Phi, LoweredBooleanPhiInstruction Instruction)> pendingPhis = [];
+        private LLVMBasicBlockRef arithmeticFailureBlock;
+        private int nextArithmeticBlockIndex;
 
-        public FunctionEmitter(LLVMContextRef context, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, CancellationToken cancellationToken)
+        public FunctionEmitter(LLVMModuleRef module, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, CancellationToken cancellationToken)
         {
-            this.context = context;
+            this.module = module;
+            this.context = module.Context;
             this.function = function;
             this.loweredFunction = loweredFunction;
             this.builder = builder;
@@ -129,6 +134,7 @@ public sealed class LLVMModuleEmitter
                 this.EmitBlock(block);
             }
 
+            this.EmitArithmeticFailureBlock();
             this.ConnectPhiIncomingValues();
         }
 
@@ -158,6 +164,7 @@ public sealed class LLVMModuleEmitter
             }
 
             this.EmitTerminator(block.Terminator);
+            this.exitBlocks.Add(block.Name, this.builder.InsertBlock);
         }
 
         private void EmitPhi(LoweredBooleanPhiInstruction instruction)
@@ -173,36 +180,145 @@ public sealed class LLVMModuleEmitter
             switch (instruction)
             {
                 case LoweredBooleanNotInstruction negation:
-                {
-                    LLVMValueRef operand = this.EmitValue(negation.Operand);
-                    LLVMValueRef trueValue = LLVMValueRef.CreateConstInt(this.context.Int1Type, 1UL);
-                    LLVMValueRef result = this.builder.BuildXor(operand, trueValue, $"sushi.bool.{negation.Destination.Index}");
-
-                    this.RegisterTemporary(negation.Destination, result);
+                    this.EmitBooleanNegation(negation);
                     return;
-                }
 
                 case LoweredBooleanBinaryInstruction binary:
-                {
-                    LLVMValueRef left = this.EmitValue(binary.Left);
-                    LLVMValueRef right = this.EmitValue(binary.Right);
-                    string name = $"sushi.bool.{binary.Destination.Index}";
-
-                    LLVMValueRef result = binary.Operator switch
-                    {
-                        IRBooleanBinaryOperator.EagerAnd => this.builder.BuildAnd(left, right, name),
-                        IRBooleanBinaryOperator.EagerOr => this.builder.BuildOr(left, right, name),
-                        IRBooleanBinaryOperator.EagerXor => this.builder.BuildXor(left, right, name),
-                        _ => throw new NotSupportedException($"Boolean operator \"{binary.Operator}\" requires different LLVM lowering.")
-                    };
-
-                    this.RegisterTemporary(binary.Destination, result);
+                    this.EmitBooleanBinary(binary);
                     return;
-                }
+
+                case LoweredIntegerNegateInstruction negation:
+                    this.EmitIntegerNegation(negation);
+                    return;
+
+                case LoweredIntegerArithmeticInstruction arithmetic:
+                    this.EmitIntegerArithmetic(arithmetic);
+                    return;
 
                 default:
                     throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
             }
+        }
+
+        private void EmitBooleanNegation(LoweredBooleanNotInstruction instruction)
+        {
+            LLVMValueRef operand = this.EmitValue(instruction.Operand);
+            LLVMValueRef trueValue = LLVMValueRef.CreateConstInt(this.context.Int1Type, 1UL);
+            LLVMValueRef result = this.builder.BuildXor(operand, trueValue, $"sushi.bool.{instruction.Destination.Index}");
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitBooleanBinary(LoweredBooleanBinaryInstruction instruction)
+        {
+            LLVMValueRef left = this.EmitValue(instruction.Left);
+            LLVMValueRef right = this.EmitValue(instruction.Right);
+            string name = $"sushi.bool.{instruction.Destination.Index}";
+
+            LLVMValueRef result = instruction.Operator switch
+            {
+                IRBooleanBinaryOperator.EagerAnd => this.builder.BuildAnd(left, right, name),
+                IRBooleanBinaryOperator.EagerOr => this.builder.BuildOr(left, right, name),
+                IRBooleanBinaryOperator.EagerXor => this.builder.BuildXor(left, right, name),
+                _ => throw new NotSupportedException($"Boolean operator \"{instruction.Operator}\" requires different LLVM lowering.")
+            };
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitIntegerNegation(LoweredIntegerNegateInstruction instruction)
+        {
+            LLVMValueRef operand = this.ExtendInteger(this.EmitValue(instruction.Operand), $"sushi.integer.operand.{instruction.Destination.Index}");
+            LLVMValueRef zero = LLVMValueRef.CreateConstInt(this.context.Int64Type, 0UL);
+            LLVMValueRef exact = this.builder.BuildSub(zero, operand, $"sushi.integer.exact.{instruction.Destination.Index}");
+            LLVMValueRef result = this.CheckIntegerResult(exact, instruction.Destination.Index);
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitIntegerArithmetic(LoweredIntegerArithmeticInstruction instruction)
+        {
+            LLVMValueRef left = this.ExtendInteger(this.EmitValue(instruction.Left), $"sushi.integer.left.{instruction.Destination.Index}");
+            LLVMValueRef right = this.ExtendInteger(this.EmitValue(instruction.Right), $"sushi.integer.right.{instruction.Destination.Index}");
+
+            if (instruction.Operator is IRIntegerBinaryOperator.Divide or IRIntegerBinaryOperator.Remainder)
+            {
+                LLVMValueRef zero = LLVMValueRef.CreateConstInt(this.context.Int64Type, 0UL);
+                LLVMValueRef divisorIsZero = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, right, zero, $"sushi.integer.zero.{instruction.Destination.Index}");
+
+                this.GuardArithmeticFailure(divisorIsZero);
+            }
+
+            string name = $"sushi.integer.exact.{instruction.Destination.Index}";
+
+            LLVMValueRef exact = instruction.Operator switch
+            {
+                IRIntegerBinaryOperator.Add => this.builder.BuildAdd(left, right, name),
+                IRIntegerBinaryOperator.Subtract => this.builder.BuildSub(left, right, name),
+                IRIntegerBinaryOperator.Multiply => this.builder.BuildMul(left, right, name),
+                IRIntegerBinaryOperator.Divide => this.builder.BuildSDiv(left, right, name),
+                IRIntegerBinaryOperator.Remainder => this.builder.BuildSRem(left, right, name),
+                _ => throw new NotSupportedException($"Integer operator \"{instruction.Operator}\" is not supported by arithmetic emission.")
+            };
+
+            LLVMValueRef result = instruction.Operator is IRIntegerBinaryOperator.Remainder
+                ? this.builder.BuildTrunc(exact, this.context.Int32Type, $"sushi.integer.{instruction.Destination.Index}")
+                : this.CheckIntegerResult(exact, instruction.Destination.Index);
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private LLVMValueRef ExtendInteger(LLVMValueRef value, string name)
+            => this.builder.BuildSExt(value, this.context.Int64Type, name);
+
+        private LLVMValueRef CheckIntegerResult(LLVMValueRef exact, int index)
+        {
+            LLVMValueRef minimum = LLVMValueRef.CreateConstInt(this.context.Int64Type, unchecked((ulong)(long)int.MinValue));
+            LLVMValueRef maximum = LLVMValueRef.CreateConstInt(this.context.Int64Type, (ulong)int.MaxValue);
+
+            LLVMValueRef belowMinimum = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, exact, minimum, $"sushi.integer.underflow.{index}");
+            LLVMValueRef aboveMaximum = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntSGT, exact, maximum, $"sushi.integer.overflow.{index}");
+            LLVMValueRef invalid = this.builder.BuildOr(belowMinimum, aboveMaximum, $"sushi.integer.outofrange.{index}");
+
+            this.GuardArithmeticFailure(invalid);
+
+            return this.builder.BuildTrunc(exact, this.context.Int32Type, $"sushi.integer.{index}");
+        }
+
+        private void GuardArithmeticFailure(LLVMValueRef invalid)
+        {
+            if (this.arithmeticFailureBlock.Handle == IntPtr.Zero)
+            {
+                this.arithmeticFailureBlock = this.function.AppendBasicBlock("sushi.arithmetic.failure");
+            }
+
+            LLVMBasicBlockRef continuation = this.function.AppendBasicBlock($"sushi.arithmetic.continue.{this.nextArithmeticBlockIndex++}");
+
+            this.builder.BuildCondBr(invalid, this.arithmeticFailureBlock, continuation);
+            this.builder.PositionAtEnd(continuation);
+        }
+
+        private void EmitArithmeticFailureBlock()
+        {
+            if (this.arithmeticFailureBlock.Handle == IntPtr.Zero)
+            {
+                return;
+            }
+
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            this.builder.PositionAtEnd(this.arithmeticFailureBlock);
+
+            LLVMTypeRef trapType = LLVMTypeRef.CreateFunction(this.context.VoidType, []);
+            LLVMValueRef trap = this.module.GetNamedFunction("llvm.trap");
+
+            if (trap.Handle == IntPtr.Zero)
+            {
+                trap = this.module.AddFunction("llvm.trap", trapType);
+            }
+
+            this.builder.BuildCall2(trapType, trap, Array.Empty<LLVMValueRef>());
+            this.builder.BuildUnreachable();
         }
 
         private void EmitTerminator(LoweredTerminator terminator)
@@ -294,6 +410,16 @@ public sealed class LLVMModuleEmitter
             return block;
         }
 
+        private LLVMBasicBlockRef GetExitBlock(string name)
+        {
+            if (!this.exitBlocks.TryGetValue(name, out LLVMBasicBlockRef block))
+            {
+                throw new InvalidOperationException($"Lowered control flow references an unknown predecessor block \"{name}\".");
+            }
+
+            return block;
+        }
+
         private void ConnectPhiIncomingValues()
         {
             foreach ((LLVMValueRef phi, LoweredBooleanPhiInstruction instruction) in this.pendingPhis)
@@ -301,7 +427,7 @@ public sealed class LLVMModuleEmitter
                 this.cancellationToken.ThrowIfCancellationRequested();
 
                 LLVMValueRef[] values = [.. instruction.Incoming.Select(incoming => this.EmitValue(incoming.Value))];
-                LLVMBasicBlockRef[] predecessors = [.. instruction.Incoming.Select(incoming => this.GetBlock(incoming.Predecessor))];
+                LLVMBasicBlockRef[] predecessors = [.. instruction.Incoming.Select(incoming => this.GetExitBlock(incoming.Predecessor))];
 
                 phi.AddIncoming(values, predecessors, (uint)values.Length);
             }
