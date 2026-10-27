@@ -1,4 +1,5 @@
-﻿using Sushi.Intermediate.Lowering;
+﻿using Sushi.Backends.LLVM;
+using Sushi.Intermediate.Lowering;
 
 namespace Sushi.Backends.Native;
 
@@ -11,6 +12,13 @@ namespace Sushi.Backends.Native;
 /// </remarks>
 public sealed class MVPExecutableBuilder(IModuleEmitter moduleEmitter, IObjectEmitter objectEmitter, IEntryShim entryShim)
 {
+    /// <summary>
+    /// Creates the default LLVM-backed executable builder for legacy callers and tests.
+    /// </summary>
+    internal MVPExecutableBuilder() : this(new LLVMModuleEmitter(), new LLVMObjectEmitter(), new TemporaryMVPEntryShim())
+    {
+    }
+
     /// <summary>
     /// Produces a runnable native executable whose temporary native entry shim invokes the supplied Sushi function.
     /// </summary>

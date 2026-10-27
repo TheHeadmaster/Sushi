@@ -22,6 +22,13 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     private readonly SourceAnalyzer sourceAnalyzer = new();
 
     /// <summary>
+    /// Creates a project compiler using the temporary default executable pipeline.
+    /// </summary>
+    internal MVPProjectCompiler() : this(new MVPExecutableBuilder())
+    {
+    }
+
+    /// <summary>
     /// Compiles a Sushi project into a native executable using the current MVP backend pipeline.
     /// </summary>
     /// <param name="projectOrFolderPath">

@@ -11,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Compilation;
+using Sushi.Backends.Native;
 
 namespace Sushi;
 
@@ -132,6 +133,8 @@ public static class Program
     {
         services.AddTransient<IModuleEmitter, LLVMModuleEmitter>();
         services.AddTransient<IObjectEmitter, LLVMObjectEmitter>();
+        services.AddTransient<IEntryShim, TemporaryMVPEntryShim>();
+        services.AddTransient<MVPExecutableBuilder>();
         services.AddTransient<MVPProjectCompiler>();
         services.AddSingleton<SushiLanguageService>();
     }
