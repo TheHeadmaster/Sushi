@@ -31,7 +31,7 @@ public sealed class LLVMObjectEmitter : IObjectEmitter
 
         if (artifact is not LLVMModuleArtifact llvmArtifact)
         {
-            throw new NotImplementedException("non-LLVMModuleArtifact objects are not supported in LLVMObjectEmitter.");
+            throw new ArgumentException("non-LLVMModuleArtifact objects are not supported in LLVMObjectEmitter.");
         }
 
         cancellationToken.ThrowIfCancellationRequested();

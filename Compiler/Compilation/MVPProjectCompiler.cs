@@ -17,10 +17,9 @@ namespace Sushi.Compilation;
 /// Selecting that function as the process root is an implementation convention and does not define Sushi
 /// source-level entry-point semantics.
 /// </remarks>
-public sealed class MVPProjectCompiler
+public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 {
     private readonly SourceAnalyzer sourceAnalyzer = new();
-    private readonly MVPExecutableBuilder executableBuilder = new();
 
     /// <summary>
     /// Compiles a Sushi project into a native executable using the current MVP backend pipeline.
@@ -94,7 +93,7 @@ public sealed class MVPProjectCompiler
 
         string outputPath = GetMVPOutputPath(projectDirectory, project);
 
-        NativeExecutableArtifact executable = await this.executableBuilder.BuildAsync(loweredFunction, outputPath, cancellationToken);
+        NativeExecutableArtifact executable = await executableBuilder.BuildAsync(loweredFunction, outputPath, cancellationToken);
 
         return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable);
     }

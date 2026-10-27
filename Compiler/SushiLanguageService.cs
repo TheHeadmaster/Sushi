@@ -14,20 +14,17 @@ namespace Sushi;
 /// <summary>
 /// Service that handles the coordination of lexing, parsing, updating, and compiling of Sushi code bases.
 /// </summary>
+/// <param name="projectCompiler">
+/// Coordinates command-line project compilation through the current executable MVP pipeline.
+/// </param>
 #pragma warning disable CA1001 // Types that own disposable fields should be disposable
-public sealed class SushiLanguageService
+public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
 #pragma warning restore CA1001 // Types that own disposable fields should be disposable
 {
     /// <summary>
     /// Handles the orchestration and plumbing of diagnostics publishing and source document tracking.
     /// </summary>
     private readonly WorkspaceOrchestrator workspace = new();
-
-    /// <summary>
-    /// Coordinates command-line project compilation through the current executable MVP pipeline.
-    /// </summary>
-    private readonly MVPProjectCompiler projectCompiler = new();
-
     /// <summary>
     /// Runs the language server.
     /// </summary>
@@ -140,7 +137,7 @@ public sealed class SushiLanguageService
     /// </returns>
     public async Task CompileJob()
     {
-        MVPCompilationResult result = await this.projectCompiler.CompileAsync(AppMeta.Options.ProjectOrFolderPath, CancellationToken.None);
+        MVPCompilationResult result = await projectCompiler.CompileAsync(AppMeta.Options.ProjectOrFolderPath, CancellationToken.None);
 
         foreach (SushiDiagnostic diagnostic in result.Diagnostics)
         {

@@ -17,7 +17,7 @@ internal class TemporaryMVPEntryShim : IEntryShim
 
         if (artifact is not LLVMModuleArtifact llvmArtifact)
         {
-            throw new NotImplementedException("non-LLVMModuleArtifact objects are not supported in TemporaryMVPEntryShim.");
+            throw new ArgumentException("non-LLVMModuleArtifact objects are not supported in TemporaryMVPEntryShim.");
         }
 
         LLVMModuleRef module = llvmArtifact.Module;

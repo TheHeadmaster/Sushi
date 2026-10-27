@@ -7,6 +7,10 @@ using Serilog.Formatting.Compact;
 using System.Globalization;
 using Serilog.Events;
 using Sushi.Diagnostics.Exceptions;
+using Microsoft.Extensions.DependencyInjection;
+using Sushi.Backends;
+using Sushi.Backends.LLVM;
+using Sushi.Compilation;
 
 namespace Sushi;
 
@@ -15,6 +19,11 @@ namespace Sushi;
 /// </summary>
 public static class Program
 {
+    /// <summary>
+    /// The service provider that acts as a container for dependency injection.
+    /// </summary>
+    public static IServiceProvider? ServiceProvider { get; private set; }
+
     /// <summary>
     /// The application entry point.
     /// </summary>
@@ -28,7 +37,7 @@ public static class Program
         {
             Initialize(args);
 
-            SushiLanguageService service = new();
+            SushiLanguageService service = ServiceProvider!.GetRequiredService<SushiLanguageService>();
 
             if (AppMeta.Options.IsInLanguageServerMode)
             {
@@ -90,12 +99,41 @@ public static class Program
 
         AppDomain.CurrentDomain.ProcessExit += OnExit;
 
+        InitializeDependencyInjection();
+
         AppMeta.Options = CompilerOptions.FromCommandLineArguments(args);
 
         if (AppMeta.Options.IsDebugLoggingEnabled)
         {
             levelSwitch.MinimumLevel = LogEventLevel.Debug;
         }
+    }
+
+    /// <summary>
+    /// Initializes the dependency injection container for the application.
+    /// </summary>
+    private static void InitializeDependencyInjection()
+    {
+        ServiceCollection services = new();
+
+        ConfigureServices(services);
+
+        ServiceProvider = services.BuildServiceProvider();
+
+    }
+
+    /// <summary>
+    /// Configures the services of the application that will be used for dependency injection.
+    /// </summary>
+    /// <param name="services">
+    /// The service collection used to register services.
+    /// </param>
+    private static void ConfigureServices(IServiceCollection services)
+    {
+        services.AddTransient<IModuleEmitter, LLVMModuleEmitter>();
+        services.AddTransient<IObjectEmitter, LLVMObjectEmitter>();
+        services.AddTransient<MVPProjectCompiler>();
+        services.AddSingleton<SushiLanguageService>();
     }
 
     /// <summary>
