@@ -2,7 +2,8 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// conditional evaluation, checked arithmetic, and fixed-width integer operations.
+/// conditional evaluation, checked arithmetic, integer comparisons,
+/// and fixed-width integer operations.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -71,6 +72,8 @@ public sealed class IRFunctionLowerer
                 IRBooleanBinaryExpression binary => this.LowerBooleanBinary(binary),
                 IRIntegerUnaryExpression unary => this.LowerIntegerUnary(unary),
                 IRIntegerBinaryExpression binary => this.LowerIntegerBinary(binary),
+                IRIntegerComparisonExpression comparison => this.LowerIntegerComparison(comparison),
+                IRIntegerRangeComparisonExpression range => this.LowerIntegerRangeComparison(range),
                 _ => throw new NotSupportedException($"Structured IR expression type \"{expression.GetType().Name}\" is not supported by lowering.")
             };
         }
@@ -228,6 +231,40 @@ public sealed class IRFunctionLowerer
             this.current.Instructions.Add(instruction);
             return destination;
         }
+
+        private LoweredValue LowerIntegerComparison(IRIntegerComparisonExpression expression)
+        {
+            LoweredValue left = this.LowerExpression(expression.Left);
+            LoweredValue right = this.LowerExpression(expression.Right);
+
+            if (left is LoweredIntegerConstant leftConstant && right is LoweredIntegerConstant rightConstant)
+            {
+                return new LoweredBooleanConstant(EvaluateIntegerComparison(expression.Operator, leftConstant.Value, rightConstant.Value));
+            }
+
+            LoweredTemporaryValue destination = this.CreateTemporary(IRType.Bool);
+            this.current.Instructions.Add(new LoweredIntegerComparisonInstruction(destination, expression.Operator, left, right));
+
+            return destination;
+        }
+
+        private LoweredValue LowerIntegerRangeComparison(IRIntegerRangeComparisonExpression expression)
+        {
+            _ = this.LowerExpression(expression.Operand);
+            return new LoweredBooleanConstant(expression.Result);
+        }
+
+        private static bool EvaluateIntegerComparison(IRIntegerComparisonOperator operation, int left, int right)
+            => operation switch
+            {
+                IRIntegerComparisonOperator.Equal => left == right,
+                IRIntegerComparisonOperator.NotEqual => left != right,
+                IRIntegerComparisonOperator.LessThan => left < right,
+                IRIntegerComparisonOperator.LessThanOrEqual => left <= right,
+                IRIntegerComparisonOperator.GreaterThan => left > right,
+                IRIntegerComparisonOperator.GreaterThanOrEqual => left >= right,
+                _ => throw new NotSupportedException($"Integer comparison \"{operation}\" is not supported by lowering.")
+            };
 
         private LoweredTemporaryValue CreateTemporary(IRType type)
             => new(this.nextTemporaryIndex++, type);

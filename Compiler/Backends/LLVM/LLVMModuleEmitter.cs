@@ -6,8 +6,8 @@ namespace Sushi.Backends.LLVM;
 
 /// <summary>
 /// Translates lowered Sushi functions into verified LLVM IR, including
-/// checked arithmetic, fixed-width bitwise operations, guarded shifts,
-/// conditional control flow, and SSA merging.
+/// checked arithmetic, integer comparisons, fixed-width bitwise operations,
+/// guarded shifts, conditional control flow, and SSA merging.
 /// </summary>
 public sealed class LLVMModuleEmitter
 {
@@ -194,6 +194,10 @@ public sealed class LLVMModuleEmitter
                     this.EmitBooleanBinary(binary);
                     return;
 
+                case LoweredIntegerComparisonInstruction comparison:
+                    this.EmitIntegerComparison(comparison);
+                    return;
+
                 case LoweredIntegerNegateInstruction negation:
                     this.EmitIntegerNegation(negation);
                     return;
@@ -241,6 +245,27 @@ public sealed class LLVMModuleEmitter
                 IRBooleanBinaryOperator.EagerXor => this.builder.BuildXor(left, right, name),
                 _ => throw new NotSupportedException($"Boolean operator \"{instruction.Operator}\" requires different LLVM lowering.")
             };
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitIntegerComparison(LoweredIntegerComparisonInstruction instruction)
+        {
+            LLVMValueRef left = this.EmitValue(instruction.Left);
+            LLVMValueRef right = this.EmitValue(instruction.Right);
+
+            LLVMIntPredicate predicate = instruction.Operator switch
+            {
+                IRIntegerComparisonOperator.Equal => LLVMIntPredicate.LLVMIntEQ,
+                IRIntegerComparisonOperator.NotEqual => LLVMIntPredicate.LLVMIntNE,
+                IRIntegerComparisonOperator.LessThan => LLVMIntPredicate.LLVMIntSLT,
+                IRIntegerComparisonOperator.LessThanOrEqual => LLVMIntPredicate.LLVMIntSLE,
+                IRIntegerComparisonOperator.GreaterThan => LLVMIntPredicate.LLVMIntSGT,
+                IRIntegerComparisonOperator.GreaterThanOrEqual => LLVMIntPredicate.LLVMIntSGE,
+                _ => throw new NotSupportedException($"Integer comparison \"{instruction.Operator}\" is not supported by LLVM emission.")
+            };
+
+            LLVMValueRef result = this.builder.BuildICmp(predicate, left, right, $"sushi.bool.{instruction.Destination.Index}");
 
             this.RegisterTemporary(instruction.Destination, result);
         }

@@ -6,15 +6,15 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Binds Boolean expressions into typed operations while evaluating integer
-/// comparisons under Sushi's exact-untyped integer semantics.
+/// Binds Boolean expressions, preserving exact integer comparisons,
+/// concrete runtime comparisons, and conditional evaluation semantics.
 /// </summary>
 internal static class BooleanExpressionBinder
 {
     /// <summary>
     /// Binds a Boolean expression against the enclosing Boolean result context.
     /// All syntactically present operands are statically validated, including
-    /// operands that would be skipped by runtime short-circuit evaluation.
+    /// operands skipped by runtime short-circuit evaluation.
     /// </summary>
     /// <param name="expression">
     /// The expression to bind.
@@ -94,10 +94,8 @@ internal static class BooleanExpressionBinder
             case BinaryExpressionSyntax binary when TryGetBooleanBinaryOperator(binary.OperatorToken, out BooleanBinaryOperator operation):
                 return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, cancellationToken);
 
-            case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out string comparisonOperator):
-                return TryEvaluateIntegerComparison(comparison, comparisonOperator, diagnosticReporter, cancellationToken, out bool result)
-                    ? new BoundBooleanConstantExpression(result)
-                    : null;
+            case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out IntegerComparisonOperator comparisonOperator):
+                return BindIntegerComparison(comparison, comparisonOperator, parameters, diagnosticReporter, cancellationToken);
 
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
@@ -140,7 +138,64 @@ internal static class BooleanExpressionBinder
         return left is null || right is null ? null : new BoundBooleanBinaryExpression(operation, left, right);
     }
 
-    private static bool TryEvaluateIntegerComparison(BinaryExpressionSyntax expression, string operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
+    private static BoundExpression? BindIntegerComparison(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        bool runtimeLeft = ContainsRuntimeIdentifier(expression.Left);
+        bool runtimeRight = ContainsRuntimeIdentifier(expression.Right);
+
+        if (!runtimeLeft && !runtimeRight)
+        {
+            return TryEvaluateIntegerComparison(expression, operation, diagnosticReporter, cancellationToken, out bool result)
+                ? new BoundBooleanConstantExpression(result)
+                : null;
+        }
+
+        if (runtimeLeft && runtimeRight)
+        {
+            BoundExpression? left = IntegerExpressionBinder.Bind(expression.Left, parameters, diagnosticReporter, cancellationToken);
+            BoundExpression? right = IntegerExpressionBinder.Bind(expression.Right, parameters, diagnosticReporter, cancellationToken);
+
+            return left is null || right is null ? null : new BoundIntegerComparisonExpression(operation, left, right);
+        }
+
+        return BindComparisonWithExactConstant(expression, operation, runtimeLeft, parameters, diagnosticReporter, cancellationToken);
+    }
+
+    private static BoundExpression? BindComparisonWithExactConstant(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, bool runtimeLeft, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        ExpressionSyntax runtimeSyntax = runtimeLeft ? expression.Left : expression.Right;
+        ExpressionSyntax exactSyntax = runtimeLeft ? expression.Right : expression.Left;
+
+        BoundExpression? operand = IntegerExpressionBinder.Bind(runtimeSyntax, parameters, diagnosticReporter, cancellationToken);
+        bool validConstant = IntegerConstantExpressionBinder.TryEvaluateUntyped(exactSyntax, diagnosticReporter, cancellationToken, out BigInteger exact);
+
+        if (operand is null || !validConstant)
+        {
+            return null;
+        }
+
+#pragma warning disable IDE0078 // Use pattern matching
+        if (exact >= int.MinValue && exact <= int.MaxValue)
+        {
+            BoundIntegerLiteralExpression constant = new((int)exact);
+
+            return runtimeLeft
+                ? new BoundIntegerComparisonExpression(operation, operand, constant)
+                : new BoundIntegerComparisonExpression(operation, constant, operand);
+        }
+#pragma warning restore IDE0078 // Use pattern matching
+
+        // Every int32 has the same relation to an exact integer outside the
+        // int32 domain. Still evaluate the runtime operand to preserve failures.
+        BigInteger boundary = exact > int.MaxValue ? int.MaxValue : int.MinValue;
+        bool result = runtimeLeft
+            ? EvaluateIntegerComparison(operation, boundary, exact)
+            : EvaluateIntegerComparison(operation, exact, boundary);
+
+        return new BoundIntegerRangeComparisonExpression(operand, result);
+    }
+
+    private static bool TryEvaluateIntegerComparison(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
     {
         value = default;
 
@@ -150,19 +205,21 @@ internal static class BooleanExpressionBinder
             return false;
         }
 
-        value = operation switch
-        {
-            "==" => left == right,
-            "!=" => left != right,
-            "<" => left < right,
-            "<=" => left <= right,
-            ">" => left > right,
-            ">=" => left >= right,
-            _ => throw new InvalidOperationException("Unexpected integer comparison operator.")
-        };
-
+        value = EvaluateIntegerComparison(operation, left, right);
         return true;
     }
+
+    private static bool EvaluateIntegerComparison(IntegerComparisonOperator operation, BigInteger left, BigInteger right)
+        => operation switch
+        {
+            IntegerComparisonOperator.Equal => left == right,
+            IntegerComparisonOperator.NotEqual => left != right,
+            IntegerComparisonOperator.LessThan => left < right,
+            IntegerComparisonOperator.LessThanOrEqual => left <= right,
+            IntegerComparisonOperator.GreaterThan => left > right,
+            IntegerComparisonOperator.GreaterThanOrEqual => left >= right,
+            _ => throw new InvalidOperationException("Unexpected integer comparison operator.")
+        };
 
     private static bool TryGetBooleanBinaryOperator(SyntaxToken token, out BooleanBinaryOperator operation)
     {
@@ -211,9 +268,9 @@ internal static class BooleanExpressionBinder
         }
     }
 
-    private static bool TryGetIntegerComparisonOperator(SyntaxToken token, out string operation)
+    private static bool TryGetIntegerComparisonOperator(SyntaxToken token, out IntegerComparisonOperator operation)
     {
-        operation = string.Empty;
+        operation = default;
 
         if (token.Type is not SyntaxType.OperatorToken || !token.IsSourceBacked)
         {
@@ -221,10 +278,48 @@ internal static class BooleanExpressionBinder
         }
 
         Source.SourceSpan span = token.Span;
-        operation = Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[span.Start..span.End]);
+        string spelling = Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[span.Start..span.End]);
 
-        return operation is "==" or "!=" or "<" or "<=" or ">" or ">=";
+        switch (spelling)
+        {
+            case "==":
+                operation = IntegerComparisonOperator.Equal;
+                return true;
+
+            case "!=":
+                operation = IntegerComparisonOperator.NotEqual;
+                return true;
+
+            case "<":
+                operation = IntegerComparisonOperator.LessThan;
+                return true;
+
+            case "<=":
+                operation = IntegerComparisonOperator.LessThanOrEqual;
+                return true;
+
+            case ">":
+                operation = IntegerComparisonOperator.GreaterThan;
+                return true;
+
+            case ">=":
+                operation = IntegerComparisonOperator.GreaterThanOrEqual;
+                return true;
+
+            default:
+                return false;
+        }
     }
+
+    private static bool ContainsRuntimeIdentifier(ExpressionSyntax expression)
+        => expression switch
+        {
+            IdentifierExpressionSyntax => true,
+            ParenthesizedExpressionSyntax grouped => ContainsRuntimeIdentifier(grouped.Expression),
+            UnaryExpressionSyntax unary => ContainsRuntimeIdentifier(unary.Operand),
+            BinaryExpressionSyntax binary => ContainsRuntimeIdentifier(binary.Left) || ContainsRuntimeIdentifier(binary.Right),
+            _ => false
+        };
 
     private static bool ContainsInvalidComparisonChain(ExpressionSyntax expression)
         => expression switch

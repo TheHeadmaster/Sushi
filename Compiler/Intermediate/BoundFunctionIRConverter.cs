@@ -79,6 +79,12 @@ public sealed class BoundFunctionIRConverter
                 ConvertIntegerBinaryOperator(integerBinary.Operator),
                 ConvertExpression(integerBinary.Left, cancellationToken),
                 ConvertExpression(integerBinary.Right, cancellationToken)),
+            BoundIntegerComparisonExpression comparison => new IRIntegerComparisonExpression(
+                ConvertIntegerComparisonOperator(comparison.Operator),
+                ConvertExpression(comparison.Left, cancellationToken),
+                ConvertExpression(comparison.Right, cancellationToken)),
+            BoundIntegerRangeComparisonExpression range => new IRIntegerRangeComparisonExpression(
+                ConvertExpression(range.Operand, cancellationToken), range.Result),
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
@@ -117,6 +123,18 @@ public sealed class BoundFunctionIRConverter
             IntegerBinaryOperator.ShiftLeft => IRIntegerBinaryOperator.ShiftLeft,
             IntegerBinaryOperator.ShiftRight => IRIntegerBinaryOperator.ShiftRight,
             _ => throw new NotSupportedException($"Integer binary operator \"{operation}\" is not supported by structured Sushi IR.")
+        };
+
+    private static IRIntegerComparisonOperator ConvertIntegerComparisonOperator(IntegerComparisonOperator operation)
+        => operation switch
+        {
+            IntegerComparisonOperator.Equal => IRIntegerComparisonOperator.Equal,
+            IntegerComparisonOperator.NotEqual => IRIntegerComparisonOperator.NotEqual,
+            IntegerComparisonOperator.LessThan => IRIntegerComparisonOperator.LessThan,
+            IntegerComparisonOperator.LessThanOrEqual => IRIntegerComparisonOperator.LessThanOrEqual,
+            IntegerComparisonOperator.GreaterThan => IRIntegerComparisonOperator.GreaterThan,
+            IntegerComparisonOperator.GreaterThanOrEqual => IRIntegerComparisonOperator.GreaterThanOrEqual,
+            _ => throw new NotSupportedException($"Integer comparison \"{operation}\" is not supported by structured Sushi IR.")
         };
 
     private static IRType ConvertType(BoundType type)
