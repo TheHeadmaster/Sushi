@@ -12,7 +12,11 @@ namespace Sushi.Backends.Native;
 /// </remarks>
 public sealed class MVPExecutableBuilder
 {
-    private readonly LLVMModuleEmitter moduleEmitter = new();
+    private readonly IModuleEmitter moduleEmitter = new LLVMModuleEmitter();
+
+    private readonly IObjectEmitter objectEmitter = new LLVMObjectEmitter();
+
+    private readonly IEntryShim entryShim = new TemporaryMVPEntryShim();
 
     /// <summary>
     /// Produces a runnable native executable whose temporary native entry shim invokes the supplied Sushi function.
@@ -48,11 +52,11 @@ public sealed class MVPExecutableBuilder
 
         try
         {
-            using LLVMModuleArtifact moduleArtifact = this.moduleEmitter.Emit("Sushi.MVP", entryFunction, cancellationToken);
+            using IModuleArtifact moduleArtifact = this.moduleEmitter.Emit("Sushi.MVP", entryFunction, cancellationToken);
 
-            TemporaryMVPEntryShim.Add(moduleArtifact, entryFunction.Name, entryFunction.ReturnType);
+            this.entryShim.Add(moduleArtifact, entryFunction.Name, entryFunction.ReturnType);
 
-            NativeObjectArtifact objectArtifact = LLVMObjectEmitter.EmitForHost(moduleArtifact, objectPath, cancellationToken);
+            NativeObjectArtifact objectArtifact = this.objectEmitter.EmitForHost(moduleArtifact, objectPath, cancellationToken);
 
             return await ClangNativeLinker.LinkAsync(objectArtifact, outputPath, cancellationToken);
         }

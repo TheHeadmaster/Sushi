@@ -5,7 +5,7 @@ namespace Sushi.Backends.LLVM;
 /// <summary>
 /// Owns an LLVM module together with the context in which it was created.
 /// </summary>
-public sealed class LLVMModuleArtifact : IDisposable
+public sealed class LLVMModuleArtifact : IModuleArtifact
 {
     private LLVMContextRef context;
     private LLVMModuleRef module;
@@ -43,9 +43,7 @@ public sealed class LLVMModuleArtifact : IDisposable
         this.module = module;
     }
 
-    /// <summary>
-    /// Releases the native LLVM module and context.
-    /// </summary>
+    /// <inheritdoc />
     public void Dispose()
     {
         if (this.disposed)

@@ -2,6 +2,7 @@
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
@@ -202,13 +203,18 @@ public class IntegerComparisonConstantTests
             .Should()
             .BeTrue();
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerComparison", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerComparison", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        artifact.Module.PrintToString()
+        llvmArtifact.Module.PrintToString()
             .Should()
             .Contain("ret i1 true");
 

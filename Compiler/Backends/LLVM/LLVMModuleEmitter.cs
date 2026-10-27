@@ -5,28 +5,12 @@ using Sushi.Intermediate.Lowering;
 namespace Sushi.Backends.LLVM;
 
 /// <summary>
-/// Translates lowered Sushi functions into verified LLVM IR, including
-/// checked arithmetic, integer comparisons, fixed-width bitwise operations,
-/// guarded shifts, conditional control flow, and SSA merging.
+/// Translates lowered Sushi functions into verified LLVM IR.
 /// </summary>
-public sealed class LLVMModuleEmitter
+public sealed class LLVMModuleEmitter : IModuleEmitter
 {
-    /// <summary>
-    /// Emits one lowered Sushi function into a new verified LLVM module.
-    /// </summary>
-    /// <param name="moduleName">
-    /// The diagnostic identity assigned to the generated LLVM module.
-    /// </param>
-    /// <param name="function">
-    /// The lowered function to translate.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// The token used to cancel LLVM translation.
-    /// </param>
-    /// <returns>
-    /// An owned LLVM module artifact. The caller is responsible for disposing it.
-    /// </returns>
-    public LLVMModuleArtifact Emit(string moduleName, LoweredFunction function, CancellationToken cancellationToken)
+    /// <inheritdoc />
+    public IModuleArtifact Emit(string moduleName, LoweredFunction function, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(moduleName);
         ArgumentNullException.ThrowIfNull(function);

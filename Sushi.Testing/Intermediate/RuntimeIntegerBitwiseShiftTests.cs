@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -48,9 +49,14 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .BeSameAs(instruction.Destination);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerComplement", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerComplement", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -60,7 +66,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .NotContain("@llvm.trap");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -105,9 +111,14 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .BeSameAs(instruction.Destination);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerBitwise", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerBitwise", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -117,7 +128,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .NotContain("@llvm.trap");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -152,9 +163,14 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .Be(IRType.Int32);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerShift", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("IntegerShift", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -184,7 +200,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .Be(checkedResult);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -233,9 +249,14 @@ public sealed class RuntimeIntegerBitwiseShiftTests
             .Should()
             .BeSameAs(xor.Destination);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("NestedIntegerBitwise", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("NestedIntegerBitwise", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -343,9 +364,14 @@ public sealed class RuntimeIntegerBitwiseShiftTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBitwiseShiftNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBitwiseShiftNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, left, right, expected);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        AddTestOnlyCaller(llvmArtifact, lowered, left, right, expected);
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, "runtime-bitwise-shift.obj");
@@ -353,7 +379,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()
@@ -421,13 +447,18 @@ public sealed class RuntimeIntegerBitwiseShiftTests
                 ], new LoweredReturnTerminator(merged))
             ]);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedShiftPhi", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedShiftPhi", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
 
-        string llvm = artifact.Module.PrintToString();
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()

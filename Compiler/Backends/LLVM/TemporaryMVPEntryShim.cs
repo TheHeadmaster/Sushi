@@ -3,34 +3,24 @@ using Sushi.Intermediate;
 
 namespace Sushi.Backends.LLVM;
 
-/// <summary>
-/// Synthesizes the temporary native process entry shim used by the executable MVP.
-/// This does not define Sushi source-level entry-point semantics.
-/// </summary>
-internal static class TemporaryMVPEntryShim
+/// <inheritdoc cref="IEntryShim"/>
+internal class TemporaryMVPEntryShim : IEntryShim
 {
     private const string NativeEntrySymbol = "main";
     private const string SushiEntryTargetSymbol = "__sushi_mvp_entry_target";
 
-    /// <summary>
-    /// Converts one explicitly selected Sushi function into the target of a generated C-compatible
-    /// native entry function. Boolean results are widened to int32 solely for process-exit testing.
-    /// </summary>
-    /// <param name="artifact">
-    /// The LLVM module containing the selected Sushi function.
-    /// </param>
-    /// <param name="selectedFunctionName">
-    /// The semantic name of the Sushi function selected by the MVP compiler pipeline.
-    /// </param>
-    /// <param name="selectedReturnType">
-    /// The lowered return type of the selected function.
-    /// </param>
-    public static void Add(LLVMModuleArtifact artifact, string selectedFunctionName, IRType selectedReturnType)
+    /// <inheritdoc />
+    public void Add(IModuleArtifact artifact, string selectedFunctionName, IRType selectedReturnType)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentException.ThrowIfNullOrEmpty(selectedFunctionName);
 
-        LLVMModuleRef module = artifact.Module;
+        if (artifact is not LLVMModuleArtifact llvmArtifact)
+        {
+            throw new NotImplementedException("non-LLVMModuleArtifact objects are not supported in TemporaryMVPEntryShim.");
+        }
+
+        LLVMModuleRef module = llvmArtifact.Module;
         LLVMContextRef context = module.Context;
 
         LLVMValueRef selectedFunction = module.GetNamedFunction(selectedFunctionName);

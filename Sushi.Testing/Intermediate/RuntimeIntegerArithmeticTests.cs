@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -106,9 +107,14 @@ public sealed class RuntimeIntegerArithmeticTests
             .Should()
             .BeSameAs(instruction.Destination);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("CheckedIntegerArithmetic", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("CheckedIntegerArithmetic", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -165,9 +171,14 @@ public sealed class RuntimeIntegerArithmeticTests
             .Should()
             .BeSameAs(add.Destination);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("NestedIntegerArithmetic", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("NestedIntegerArithmetic", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -197,9 +208,14 @@ public sealed class RuntimeIntegerArithmeticTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeArithmeticNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeArithmeticNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, left, right, expected);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        AddTestOnlyCaller(llvmArtifact, lowered, left, right, expected);
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, "runtime-arithmetic.obj");
@@ -207,7 +223,7 @@ public sealed class RuntimeIntegerArithmeticTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()
@@ -249,9 +265,14 @@ public sealed class RuntimeIntegerArithmeticTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeArithmeticGuards", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeArithmeticGuards", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -265,7 +286,7 @@ public sealed class RuntimeIntegerArithmeticTests
             .Should()
             .Contain("unreachable");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -276,9 +297,14 @@ public sealed class RuntimeIntegerArithmeticTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("SafeDivision", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("SafeDivision", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -323,13 +349,18 @@ public sealed class RuntimeIntegerArithmeticTests
                 ], new LoweredReturnTerminator(phiResult))
             ]);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedPhi", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedPhi", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
 
-        artifact.Module.PrintToString()
+        llvmArtifact.Module.PrintToString()
             .Should()
             .Contain("phi i1");
     }

@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -200,9 +201,14 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .BeTrue();
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RangeEvaluation", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RangeEvaluation", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -216,7 +222,7 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .Contain("@llvm.trap");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -231,9 +237,14 @@ public sealed class RuntimeIntegerComparisonTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeComparison", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeComparison", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -243,7 +254,7 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .NotContain("@llvm.trap");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -265,9 +276,14 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .ContainSingle(instruction => instruction is LoweredBooleanPhiInstruction);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("MixedBooleanInteger", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("MixedBooleanInteger", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -281,7 +297,7 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .Contain("sushi.arithmetic.failure");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -291,9 +307,14 @@ public sealed class RuntimeIntegerComparisonTests
     {
         LoweredFunction lowered = await Lower("enabled and ((value + 1) < 2147483648)");
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedRangeComparison", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("GuardedRangeComparison", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -307,7 +328,7 @@ public sealed class RuntimeIntegerComparisonTests
             .Should()
             .Contain("phi i1");
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
     }
@@ -397,11 +418,16 @@ public sealed class RuntimeIntegerComparisonTests
     {
         LoweredFunction lowered = await Lower(expression);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeIntegerComparisonNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeIntegerComparisonNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, enabled, value, other, expected);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
 
-        await ExecuteNative(artifact);
+        AddTestOnlyCaller(llvmArtifact, lowered, enabled, value, other, expected);
+
+        await ExecuteNative(llvmArtifact);
     }
 
     [TestCase(TestName = "Integer Comparison Instruction Must Reject Boolean Operand")]
@@ -495,7 +521,7 @@ public sealed class RuntimeIntegerComparisonTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()

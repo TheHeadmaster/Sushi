@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -73,13 +74,18 @@ public sealed class RuntimeBooleanParameterTests
             .Should()
             .HaveCount(bound.Parameters.Count);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanParameters", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanParameters", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        artifact.Module.PrintToString()
+        llvmArtifact.Module.PrintToString()
             .Should()
             .Contain("ret i1 %");
     }
@@ -93,9 +99,14 @@ public sealed class RuntimeBooleanParameterTests
         BoundFunction bound = await Bind(declaration);
         LoweredFunction lowered = IRFunctionLowerer.Lower(BoundFunctionIRConverter.Convert(bound, CancellationToken.None), CancellationToken.None);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeParameterNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeParameterNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, firstArgument, secondArgument);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        AddTestOnlyCaller(llvmArtifact, lowered, firstArgument, secondArgument);
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, "runtime-parameter.obj");
@@ -103,7 +114,7 @@ public sealed class RuntimeBooleanParameterTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()
@@ -157,9 +168,14 @@ public sealed class RuntimeBooleanParameterTests
             .Should()
             .ContainSingle();
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("LogicalParameter", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("LogicalParameter", lowered, CancellationToken.None);
 
-        string llvm = artifact.Module.PrintToString();
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()

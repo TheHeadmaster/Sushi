@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using NUnit.Framework;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Intermediate;
@@ -24,14 +25,22 @@ public class LLVMObjectEmitterTests
                     new LoweredReturnTerminator(new LoweredIntegerConstant(42)))
             ]);
 
-        using LLVMModuleArtifact moduleArtifact = new LLVMModuleEmitter().Emit("TestModule", function, CancellationToken.None);
+        IModuleEmitter moduleEmitter = new LLVMModuleEmitter();
+        IObjectEmitter objectEmitter = new LLVMObjectEmitter();
+
+        using IModuleArtifact moduleArtifact = moduleEmitter.Emit("TestModule", function, CancellationToken.None);
+
+        LLVMModuleArtifact llvmModuleArtifact = moduleArtifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, OperatingSystem.IsWindows() ? "TestModule.obj" : "TestModule.o");
 
         try
         {
-            NativeObjectArtifact objectArtifact = LLVMObjectEmitter.EmitForHost(moduleArtifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectArtifact = objectEmitter.EmitForHost(llvmModuleArtifact, objectPath, CancellationToken.None);
 
             objectArtifact.FilePath
                 .Should()
@@ -41,11 +50,11 @@ public class LLVMObjectEmitterTests
                 .Should()
                 .NotBeNullOrWhiteSpace();
 
-            moduleArtifact.Module.Target
+            llvmModuleArtifact.Module.Target
                 .Should()
                 .Be(objectArtifact.TargetTriple);
 
-            moduleArtifact.Module.DataLayout
+            llvmModuleArtifact.Module.DataLayout
                 .Should()
                 .NotBeNullOrWhiteSpace();
 

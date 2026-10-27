@@ -2,6 +2,7 @@
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
@@ -97,13 +98,20 @@ public class BooleanOperationStructureTests
             .Should()
             .Be(expectedValue);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("BooleanOperations", lowered, CancellationToken.None);
+        IModuleEmitter moduleEmitter = new LLVMModuleEmitter();
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        using IModuleArtifact moduleArtifact = moduleEmitter.Emit("BooleanOperations", lowered, CancellationToken.None);
+
+        LLVMModuleArtifact llvmModuleArtifact = moduleArtifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmModuleArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        artifact.Module.PrintToString()
+        llvmModuleArtifact.Module.PrintToString()
             .Should()
             .Contain(expectedValue ? "ret i1 true" : "ret i1 false");
 

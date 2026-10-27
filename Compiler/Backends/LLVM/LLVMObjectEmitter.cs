@@ -7,7 +7,7 @@ namespace Sushi.Backends.LLVM;
 /// <summary>
 /// Emits verified LLVM modules as native object files for the compiler host.
 /// </summary>
-public sealed class LLVMObjectEmitter
+public sealed class LLVMObjectEmitter : IObjectEmitter
 {
     /// <summary>
     /// Emits an LLVM module as a host-native object file.
@@ -24,10 +24,15 @@ public sealed class LLVMObjectEmitter
     /// <returns>
     /// The emitted native object artifact.
     /// </returns>
-    public static NativeObjectArtifact EmitForHost(LLVMModuleArtifact artifact, string outputPath, CancellationToken cancellationToken)
+    public NativeObjectArtifact EmitForHost(IModuleArtifact artifact, string outputPath, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
+
+        if (artifact is not LLVMModuleArtifact llvmArtifact)
+        {
+            throw new NotImplementedException("non-LLVMModuleArtifact objects are not supported in LLVMObjectEmitter.");
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -41,7 +46,7 @@ public sealed class LLVMObjectEmitter
 
         LLVMTargetMachineRef targetMachine = default;
         LLVMTargetDataRef targetData = default;
-        LLVMModuleRef module = artifact.Module;
+        LLVMModuleRef module = llvmArtifact.Module;
         
         try
         {

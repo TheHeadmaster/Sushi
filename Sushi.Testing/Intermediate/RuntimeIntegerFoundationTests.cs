@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -300,13 +301,18 @@ public sealed class RuntimeIntegerFoundationTests
             .Should()
             .Be(IRType.Int32);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("MixedIntegerParameters", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("MixedIntegerParameters", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
 
-        string llvm = artifact.Module.PrintToString();
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -348,9 +354,14 @@ public sealed class RuntimeIntegerFoundationTests
         BoundFunction bound = await Bind(declaration);
         LoweredFunction lowered = IRFunctionLowerer.Lower(BoundFunctionIRConverter.Convert(bound, CancellationToken.None), CancellationToken.None);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeIntegerNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeIntegerNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, first, second, enabled);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        AddTestOnlyCaller(llvmArtifact, lowered, first, second, enabled);
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, "runtime-integer.obj");
@@ -358,7 +369,7 @@ public sealed class RuntimeIntegerFoundationTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()

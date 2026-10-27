@@ -3,6 +3,7 @@ using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -61,13 +62,18 @@ public sealed class RuntimeBooleanOperationTests
                 .Be(IRType.Bool);
         }
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanOperations", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanOperations", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string message)
             .Should()
             .BeTrue(message);
 
-        artifact.Module.PrintToString()
+        llvmArtifact.Module.PrintToString()
             .Should()
             .Contain(expectedOpcode);
     }
@@ -142,9 +148,14 @@ public sealed class RuntimeBooleanOperationTests
         BoundFunction bound = await Bind(declaration);
         LoweredFunction lowered = IRFunctionLowerer.Lower(BoundFunctionIRConverter.Convert(bound, CancellationToken.None), CancellationToken.None);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanNative", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("RuntimeBooleanNative", lowered, CancellationToken.None);
 
-        AddTestOnlyCaller(artifact, lowered, firstArgument, secondArgument);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        AddTestOnlyCaller(llvmArtifact, lowered, firstArgument, secondArgument);
 
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
         string objectPath = Path.Combine(directory, "boolean-runtime.obj");
@@ -152,7 +163,7 @@ public sealed class RuntimeBooleanOperationTests
 
         try
         {
-            NativeObjectArtifact objectFile = LLVMObjectEmitter.EmitForHost(artifact, objectPath, CancellationToken.None);
+            NativeObjectArtifact objectFile = new LLVMObjectEmitter().EmitForHost(artifact, objectPath, CancellationToken.None);
             NativeExecutableArtifact executable = await ClangNativeLinker.LinkAsync(objectFile, executablePath, CancellationToken.None);
 
             using Process process = new()
@@ -225,7 +236,8 @@ public sealed class RuntimeBooleanOperationTests
 
         Action action = () =>
         {
-            using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("UndefinedTemporary", function, CancellationToken.None);
+            IModuleEmitter moduleEmitter = new LLVMModuleEmitter();
+            using IModuleArtifact moduleArtifact = moduleEmitter.Emit("UndefinedTemporary", function, CancellationToken.None);
         };
 
         action
@@ -255,7 +267,7 @@ public sealed class RuntimeBooleanOperationTests
 
         Action action = () =>
         {
-            using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("DuplicateTemporary", function, CancellationToken.None);
+            using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("DuplicateTemporary", function, CancellationToken.None);
         };
 
         action

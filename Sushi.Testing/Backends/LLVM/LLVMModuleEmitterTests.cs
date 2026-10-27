@@ -1,6 +1,7 @@
 ﻿using FluentAssertions;
 using LLVMSharp.Interop;
 using NUnit.Framework;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
@@ -24,13 +25,20 @@ public class LLVMModuleEmitterTests
                     new LoweredReturnTerminator(new LoweredIntegerConstant(42)))
             ]);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("TestModule", function, CancellationToken.None);
+        IModuleEmitter emitter = new LLVMModuleEmitter();
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        using IModuleArtifact artifact = emitter.Emit("TestModule", function, CancellationToken.None);
+
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        string llvm = artifact.Module.PrintToString();
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()

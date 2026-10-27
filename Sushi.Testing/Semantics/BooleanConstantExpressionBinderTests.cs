@@ -2,6 +2,7 @@
 using LLVMSharp.Interop;
 using NUnit.Framework;
 using Sushi.Analysis;
+using Sushi.Backends;
 using Sushi.Backends.LLVM;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
@@ -204,13 +205,18 @@ public class BooleanConstantExpressionBinderTests
             .Should()
             .BeTrue();
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("BooleanConstants", lowered, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("BooleanConstants", lowered, CancellationToken.None);
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        string llvm = artifact.Module.PrintToString();
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
@@ -239,15 +245,20 @@ public class BooleanConstantExpressionBinderTests
                     new LoweredReturnTerminator(new LoweredBooleanConstant(true)))
             ]);
 
-        using LLVMModuleArtifact artifact = new LLVMModuleEmitter().Emit("BooleanEntryShim", function, CancellationToken.None);
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("BooleanEntryShim", function, CancellationToken.None);
 
-        TemporaryMVPEntryShim.Add(artifact, function.Name, function.ReturnType);
+        LLVMModuleArtifact llvmArtifact = artifact
+            .Should()
+            .BeOfType<LLVMModuleArtifact>()
+            .Subject;
 
-        artifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+        new TemporaryMVPEntryShim().Add(artifact, function.Name, function.ReturnType);
+
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
             .Should()
             .BeTrue(verificationMessage);
 
-        string llvm = artifact.Module.PrintToString();
+        string llvm = llvmArtifact.Module.PrintToString();
 
         llvm
             .Should()
