@@ -6,7 +6,8 @@ namespace Sushi.Backends.LLVM;
 
 /// <summary>
 /// Translates lowered Sushi functions into verified LLVM IR, including
-/// checked integer arithmetic, conditional control flow, and SSA merging.
+/// checked arithmetic, fixed-width bitwise operations, guarded shifts,
+/// conditional control flow, and SSA merging.
 /// </summary>
 public sealed class LLVMModuleEmitter
 {
@@ -97,6 +98,8 @@ public sealed class LLVMModuleEmitter
 
     private sealed class FunctionEmitter
     {
+        private const int Int32Width = 32;
+
         private readonly LLVMModuleRef module;
         private readonly LLVMContextRef context;
         private readonly LLVMValueRef function;
@@ -107,8 +110,11 @@ public sealed class LLVMModuleEmitter
         private readonly Dictionary<string, LLVMBasicBlockRef> exitBlocks = new(StringComparer.Ordinal);
         private readonly Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries = [];
         private readonly List<(LLVMValueRef Phi, LoweredBooleanPhiInstruction Instruction)> pendingPhis = [];
+
         private LLVMBasicBlockRef arithmeticFailureBlock;
+        private LLVMBasicBlockRef shiftFailureBlock;
         private int nextArithmeticBlockIndex;
+        private int nextShiftBlockIndex;
 
         public FunctionEmitter(LLVMModuleRef module, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, CancellationToken cancellationToken)
         {
@@ -134,7 +140,8 @@ public sealed class LLVMModuleEmitter
                 this.EmitBlock(block);
             }
 
-            this.EmitArithmeticFailureBlock();
+            this.EmitFailureBlock(this.arithmeticFailureBlock);
+            this.EmitFailureBlock(this.shiftFailureBlock);
             this.ConnectPhiIncomingValues();
         }
 
@@ -193,6 +200,18 @@ public sealed class LLVMModuleEmitter
 
                 case LoweredIntegerArithmeticInstruction arithmetic:
                     this.EmitIntegerArithmetic(arithmetic);
+                    return;
+
+                case LoweredIntegerComplementInstruction complement:
+                    this.EmitIntegerComplement(complement);
+                    return;
+
+                case LoweredIntegerBitwiseInstruction bitwise:
+                    this.EmitIntegerBitwise(bitwise);
+                    return;
+
+                case LoweredIntegerShiftInstruction shift:
+                    this.EmitIntegerShift(shift);
                     return;
 
                 default:
@@ -268,6 +287,69 @@ public sealed class LLVMModuleEmitter
             this.RegisterTemporary(instruction.Destination, result);
         }
 
+        private void EmitIntegerComplement(LoweredIntegerComplementInstruction instruction)
+        {
+            LLVMValueRef operand = this.EmitValue(instruction.Operand);
+            LLVMValueRef mask = LLVMValueRef.CreateConstInt(this.context.Int32Type, uint.MaxValue);
+            LLVMValueRef result = this.builder.BuildXor(operand, mask, $"sushi.integer.{instruction.Destination.Index}");
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitIntegerBitwise(LoweredIntegerBitwiseInstruction instruction)
+        {
+            LLVMValueRef left = this.EmitValue(instruction.Left);
+            LLVMValueRef right = this.EmitValue(instruction.Right);
+            string name = $"sushi.integer.{instruction.Destination.Index}";
+
+            LLVMValueRef result = instruction.Operator switch
+            {
+                IRIntegerBinaryOperator.BitwiseAnd => this.builder.BuildAnd(left, right, name),
+                IRIntegerBinaryOperator.BitwiseOr => this.builder.BuildOr(left, right, name),
+                IRIntegerBinaryOperator.BitwiseXor => this.builder.BuildXor(left, right, name),
+                _ => throw new NotSupportedException($"Integer operator \"{instruction.Operator}\" is not supported by bitwise emission.")
+            };
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void EmitIntegerShift(LoweredIntegerShiftInstruction instruction)
+        {
+            LLVMValueRef left = this.EmitValue(instruction.Left);
+            LLVMValueRef count = this.EmitValue(instruction.Right);
+
+            this.GuardShiftCount(count, instruction.Destination.Index);
+
+            LLVMValueRef result;
+
+            if (instruction.Operator is IRIntegerBinaryOperator.ShiftLeft)
+            {
+                LLVMValueRef wideLeft = this.ExtendInteger(left, $"sushi.shift.left.{instruction.Destination.Index}");
+                LLVMValueRef wideCount = this.builder.BuildZExt(count, this.context.Int64Type, $"sushi.shift.count.{instruction.Destination.Index}");
+                LLVMValueRef exact = this.builder.BuildShl(wideLeft, wideCount, $"sushi.shift.exact.{instruction.Destination.Index}");
+
+                result = this.CheckIntegerResult(exact, instruction.Destination.Index);
+            }
+            else
+            {
+                result = this.builder.BuildAShr(left, count, $"sushi.integer.{instruction.Destination.Index}");
+            }
+
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private void GuardShiftCount(LLVMValueRef count, int index)
+        {
+            LLVMValueRef zero = LLVMValueRef.CreateConstInt(this.context.Int32Type, 0UL);
+            LLVMValueRef width = LLVMValueRef.CreateConstInt(this.context.Int32Type, Int32Width);
+
+            LLVMValueRef negative = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntSLT, count, zero, $"sushi.shift.negative.{index}");
+            LLVMValueRef tooLarge = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntSGE, count, width, $"sushi.shift.toolarge.{index}");
+            LLVMValueRef invalid = this.builder.BuildOr(negative, tooLarge, $"sushi.shift.invalid.{index}");
+
+            this.GuardShiftFailure(invalid);
+        }
+
         private LLVMValueRef ExtendInteger(LLVMValueRef value, string name)
             => this.builder.BuildSExt(value, this.context.Int64Type, name);
 
@@ -286,28 +368,33 @@ public sealed class LLVMModuleEmitter
         }
 
         private void GuardArithmeticFailure(LLVMValueRef invalid)
+            => this.GuardRuntimeFailure(invalid, ref this.arithmeticFailureBlock, "sushi.arithmetic.failure", $"sushi.arithmetic.continue.{this.nextArithmeticBlockIndex++}");
+
+        private void GuardShiftFailure(LLVMValueRef invalid)
+            => this.GuardRuntimeFailure(invalid, ref this.shiftFailureBlock, "sushi.shift.failure", $"sushi.shift.continue.{this.nextShiftBlockIndex++}");
+
+        private void GuardRuntimeFailure(LLVMValueRef invalid, ref LLVMBasicBlockRef failureBlock, string failureName, string continuationName)
         {
-            if (this.arithmeticFailureBlock.Handle == IntPtr.Zero)
+            if (failureBlock.Handle == IntPtr.Zero)
             {
-                this.arithmeticFailureBlock = this.function.AppendBasicBlock("sushi.arithmetic.failure");
+                failureBlock = this.function.AppendBasicBlock(failureName);
             }
 
-            LLVMBasicBlockRef continuation = this.function.AppendBasicBlock($"sushi.arithmetic.continue.{this.nextArithmeticBlockIndex++}");
+            LLVMBasicBlockRef continuation = this.function.AppendBasicBlock(continuationName);
 
-            this.builder.BuildCondBr(invalid, this.arithmeticFailureBlock, continuation);
+            this.builder.BuildCondBr(invalid, failureBlock, continuation);
             this.builder.PositionAtEnd(continuation);
         }
 
-        private void EmitArithmeticFailureBlock()
+        private void EmitFailureBlock(LLVMBasicBlockRef failureBlock)
         {
-            if (this.arithmeticFailureBlock.Handle == IntPtr.Zero)
+            if (failureBlock.Handle == IntPtr.Zero)
             {
                 return;
             }
 
             this.cancellationToken.ThrowIfCancellationRequested();
-
-            this.builder.PositionAtEnd(this.arithmeticFailureBlock);
+            this.builder.PositionAtEnd(failureBlock);
 
             LLVMTypeRef trapType = LLVMTypeRef.CreateFunction(this.context.VoidType, []);
             LLVMValueRef trap = this.module.GetNamedFunction("llvm.trap");

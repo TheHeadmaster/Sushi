@@ -317,23 +317,25 @@ public sealed class RuntimeIntegerFoundationTests
             .Contain("ret i32 %second");
     }
 
-    [TestCase("~value", TestName = "Runtime Bitwise Complement Awaits Slice XII")]
-    [TestCase("value & 1", TestName = "Runtime Bitwise And Awaits Slice XII")]
-    [TestCase("value | 1", TestName = "Runtime Bitwise Or Awaits Slice XII")]
-    [TestCase("value ^ 1", TestName = "Runtime Bitwise Xor Awaits Slice XII")]
-    [TestCase("value << 1", TestName = "Runtime Left Shift Awaits Slice XII")]
-    [TestCase("value >> 1", TestName = "Runtime Right Shift Awaits Slice XII")]
-    public async Task LowerShould_0(string expression)
+    [TestCase("~value", typeof(LoweredIntegerComplementInstruction), TestName = "Runtime Complement Should Lower To Bitwise Complement")]
+    [TestCase("value & 1", typeof(LoweredIntegerBitwiseInstruction), TestName = "Runtime Bitwise And Should Lower")]
+    [TestCase("value | 1", typeof(LoweredIntegerBitwiseInstruction), TestName = "Runtime Bitwise Or Should Lower")]
+    [TestCase("value ^ 1", typeof(LoweredIntegerBitwiseInstruction), TestName = "Runtime Bitwise Xor Should Lower")]
+    [TestCase("value << 1", typeof(LoweredIntegerShiftInstruction), TestName = "Runtime Left Shift Should Lower")]
+    [TestCase("value >> 1", typeof(LoweredIntegerShiftInstruction), TestName = "Runtime Right Shift Should Lower")]
+    public async Task LowerShould_0(string expression, Type expectedInstructionType)
     {
         BoundFunction bound = await Bind($"public int32 calculate(int32 value) {{ return {expression}; }}");
         IRFunction structured = BoundFunctionIRConverter.Convert(bound, CancellationToken.None);
+        LoweredFunction lowered = IRFunctionLowerer.Lower(structured, CancellationToken.None);
 
-        Action action = () => IRFunctionLowerer.Lower(structured, CancellationToken.None);
-
-        action
+        lowered.EntryBlock.Instructions
             .Should()
-            .Throw<NotSupportedException>()
-            .WithMessage("*not supported by lowering*");
+            .ContainSingle();
+
+        lowered.EntryBlock.Instructions[0].GetType()
+            .Should()
+            .Be(expectedInstructionType);
     }
 
     [TestCase("public int32 echo(int32 value) { return value; }", 42, 0, false, 42, TestName = "Native Should Return Direct Integer Parameter")]

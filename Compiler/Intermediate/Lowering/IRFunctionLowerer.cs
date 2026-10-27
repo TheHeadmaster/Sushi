@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// conditional evaluation, checked arithmetic, and constant results.
+/// conditional evaluation, checked arithmetic, and fixed-width integer operations.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -179,7 +179,7 @@ public sealed class IRFunctionLowerer
                 return this.LowerExpression(expression.Operand);
             }
 
-            if (expression.Operator is not IRIntegerUnaryOperator.Negate)
+            if (expression.Operator is not (IRIntegerUnaryOperator.Negate or IRIntegerUnaryOperator.Complement))
             {
                 throw new NotSupportedException($"Integer unary operator \"{expression.Operator}\" is not supported by lowering.");
             }
@@ -187,24 +187,45 @@ public sealed class IRFunctionLowerer
             LoweredValue operand = this.LowerExpression(expression.Operand);
             LoweredTemporaryValue destination = this.CreateTemporary(IRType.Int32);
 
-            this.current.Instructions.Add(new LoweredIntegerNegateInstruction(destination, operand));
+            LoweredInstruction instruction = expression.Operator switch
+            {
+                IRIntegerUnaryOperator.Negate => new LoweredIntegerNegateInstruction(destination, operand),
+                IRIntegerUnaryOperator.Complement => new LoweredIntegerComplementInstruction(destination, operand),
+                _ => throw new InvalidOperationException("Unexpected integer unary operation.")
+            };
 
+            this.current.Instructions.Add(instruction);
             return destination;
         }
 
         private LoweredValue LowerIntegerBinary(IRIntegerBinaryExpression expression)
         {
-            if (expression.Operator is not (IRIntegerBinaryOperator.Add or IRIntegerBinaryOperator.Subtract or IRIntegerBinaryOperator.Multiply or IRIntegerBinaryOperator.Divide or IRIntegerBinaryOperator.Remainder))
+            IRIntegerBinaryOperator operation = expression.Operator;
+
+            if (!Enum.IsDefined(operation))
             {
-                throw new NotSupportedException($"Integer binary operator \"{expression.Operator}\" is not supported by lowering.");
+                throw new NotSupportedException($"Integer binary operator \"{operation}\" is not supported by lowering.");
             }
 
             LoweredValue left = this.LowerExpression(expression.Left);
             LoweredValue right = this.LowerExpression(expression.Right);
             LoweredTemporaryValue destination = this.CreateTemporary(IRType.Int32);
 
-            this.current.Instructions.Add(new LoweredIntegerArithmeticInstruction(destination, expression.Operator, left, right));
+            LoweredInstruction instruction = operation switch
+            {
+                IRIntegerBinaryOperator.Add or IRIntegerBinaryOperator.Subtract or IRIntegerBinaryOperator.Multiply or IRIntegerBinaryOperator.Divide or IRIntegerBinaryOperator.Remainder
+                    => new LoweredIntegerArithmeticInstruction(destination, operation, left, right),
 
+                IRIntegerBinaryOperator.BitwiseAnd or IRIntegerBinaryOperator.BitwiseOr or IRIntegerBinaryOperator.BitwiseXor
+                    => new LoweredIntegerBitwiseInstruction(destination, operation, left, right),
+
+                IRIntegerBinaryOperator.ShiftLeft or IRIntegerBinaryOperator.ShiftRight
+                    => new LoweredIntegerShiftInstruction(destination, operation, left, right),
+
+                _ => throw new NotSupportedException($"Integer binary operator \"{operation}\" is not supported by lowering.")
+            };
+
+            this.current.Instructions.Add(instruction);
             return destination;
         }
 
