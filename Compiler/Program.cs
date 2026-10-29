@@ -20,10 +20,12 @@ namespace Sushi;
 /// </summary>
 public static class Program
 {
+    private static ServiceProvider? serviceProvider;
+
     /// <summary>
     /// The service provider that acts as a container for dependency injection.
     /// </summary>
-    public static IServiceProvider? ServiceProvider { get; private set; }
+    public static IServiceProvider? ServiceProvider => serviceProvider;
 
     /// <summary>
     /// The application entry point.
@@ -119,7 +121,7 @@ public static class Program
 
         ConfigureServices(services);
 
-        ServiceProvider = services.BuildServiceProvider();
+        serviceProvider = services.BuildServiceProvider();
 
     }
 
@@ -148,7 +150,11 @@ public static class Program
     /// <param name="args">
     /// The event arguments.
     /// </param>
-    private static void OnExit(object? sender, EventArgs args) => Log.CloseAndFlush();
+    private static void OnExit(object? sender, EventArgs args)
+    {
+        Log.CloseAndFlush();
+        serviceProvider?.Dispose();
+    }
 
     /// <summary>
     /// Exits the program gracefully.
