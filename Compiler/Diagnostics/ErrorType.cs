@@ -1,4 +1,5 @@
-﻿namespace Sushi.Diagnostics;
+﻿
+namespace Sushi.Diagnostics;
 
 /// <summary>
 /// Represents a type of error in Sushi.
@@ -39,5 +40,13 @@ public enum ErrorType
     InvalidIntegerShiftCount = 307,
     UnknownIdentifier = 308,
     DuplicateParameter = 309,
+    MissingActivityEntry = 310,
+    DuplicateActivityEntry = 311,
+    InvalidRootEntryParameters = 312,
+    InvalidRootEntryReturnType = 313,
+    InvalidActivityStopReturnType = 314,
+    MissingRootActivity = 315,
+    DuplicateRootActivity = 316,
+    UnsupportedMultipleActivityStopMethods = 317
     #endregion
 }

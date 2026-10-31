@@ -1,3 +1,4 @@
+
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -20,6 +21,12 @@ namespace Sushi.Analysis;
 /// The semantic identity of the declared namespace when the declaration can be bound reliably.
 /// </param>
 /// <param name="Functions">
-/// The declared functions.
+/// The bound package-level functions.
 /// </param>
-public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions) : AnalysisResult(Snapshot);
+public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree SyntaxTree, PackageIdentity? Package, NamespaceIdentity? Namespace, IReadOnlyList<BoundFunction> Functions) : AnalysisResult(Snapshot)
+{
+    /// <summary>
+    /// Gets the successfully bound activity declarations in this source file.
+    /// </summary>
+    public IReadOnlyList<BoundActivity> Activities { get; init; } = [];
+}

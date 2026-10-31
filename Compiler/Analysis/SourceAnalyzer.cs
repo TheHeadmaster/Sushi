@@ -1,3 +1,4 @@
+
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Parsing;
@@ -15,7 +16,7 @@ public sealed class SourceAnalyzer : Analyzer
     private readonly SourceLexer lexer = new();
 
     /// <summary>
-    /// Analyzes a Sushi source snapshot and produces its concrete syntax tree.
+    /// Analyzes a Sushi source snapshot and produces its syntax and supported semantic declarations.
     /// </summary>
     /// <param name="snapshot">
     /// The authoritative source snapshot to analyze.
@@ -27,37 +28,36 @@ public sealed class SourceAnalyzer : Analyzer
     /// The token used to cancel analysis.
     /// </param>
     /// <returns>
-    /// The source analysis result, including the recovered concrete syntax tree.
+    /// The source analysis result, including parsed syntax and bound declarations.
     /// </returns>
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
         AccumulateEncodingDiagnostics(localDiagnostics, snapshot);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         LexerResult lexerResult = this.lexer.Lex(snapshot, localDiagnostics, cancellationToken);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         ParserResult parserResult = SourceParser.ParseSourceFile(lexerResult, localDiagnostics, cancellationToken);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
-
         SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, cancellationToken);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         diagnosticReporter.CommitReporter(localDiagnostics);
 
-        return Task.FromResult<AnalysisResult>(new SourceAnalysisResult(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions));
+        SourceAnalysisResult result = new(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions)
+        {
+            Activities = bindResult.Activities
+        };
+
+        return Task.FromResult<AnalysisResult>(result);
     }
 }

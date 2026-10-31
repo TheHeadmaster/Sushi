@@ -1,4 +1,5 @@
-﻿using System.Collections.ObjectModel;
+﻿
+using System.Collections.ObjectModel;
 using Sushi.Source;
 
 namespace Sushi.Diagnostics;
@@ -8,7 +9,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
 {
     private readonly List<SushiDiagnostic> diagnostics = [];
 
-    private static readonly Dictionary<ErrorType, string> errorMessages = new(){
+    private static readonly Dictionary<ErrorType, string> errorMessages = new()
+    {
         [ErrorType.InvalidUtf8] = "Malformed UTF-8 source sequence.",
         [ErrorType.TomlSyntaxError] = "Syntax error in Toml source.",
         [ErrorType.TomlMissingRequiredKey] = "Required configuration key is missing.",
@@ -34,9 +36,18 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.InvalidIntegerShiftCount] = "Integer shift count is outside the valid range.",
         [ErrorType.UnknownIdentifier] = "The identifier does not resolve to a supported local binding.",
         [ErrorType.DuplicateParameter] = "A function cannot declare multiple parameters with the same semantic name.",
+        [ErrorType.MissingActivityEntry] = "Every concrete activity must declare exactly one entry method.",
+        [ErrorType.DuplicateActivityEntry] = "An activity cannot declare multiple entry methods.",
+        [ErrorType.InvalidRootEntryParameters] = "A root activity entry method must be parameterless.",
+        [ErrorType.InvalidRootEntryReturnType] = "A root activity entry method must return void.",
+        [ErrorType.InvalidActivityStopReturnType] = "An activity stop method must return void.",
+        [ErrorType.MissingRootActivity] = "An executable Sushi project must declare exactly one root activity in its own assembly.",
+        [ErrorType.DuplicateRootActivity] = "An executable Sushi project cannot declare multiple root activities.",
+        [ErrorType.UnsupportedMultipleActivityStopMethods] = "The current compiler subset supports at most one stop method per activity."
     };
 
-    private static readonly Dictionary<WarningType, string> warningMessages = new(){
+    private static readonly Dictionary<WarningType, string> warningMessages = new()
+    {
         [WarningType.TomlSyntaxWarning] = "Syntax warning in Toml source."
     };
 
@@ -60,7 +71,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
             throw new InvalidOperationException($"ErrorType \"{Enum.GetName(type)}\" does not have an associated error message.");
         }
 
-        this.GenerateErrorWithCustomMessage(type, message, sourceSpan);     
+        this.GenerateErrorWithCustomMessage(type, message, sourceSpan);
     }
 
     /// <inheritdoc />
@@ -72,8 +83,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         }
 
         SushiDiagnostic diagnostic = new((int)type, message, DiagnosticSeverity.Error, sourceSpan);
-
-        this.diagnostics.Add(diagnostic);   
+        this.diagnostics.Add(diagnostic);
     }
 
     /// <inheritdoc />
@@ -84,7 +94,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
             throw new InvalidOperationException($"WarningType \"{Enum.GetName(type)}\" does not have an associated warning message.");
         }
 
-        this.GenerateWarningWithCustomMessage(type, message, sourceSpan);    
+        this.GenerateWarningWithCustomMessage(type, message, sourceSpan);
     }
 
     /// <inheritdoc />
@@ -96,8 +106,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         }
 
         SushiDiagnostic diagnostic = new((int)type, message, DiagnosticSeverity.Warning, sourceSpan);
-
-        this.diagnostics.Add(diagnostic);   
+        this.diagnostics.Add(diagnostic);
     }
 
     /// <inheritdoc />

@@ -1,5 +1,7 @@
+
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
+using Sushi.Source;
 
 namespace Sushi.Semantics;
 
@@ -21,26 +23,27 @@ public sealed class SourceFileBinder
     /// The token used to cancel binding.
     /// </param>
     /// <returns>
-    /// The bound package and namespaces identities when unambiguous.
+    /// The bound package, namespace, functions, and valid activity declarations.
     /// </returns>
     public static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
 
         PackageIdentity? package = BindPackage(sourceFile, localDiagnostics, cancellationToken);
         NamespaceIdentity? @namespace = BindNamespace(sourceFile, localDiagnostics, cancellationToken);
+
         List<BoundFunction> functions = [];
+        List<BoundActivity> activities = [];
 
         foreach (FunctionDeclarationSyntax declaration in sourceFile.FunctionDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, localDiagnostics,  cancellationToken);
+            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, localDiagnostics, cancellationToken);
 
             if (result.Function is not null)
             {
@@ -48,23 +51,35 @@ public sealed class SourceFileBinder
             }
         }
 
+        foreach (ActivityDeclarationSyntax declaration in sourceFile.ActivityDeclarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            BoundActivity? activity = ActivityDeclarationBinder.Bind(declaration, localDiagnostics, cancellationToken);
+
+            if (activity is not null)
+            {
+                activities.Add(activity);
+            }
+        }
+
         diagnosticReporter.CommitReporter(localDiagnostics);
 
-        return new SourceFileBindResult(package, @namespace, functions);
+        return new SourceFileBindResult(package, @namespace, functions)
+        {
+            Activities = activities
+        };
     }
 
     private static PackageIdentity? BindPackage(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
-    {      
+    {
         if (sourceFile.PackageDeclarations.Count == 0)
         {
             int position = sourceFile.NamespaceDeclarations.Count > 0
                 ? sourceFile.NamespaceDeclarations[0].Span.Start
-                : sourceFile.FunctionDeclarations.Count > 0
-                ? sourceFile.FunctionDeclarations[0].Span.Start
-                : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
+                : GetFirstDeclarationPosition(sourceFile);
 
-            diagnosticReporter.GenerateError(ErrorType.MissingPackageDeclaration, new Source.SourceSpan(sourceFile.Snapshot, position, position));
-
+            diagnosticReporter.GenerateError(ErrorType.MissingPackageDeclaration, new SourceSpan(sourceFile.Snapshot, position, position));
             return null;
         }
 
@@ -73,10 +88,9 @@ public sealed class SourceFileBinder
             for (int i = 1; i < sourceFile.PackageDeclarations.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 diagnosticReporter.GenerateError(ErrorType.DuplicatePackageDeclaration, sourceFile.PackageDeclarations[i].PackageKeyword.Span);
             }
-       
+
             return null;
         }
 
@@ -87,12 +101,8 @@ public sealed class SourceFileBinder
     {
         if (sourceFile.NamespaceDeclarations.Count == 0)
         {
-            int position = sourceFile.FunctionDeclarations.Count > 0
-                ? sourceFile.FunctionDeclarations[0].Span.Start
-                : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
-
-            diagnosticReporter.GenerateError(ErrorType.MissingNamespaceDeclaration, new Source.SourceSpan(sourceFile.Snapshot, position, position));
-
+            int position = GetFirstDeclarationPosition(sourceFile);
+            diagnosticReporter.GenerateError(ErrorType.MissingNamespaceDeclaration, new SourceSpan(sourceFile.Snapshot, position, position));
             return null;
         }
 
@@ -101,13 +111,17 @@ public sealed class SourceFileBinder
             for (int i = 1; i < sourceFile.NamespaceDeclarations.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
                 diagnosticReporter.GenerateError(ErrorType.DuplicateNamespaceDeclaration, sourceFile.NamespaceDeclarations[i].NamespaceKeyword.Span);
             }
-       
+
             return null;
         }
 
         return NamespaceDeclarationBinder.Bind(sourceFile.NamespaceDeclarations[0], cancellationToken);
     }
+
+    private static int GetFirstDeclarationPosition(SourceFileSyntax sourceFile)
+        => sourceFile.Declarations.Count > 0
+            ? sourceFile.Declarations[0].Span.Start
+            : sourceFile.UnparsedContentSpan?.Start ?? sourceFile.Snapshot.SourceLength;
 }
