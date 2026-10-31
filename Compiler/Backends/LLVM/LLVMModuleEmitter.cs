@@ -1,4 +1,5 @@
-﻿using LLVMSharp.Interop;
+﻿
+using LLVMSharp.Interop;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
 
@@ -67,6 +68,7 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         {
             IRType.Int32 => context.Int32Type,
             IRType.Bool => context.Int1Type,
+            IRType.Void => context.VoidType,
             _ => throw new NotSupportedException($"IR type \"{type}\" is not supported by the LLVM backend.")
         };
 
@@ -423,8 +425,12 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
 
             switch (terminator)
             {
+                case LoweredReturnTerminator { Value: null }:
+                    this.builder.BuildRetVoid();
+                    return;
+
                 case LoweredReturnTerminator result:
-                    this.builder.BuildRet(this.EmitValue(result.Value));
+                    this.builder.BuildRet(this.EmitValue(result.Value!));
                     return;
 
                 case LoweredBranchTerminator branch:

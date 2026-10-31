@@ -1,3 +1,4 @@
+
 using Sushi.Semantics;
 
 namespace Sushi.Intermediate;
@@ -22,7 +23,6 @@ public sealed class BoundFunctionIRConverter
     public static IRFunction Convert(BoundFunction function, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(function);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         return new IRFunction(
@@ -40,7 +40,6 @@ public sealed class BoundFunctionIRConverter
         foreach (BoundStatement statement in block.Statements)
         {
             cancellationToken.ThrowIfCancellationRequested();
-
             statements.Add(ConvertStatement(statement, cancellationToken));
         }
 
@@ -53,7 +52,8 @@ public sealed class BoundFunctionIRConverter
 
         return statement switch
         {
-            BoundReturnStatement returnStatement => new IRReturnStatement(ConvertExpression(returnStatement.Expression, cancellationToken)),
+            BoundReturnStatement returnStatement => new IRReturnStatement(
+                returnStatement.Expression is null ? null : ConvertExpression(returnStatement.Expression, cancellationToken)),
             _ => throw new NotSupportedException($"Bound statement type \"{statement.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
@@ -142,6 +142,7 @@ public sealed class BoundFunctionIRConverter
         {
             BoundType.Int32 => IRType.Int32,
             BoundType.Bool => IRType.Bool,
+            BoundType.Void => IRType.Void,
             _ => throw new NotSupportedException($"Bound type \"{type}\" is not supported by structured Sushi IR.")
         };
 

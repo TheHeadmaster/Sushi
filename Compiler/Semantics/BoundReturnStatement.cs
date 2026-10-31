@@ -1,9 +1,10 @@
+
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Represents a return statement whose expression has been bound against the enclosing function's return contract.
+/// Represents a return statement validated against the enclosing callable's return contract.
 /// </summary>
 /// <param name="Expression">
-/// The value returned by the statement.
+/// The returned value, or null when control returns without producing a value.
 /// </param>
-public sealed record BoundReturnStatement(BoundExpression Expression) : BoundStatement;
+public sealed record BoundReturnStatement(BoundExpression? Expression) : BoundStatement;

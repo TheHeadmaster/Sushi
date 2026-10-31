@@ -1,3 +1,4 @@
+
 namespace Sushi.Semantics;
 
 /// <summary>
@@ -6,5 +7,6 @@ namespace Sushi.Semantics;
 public enum BoundType
 {
     Int32,
-    Bool
+    Bool,
+    Void
 }

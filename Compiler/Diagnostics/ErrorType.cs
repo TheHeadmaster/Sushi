@@ -47,6 +47,8 @@ public enum ErrorType
     InvalidActivityStopReturnType = 314,
     MissingRootActivity = 315,
     DuplicateRootActivity = 316,
-    UnsupportedMultipleActivityStopMethods = 317
+    UnsupportedMultipleActivityStopMethods = 317,
+    ReturnValueInVoidFunction = 318,
+    MissingReturnValue = 319
     #endregion
 }

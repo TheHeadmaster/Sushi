@@ -1,3 +1,4 @@
+
 using Sushi.Diagnostics;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
@@ -9,8 +10,12 @@ namespace Sushi.Parsing;
 /// Parses braced statement blocks using the cursor shared with declaration parsing.
 /// Currently supports return statements and delegates expression syntax to ExpressionParser.
 /// </summary>
-/// <param name="cursor">The cursor shared by the current parsing session.</param>
-/// <param name="cancellationToken">The token used to cancel parsing.</param>
+/// <param name="cursor">
+/// The cursor shared by the current parsing session.
+/// </param>
+/// <param name="cancellationToken">
+/// The token used to cancel parsing.
+/// </param>
 internal sealed class StatementParser(ParserCursor cursor, CancellationToken cancellationToken)
 {
     private readonly ParserCursor cursor = cursor ?? throw new ArgumentNullException(nameof(cursor));
@@ -48,7 +53,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
         SyntaxToken returnKeyword = this.ParseReturnKeyword(diagnosticReporter);
-        ExpressionSyntax expression = this.expressions.ParseExpression(diagnosticReporter);
+
+        ExpressionSyntax? expression = this.cursor.TryPeek(out LexToken next) && this.IsPunctuation(next, (byte)';')
+            ? null
+            : this.expressions.ParseExpression(diagnosticReporter);
+
         SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after return statement.", diagnosticReporter);
 
         return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
@@ -72,6 +81,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         => this.cursor.TryPeek(out LexToken token)
             && token.Type is LexTokenType.Keyword
             && this.cursor.TokenTextEquals(token, "return"u8);
+
+    private bool IsPunctuation(LexToken token, byte punctuation)
+        => token.Type is LexTokenType.Punctuation
+            && token.Span.Length == 1
+            && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
 
     private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
     {

@@ -1,4 +1,5 @@
-﻿using LLVMSharp.Interop;
+﻿
+using LLVMSharp.Interop;
 using Sushi.Intermediate;
 
 namespace Sushi.Backends.LLVM;
@@ -39,6 +40,7 @@ internal class TemporaryMVPEntryShim : IEntryShim
         {
             IRType.Int32 => context.Int32Type,
             IRType.Bool => context.Int1Type,
+            IRType.Void => context.VoidType,
             _ => throw new NotSupportedException($"MVP entry return type \"{selectedReturnType}\" is not supported.")
         };
 
@@ -64,11 +66,19 @@ internal class TemporaryMVPEntryShim : IEntryShim
 
         builder.PositionAtEnd(entryBlock);
 
-        LLVMValueRef result = builder.BuildCall2(sushiFunctionType, selectedFunction, Array.Empty<LLVMValueRef>(), "sushi.result");
+        LLVMValueRef result = builder.BuildCall2(
+            sushiFunctionType,
+            selectedFunction,
+            Array.Empty<LLVMValueRef>(),
+            selectedReturnType is IRType.Void ? string.Empty : "sushi.result");
 
-        LLVMValueRef exitCode = selectedReturnType is IRType.Bool
-            ? builder.BuildZExt(result, context.Int32Type, "sushi.exitcode")
-            : result;
+        LLVMValueRef exitCode = selectedReturnType switch
+        {
+            IRType.Int32 => result,
+            IRType.Bool => builder.BuildZExt(result, context.Int32Type, "sushi.exitcode"),
+            IRType.Void => LLVMValueRef.CreateConstInt(context.Int32Type, 0UL),
+            _ => throw new NotSupportedException($"MVP entry return type \"{selectedReturnType}\" is not supported.")
+        };
 
         builder.BuildRet(exitCode);
 

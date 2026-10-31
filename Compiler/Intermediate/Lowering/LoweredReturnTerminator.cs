@@ -1,4 +1,5 @@
-﻿namespace Sushi.Intermediate.Lowering;
+﻿
+namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
 /// Represents a function return that terminates a lowered basic block.
@@ -6,20 +7,26 @@
 public sealed record LoweredReturnTerminator : LoweredTerminator
 {
     /// <summary>
-    /// Gets the value returned by the function.
+    /// Gets the returned value, or null when the function returns without a result.
     /// </summary>
-    public LoweredValue Value { get; }
+    public LoweredValue? Value { get; }
 
     /// <summary>
-    /// Creates a lowered return terminator.
+    /// Creates a return terminator for a function that supplies no result.
+    /// </summary>
+    public LoweredReturnTerminator()
+    {
+    }
+
+    /// <summary>
+    /// Creates a return terminator carrying a concrete value.
     /// </summary>
     /// <param name="value">
-    /// The value returned by the function.
+    /// The value to return.
     /// </param>
     public LoweredReturnTerminator(LoweredValue value)
     {
         ArgumentNullException.ThrowIfNull(value);
-
         this.Value = value;
     }
 }

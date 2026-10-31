@@ -43,7 +43,9 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.InvalidActivityStopReturnType] = "An activity stop method must return void.",
         [ErrorType.MissingRootActivity] = "An executable Sushi project must declare exactly one root activity in its own assembly.",
         [ErrorType.DuplicateRootActivity] = "An executable Sushi project cannot declare multiple root activities.",
-        [ErrorType.UnsupportedMultipleActivityStopMethods] = "The current compiler subset supports at most one stop method per activity."
+        [ErrorType.UnsupportedMultipleActivityStopMethods] = "The current compiler subset supports at most one stop method per activity.",
+        [ErrorType.ReturnValueInVoidFunction] = "A void function cannot return a value.",
+        [ErrorType.MissingReturnValue] = "A value-returning function requires an expression after return."
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()
@@ -82,8 +84,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
             throw new ArgumentException($"Type value {(int)type} is invalid for enum ErrorType.");
         }
 
-        SushiDiagnostic diagnostic = new((int)type, message, DiagnosticSeverity.Error, sourceSpan);
-        this.diagnostics.Add(diagnostic);
+        this.diagnostics.Add(new SushiDiagnostic((int)type, message, DiagnosticSeverity.Error, sourceSpan));
     }
 
     /// <inheritdoc />
@@ -105,8 +106,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
             throw new ArgumentException($"Type value {(int)type} is invalid for enum WarningType.");
         }
 
-        SushiDiagnostic diagnostic = new((int)type, message, DiagnosticSeverity.Warning, sourceSpan);
-        this.diagnostics.Add(diagnostic);
+        this.diagnostics.Add(new SushiDiagnostic((int)type, message, DiagnosticSeverity.Warning, sourceSpan));
     }
 
     /// <inheritdoc />

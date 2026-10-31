@@ -1,3 +1,4 @@
+
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
@@ -79,7 +80,7 @@ public sealed class FunctionDeclarationBinder
 
             string? name = IdentifierBinder.Bind(declaration.NameToken);
 
-            if (!TryBindReturnType(declaration.TypeToken, out BoundType type))
+            if (!TryBindReturnType(declaration.TypeToken, out BoundType type) || type is BoundType.Void)
             {
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.TypeToken.Span);
                 valid = false;
@@ -140,6 +141,23 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
+        if (returnType is BoundType.Void)
+        {
+            if (statement.Expression is not null)
+            {
+                diagnosticReporter.GenerateError(ErrorType.ReturnValueInVoidFunction, statement.Expression.Span);
+                return null;
+            }
+
+            return new BoundReturnStatement(null);
+        }
+
+        if (statement.Expression is null)
+        {
+            diagnosticReporter.GenerateError(ErrorType.MissingReturnValue, statement.SemicolonToken.Span);
+            return null;
+        }
+
         BoundExpression? expression = returnType switch
         {
             BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
@@ -152,6 +170,12 @@ public sealed class FunctionDeclarationBinder
 
     private static bool TryBindReturnType(SyntaxToken token, out BoundType type)
     {
+        if (token.Type is SyntaxType.VoidKeyword && token.IsSourceBacked)
+        {
+            type = BoundType.Void;
+            return true;
+        }
+
         switch (IdentifierBinder.Bind(token))
         {
             case "int32":

@@ -1,9 +1,10 @@
+
 using Sushi.Source;
 
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
-/// Represents a return statement.
+/// Represents a return statement, with an optional expression when the enclosing callable returns a value.
 /// </summary>
 public sealed class ReturnStatementSyntax : StatementSyntax
 {
@@ -19,9 +20,9 @@ public sealed class ReturnStatementSyntax : StatementSyntax
     public SyntaxToken ReturnKeyword { get; }
 
     /// <summary>
-    /// Gets the expression whose value is returned.
+    /// Gets the returned expression, or null for a bare return statement.
     /// </summary>
-    public ExpressionSyntax Expression { get; }
+    public ExpressionSyntax? Expression { get; }
 
     /// <summary>
     /// Gets the terminating semicolon.
@@ -29,21 +30,19 @@ public sealed class ReturnStatementSyntax : StatementSyntax
     public SyntaxToken SemicolonToken { get; }
 
     /// <summary>
-    /// Creates a return statement.
+    /// Creates a return statement while preserving whether a result expression was supplied.
     /// </summary>
     /// <param name="returnKeyword">
-    /// The return keyword.
+    /// The keyword beginning the return statement.
     /// </param>
     /// <param name="expression">
-    /// The expression whose value is returned.
+    /// The optional result expression.
     /// </param>
     /// <param name="semicolonToken">
-    /// Gets the terminating semicolon.
+    /// The semicolon terminating the statement.
     /// </param>
-    public ReturnStatementSyntax(SyntaxToken returnKeyword, ExpressionSyntax expression, SyntaxToken semicolonToken)
+    public ReturnStatementSyntax(SyntaxToken returnKeyword, ExpressionSyntax? expression, SyntaxToken semicolonToken)
     {
-        ArgumentNullException.ThrowIfNull(expression);
-
         if (returnKeyword.Type is not SyntaxType.ReturnKeyword)
         {
             throw new ArgumentException("Return statements require a return keyword token.", nameof(returnKeyword));
@@ -56,9 +55,20 @@ public sealed class ReturnStatementSyntax : StatementSyntax
 
         SourceSnapshot snapshot = returnKeyword.Span.Snapshot;
 
-        if (!ReferenceEquals(expression.Span.Snapshot, snapshot) || !ReferenceEquals(semicolonToken.Span.Snapshot, snapshot))
+        if (!ReferenceEquals(semicolonToken.Span.Snapshot, snapshot)
+            || (expression is not null && !ReferenceEquals(expression.Span.Snapshot, snapshot)))
         {
             throw new ArgumentException("All return-statement syntax must originate from the same source snapshot.");
+        }
+
+        if (expression is not null && expression.Span.Start < returnKeyword.Span.End)
+        {
+            throw new ArgumentException("A return expression must follow the return keyword.", nameof(expression));
+        }
+
+        if (semicolonToken.Span.Start < (expression?.Span.End ?? returnKeyword.Span.End))
+        {
+            throw new ArgumentException("A return semicolon must follow the return expression.");
         }
 
         this.ReturnKeyword = returnKeyword;

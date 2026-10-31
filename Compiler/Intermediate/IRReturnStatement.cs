@@ -1,9 +1,10 @@
+
 namespace Sushi.Intermediate;
 
 /// <summary>
 /// Represents a return operation in structured Sushi IR.
 /// </summary>
 /// <param name="Expression">
-/// The value returned by the function.
+/// The returned value, or null for a return that produces no result.
 /// </param>
-public sealed record IRReturnStatement(IRExpression Expression) : IRStatement;
+public sealed record IRReturnStatement(IRExpression? Expression) : IRStatement;

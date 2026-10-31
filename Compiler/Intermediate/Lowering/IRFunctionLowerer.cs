@@ -1,4 +1,5 @@
-﻿namespace Sushi.Intermediate.Lowering;
+﻿
+namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
@@ -46,17 +47,45 @@ public sealed class IRFunctionLowerer
         {
             this.cancellationToken.ThrowIfCancellationRequested();
 
-            if (function.Body.Statements.Count != 1 || function.Body.Statements[0] is not IRReturnStatement returnStatement)
+            if (function.ReturnType is IRType.Void)
             {
-                throw new NotSupportedException("The current lowering pass supports exactly one return statement in a function body.");
+                this.LowerVoidBody(function.Body);
+            }
+            else
+            {
+                this.LowerValueReturningBody(function.Body);
+            }
+
+            LoweredBasicBlock[] loweredBlocks = [.. this.blocks.Select(block => block.Complete())];
+            return new LoweredFunction(function.Accessibility, function.Name, function.ReturnType, function.Parameters, loweredBlocks);
+        }
+
+        private void LowerVoidBody(IRBlock body)
+        {
+            if (body.Statements.Count == 0)
+            {
+                this.current.Terminate(new LoweredReturnTerminator());
+                return;
+            }
+
+            if (body.Statements.Count == 1 && body.Statements[0] is IRReturnStatement { Expression: null })
+            {
+                this.current.Terminate(new LoweredReturnTerminator());
+                return;
+            }
+
+            throw new NotSupportedException("The current lowering pass supports empty void bodies or a single bare return statement.");
+        }
+
+        private void LowerValueReturningBody(IRBlock body)
+        {
+            if (body.Statements.Count != 1 || body.Statements[0] is not IRReturnStatement { Expression: not null } returnStatement)
+            {
+                throw new NotSupportedException("The current lowering pass requires exactly one value-returning statement in a non-void function.");
             }
 
             LoweredValue value = this.LowerExpression(returnStatement.Expression);
             this.current.Terminate(new LoweredReturnTerminator(value));
-
-            LoweredBasicBlock[] loweredBlocks = [.. this.blocks.Select(block => block.Complete())];
-
-            return new LoweredFunction(function.Accessibility, function.Name, function.ReturnType, function.Parameters, loweredBlocks);
         }
 
         private LoweredValue LowerExpression(IRExpression expression)
