@@ -88,42 +88,22 @@ public class MVPIntegerConstantCompilationTests
     private static async Task WithProject(string expression, Func<MVPCompilationResult, Task> verify)
     {
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
-        string buildDirectory = Path.Combine(directory, "Build");
-        string projectPath = Path.Combine(directory, ".susproj");
-
-        Directory.CreateDirectory(buildDirectory);
-
+    
         try
         {
-            await File.WriteAllTextAsync(
-                projectPath,
-                """
-                name = "Constant Arithmetic"
-                assembly = "ConstantArithmetic"
-                language-version = "1.0"
-
-                [build]
-                default = "debug"
-                sources = ["Build/**/*.sus"]
-
-                [build.targets.debug]
-                type = "Sushi.MVP.Debug"
-                """,
-                CancellationToken.None);
-
             string source = $$"""
                 package Example;
                 namespace Example;
-
-                public int32 launch() {
+    
+                public int32 launch()
+                {
                     return {{expression}};
                 }
                 """;
-
-            await File.WriteAllTextAsync(Path.Combine(buildDirectory, "Program.sus"), source, CancellationToken.None);
-
-            MVPCompilationResult compilation = await new MVPProjectCompiler().CompileAsync(projectPath, CancellationToken.None);
-
+    
+            MVPCompilationResult compilation = await LegacyFunctionCompilationHelper.CompileAsync(
+                source, Path.Combine(directory, "IntegerExecution"), CancellationToken.None);
+    
             await verify(compilation);
         }
         finally
