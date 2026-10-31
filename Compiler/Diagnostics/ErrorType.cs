@@ -52,6 +52,7 @@ public enum ErrorType
     MissingReturnValue = 319,
     UnsupportedRootActivityLifetime = 320,
     UnsupportedRootLifecycleParameters = 321,
-    UnsupportedRootLifecycleBody = 322
+    UnsupportedRootLifecycleBody = 322,
+    MissingReturnPath = 323
     #endregion
 }

@@ -61,9 +61,19 @@ public sealed class FunctionDeclarationBinder
 
         BoundBlock? body = BindBody(declaration.Body, signature.ReturnType, signature.Parameters, diagnosticReporter, cancellationToken, callables);
 
-        return body is null
-            ? new FunctionBindResult(null)
-            : new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType, signature.Parameters, body));
+        if (body is null)
+        {
+            return new FunctionBindResult(null);
+        }
+
+        if (signature.ReturnType is not BoundType.Void && CanCompleteNormally(body))
+        {
+            diagnosticReporter.GenerateError(ErrorType.MissingReturnPath, declaration.Body.CloseBraceToken.Span);
+            return new FunctionBindResult(null);
+        }
+
+        return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType, signature.Parameters, body));
+
     }
 
     /// <summary>
@@ -216,23 +226,7 @@ public sealed class FunctionDeclarationBinder
             statements.Add(boundStatement);
         }
 
-        if (!valid)
-        {
-            return null;
-        }
-        
-        if (returnType is not BoundType.Void
-            && (statements.Count != 1 || statements[0] is not BoundReturnStatement { Expression: not null }))
-        {
-            diagnosticReporter.GenerateErrorWithCustomMessage(
-                ErrorType.UnsupportedMVPExpression,
-                "The current executable MVP requires a value-returning function body to contain exactly one return statement producing a value.",
-                block.Span);
-        
-            return null;
-        }
-        
-        return new BoundBlock(statements);
+        return valid ? new BoundBlock(statements) : null;
     }
 
     private static BoundStatement? BindExpressionStatement(
@@ -267,12 +261,6 @@ public sealed class FunctionDeclarationBinder
             || !statement.ThenBlock.OpenBraceToken.IsSourceBacked
             || !statement.ThenBlock.CloseBraceToken.IsSourceBacked)
         {
-            return null;
-        }
-
-        if (returnType is not BoundType.Void)
-        {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
             return null;
         }
 
@@ -357,6 +345,41 @@ public sealed class FunctionDeclarationBinder
         };
 
         return expression is null ? null : new BoundReturnStatement(expression);
+    }
+    
+    private static bool CanCompleteNormally(BoundBlock block)
+    {
+        foreach (BoundStatement statement in block.Statements)
+        {
+            if (!CanCompleteNormally(statement))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool CanCompleteNormally(BoundStatement statement)
+        => statement switch
+        {
+            BoundReturnStatement => false,
+            BoundIfStatement conditional => CanConditionalCompleteNormally(conditional),
+            _ => true
+        };
+
+    private static bool CanConditionalCompleteNormally(BoundIfStatement conditional)
+    {
+        if (conditional.Condition is BoundBooleanConstantExpression constant)
+        {
+            return constant.Value
+                ? CanCompleteNormally(conditional.Then)
+                : conditional.Else is null || CanCompleteNormally(conditional.Else);
+        }
+
+        return CanCompleteNormally(conditional.Then)
+            || conditional.Else is null
+            || CanCompleteNormally(conditional.Else);
     }
 
     private static bool TryBindReturnType(SyntaxToken token, out BoundType type)

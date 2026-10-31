@@ -35,6 +35,7 @@ public sealed class IRFunctionLowerer
         private BlockBuilder current;
         private int nextBlockIndex;
         private int nextTemporaryIndex;
+        private IRType returnType;
 
         public LoweringContext(CancellationToken cancellationToken)
         {
@@ -45,6 +46,8 @@ public sealed class IRFunctionLowerer
         public LoweredFunction Lower(IRFunction function)
         {
             this.cancellationToken.ThrowIfCancellationRequested();
+
+            this.returnType = function.ReturnType;
 
             if (function.ReturnType is IRType.Void)
             {
@@ -61,15 +64,15 @@ public sealed class IRFunctionLowerer
 
         private void LowerVoidBody(IRBlock body)
         {
-            this.LowerVoidStatements(body);
+            this.LowerStatements(body);
 
             if (!this.current.IsTerminated)
             {
                 this.current.Terminate(new LoweredReturnTerminator());
             }
         }
-
-        private void LowerVoidStatements(IRBlock body)
+ 
+        private void LowerStatements(IRBlock body)
         {
             foreach (IRStatement statement in body.Statements)
             {
@@ -82,12 +85,16 @@ public sealed class IRFunctionLowerer
 
                 switch (statement)
                 {
-                    case IRReturnStatement { Expression: null }:
-                        this.current.Terminate(new LoweredReturnTerminator());
+                    case IRReturnStatement result:
+                        this.LowerReturn(result);
+                        break;
+
+                    case IRIfStatement conditional when this.returnType is IRType.Void:
+                        this.LowerVoidConditional(conditional);
                         break;
 
                     case IRIfStatement conditional:
-                        this.LowerVoidConditional(conditional);
+                        this.LowerValueConditional(conditional);
                         break;
 
                     case IRVoidCallStatement call:
@@ -95,10 +102,38 @@ public sealed class IRFunctionLowerer
                         break;
 
                     default:
-                        throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported in the current void lowering subset.");
+                        throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported by the current lowering subset.");
                 }
             }
         }
+
+        private void LowerReturn(IRReturnStatement statement)
+        {
+            if (statement.Expression is null)
+            {
+                if (this.returnType is not IRType.Void)
+                {
+                    throw new NotSupportedException("A value-returning IR function cannot contain a bare return.");
+                }
+
+                this.current.Terminate(new LoweredReturnTerminator());
+                return;
+            }
+
+            if (this.returnType is IRType.Void)
+            {
+                throw new NotSupportedException("A void IR function cannot return a value.");
+            }
+
+            LoweredValue value = this.LowerExpression(statement.Expression);
+
+            if (value.Type != this.returnType)
+            {
+                throw new InvalidOperationException("The returned IR value does not match the function's return type.");
+            }
+
+            this.current.Terminate(new LoweredReturnTerminator(value));
+        }    
 
         private void LowerVoidCall(IRVoidCallStatement call)
         {
@@ -129,6 +164,64 @@ public sealed class IRFunctionLowerer
             return lowered;
         }
 
+    private void LowerValueConditional(IRIfStatement conditional)
+    {
+        if (conditional.Condition is IRBooleanConstant constant)
+        {
+            if (constant.Value)
+            {
+                this.LowerStatements(conditional.Then);
+            }
+            else if (conditional.Else is not null)
+            {
+                this.LowerStatements(conditional.Else);
+            }
+
+            return;
+        }
+
+        LoweredValue condition = this.LowerExpression(conditional.Condition);
+
+        BlockBuilder thenBlock = this.CreateBlock("if.then");
+        BlockBuilder? elseBlock = conditional.Else is null ? null : this.CreateBlock("if.else");
+        BlockBuilder? mergeBlock = elseBlock is null ? this.CreateBlock("if.merge") : null;
+
+        this.current.Terminate(new LoweredConditionalBranchTerminator(
+            condition, thenBlock.Name, elseBlock?.Name ?? mergeBlock!.Name));
+
+        this.current = thenBlock;
+        this.LowerStatements(conditional.Then);
+        BlockBuilder thenExit = this.current;
+
+        this.current = elseBlock ?? mergeBlock!;
+
+        if (elseBlock is not null)
+        {
+            this.LowerStatements(conditional.Else!);
+        }
+
+        BlockBuilder elseExit = this.current;
+
+        if (thenExit.IsTerminated && elseExit.IsTerminated)
+        {
+            return;
+        }
+
+        mergeBlock ??= this.CreateBlock("if.merge");
+
+        if (!thenExit.IsTerminated)
+        {
+            thenExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
+        }
+
+        if (!elseExit.IsTerminated && !ReferenceEquals(elseExit, mergeBlock))
+        {
+            elseExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
+        }
+
+        this.current = mergeBlock;
+    }
+
         private void LowerVoidConditional(IRIfStatement conditional)
         {
             LoweredValue condition = this.LowerExpression(conditional.Condition);
@@ -141,7 +234,7 @@ public sealed class IRFunctionLowerer
                 condition, thenBlock.Name, elseBlock?.Name ?? mergeBlock.Name));
 
             this.current = thenBlock;
-            this.LowerVoidStatements(conditional.Then);
+            this.LowerStatements(conditional.Then);
 
             if (!this.current.IsTerminated)
             {
@@ -151,7 +244,7 @@ public sealed class IRFunctionLowerer
             if (elseBlock is not null)
             {
                 this.current = elseBlock;
-                this.LowerVoidStatements(conditional.Else!);
+                this.LowerStatements(conditional.Else!);
 
                 if (!this.current.IsTerminated)
                 {
@@ -164,13 +257,12 @@ public sealed class IRFunctionLowerer
 
         private void LowerValueReturningBody(IRBlock body)
         {
-            if (body.Statements.Count != 1 || body.Statements[0] is not IRReturnStatement { Expression: not null } returnStatement)
-            {
-                throw new NotSupportedException("The current lowering pass requires exactly one value-returning statement in a non-void function.");
-            }
+            this.LowerStatements(body);
 
-            LoweredValue value = this.LowerExpression(returnStatement.Expression);
-            this.current.Terminate(new LoweredReturnTerminator(value));
+            if (!this.current.IsTerminated)
+            {
+                throw new NotSupportedException("A value-returning IR function has a control-flow path that reaches its end without returning a value.");
+            }
         }
 
         private LoweredValue LowerExpression(IRExpression expression)

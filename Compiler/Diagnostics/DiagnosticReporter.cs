@@ -48,7 +48,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.MissingReturnValue] = "A value-returning function requires an expression after return.",
         [ErrorType.UnsupportedRootActivityLifetime] = "The current native bootstrap supports task root activities only.",
         [ErrorType.UnsupportedRootLifecycleParameters] = "The current native bootstrap requires parameterless root lifecycle methods.",
-        [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement."
+        [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement.",     
+        [ErrorType.MissingReturnPath] = "A reachable path through a value-returning function can complete without returning a value."
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()

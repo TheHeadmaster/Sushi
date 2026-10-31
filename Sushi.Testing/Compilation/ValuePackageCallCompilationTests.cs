@@ -285,23 +285,63 @@ public class ValuePackageCallCompilationTests
             .Contain(diagnostic => diagnostic.IsType(ErrorType.UnsupportedMVPExpression));
     }
 
-    [TestCase("Log(); return 42;", TestName = "Value Function Should Diagnose Statement Before Return")]
-    [TestCase("return 42; Log();", TestName = "Value Function Should Diagnose Unreachable Statement After Return")]
-    [TestCase("return 42; return 7;", TestName = "Value Function Should Diagnose Multiple Returns")]
-    [TestCase("Log();", TestName = "Value Function Should Diagnose Missing Return After Invocation")]
-    [TestCase("", TestName = "Value Function Should Diagnose Empty Body")]
-    public async Task UnsupportedValueShould_0(string body)
+    [TestCase("Trace(); return 42;", TestName = "Value Function Should Permit Invocation Before Return")]
+    [TestCase("return 42; Trace();", TestName = "Value Function Should Permit Valid Unreachable Statement After Return")]
+    [TestCase("return 42; return 7;", TestName = "Value Function Should Permit Multiple Returns")]
+    [TestCase("if (true) { return 42; }", TestName = "Constant True Branch Should Satisfy Return Contract")]
+    [TestCase("if (false) { return 7; } else { return 42; }", TestName = "Constant False Branch Should Select Returning Else")]
+    public async Task ValueReturnStatementsShould_0(string body)
+    {
+        string helper = Helpers + $$"""
+
+            public void Trace()
+            {
+                return;
+            }
+
+            public int32 Evaluate()
+            {
+                {{body}}
+            }
+            """;
+
+        using TestProject project = await TestProject.Create(CreateRoot("Ensure(Evaluate(), 42);"), helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+
+        int exitCode = await RunExecutable(result.Executable!.FilePath);
+
+        exitCode
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase("", TestName = "Empty Value Body Should Have Missing Return Path")]
+    [TestCase("Trace();", TestName = "Value Body With Only Invocation Should Have Missing Return Path")]
+    [TestCase("if (flag) { return 1; }", TestName = "Conditional Return Without Else Should Have Missing Return Path")]
+    [TestCase("if (flag) { return 1; } else { Trace(); }", TestName = "Else Branch Without Return Should Have Missing Return Path")]
+    [TestCase("if (flag) { if (flag) { return 1; } } else { return 2; }", TestName = "Nested Conditional Should Detect Missing Return Path")]
+    [TestCase("if (false) { return 1; }", TestName = "Unreachable Constant True Branch Should Not Satisfy Return Contract")]
+    [TestCase("if (true) { Trace(); }", TestName = "Constant True Branch Without Return Should Have Missing Return Path")]
+    public async Task MissingReturnPathShould_0(string body)
     {
         string helper = $$"""
             package Example;
             namespace Example;
 
-            public void Log()
+            public void Trace()
             {
                 return;
             }
 
-            public int32 Calculate()
+            public int32 Evaluate(bool flag)
             {
                 {{body}}
             }
@@ -320,12 +360,12 @@ public class ValuePackageCallCompilationTests
 
         SushiDiagnostic diagnostic = result.Diagnostics
             .Should()
-            .ContainSingle(item => item.IsType(ErrorType.UnsupportedMVPExpression))
+            .ContainSingle(item => item.IsType(ErrorType.MissingReturnPath))
             .Which;
 
-        diagnostic.Message
+        diagnostic.DisplayName
             .Should()
-            .Contain("exactly one return statement producing a value");
+            .Be("SUSE0323");
 
         diagnostic.Span.Snapshot.Uri.LocalPath
             .Should()
@@ -400,6 +440,149 @@ public class ValuePackageCallCompilationTests
         exitCode
             .Should()
             .Be(0);
+    }
+
+    [TestCase(TestName = "Dynamic Conditional Returns Should Preserve Execution Paths")]
+    public async Task ValueReturnControlFlowShould_0()
+    {
+        string helper = Helpers + """
+
+            public int32 Choose(bool flag)
+            {
+                if (flag)
+                {
+                    return 10;
+                }
+                else
+                {
+                    return 20;
+                }
+            }
+
+            public int32 Fallback(bool flag)
+            {
+                if (flag)
+                {
+                    return 30;
+                }
+
+                return 40;
+            }
+
+            public int32 Nested(bool outer, bool inner)
+            {
+                if (outer)
+                {
+                    if (inner)
+                    {
+                        return 1;
+                    }
+
+                    return 2;
+                }
+                else if (inner)
+                {
+                    return 3;
+                }
+
+                return 4;
+            }
+
+            public bool ToBool(bool flag)
+            {
+                if (flag)
+                {
+                    return true;
+                }
+
+                return false;
+            }
+
+            public int32 Ordered(bool flag)
+            {
+                Ensure(9, 9);
+
+                if (flag)
+                {
+                    return 50;
+                }
+
+                Ensure(8, 8);
+                return 60;
+            }
+            """;
+
+        string root = CreateRoot("""
+            Ensure(Choose(true), 10);
+            Ensure(Choose(false), 20);
+
+            Ensure(Fallback(true), 30);
+            Ensure(Fallback(false), 40);
+
+            Ensure(Nested(true, true), 1);
+            Ensure(Nested(true, false), 2);
+            Ensure(Nested(false, true), 3);
+            Ensure(Nested(false, false), 4);
+
+            Require(ToBool(true));
+            Require(not ToBool(false));
+
+            Ensure(Ordered(true), 50);
+            Ensure(Ordered(false), 60);
+            """);
+
+        using TestProject project = await TestProject.Create(root, helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+
+        int exitCode = await RunExecutable(result.Executable!.FilePath);
+
+        exitCode
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase(TestName = "Unreachable Invalid Value Call Should Still Be Diagnosed")]
+    public async Task UnreachableValueReturnCodeShould_0()
+    {
+        string helper = Helpers + """
+
+            public int32 Evaluate()
+            {
+                return 42;
+
+                if (false)
+                {
+                    return Missing();
+                }
+            }
+            """;
+
+        using TestProject project = await TestProject.Create(CreateRoot("return;"), helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+
+        result.Executable
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.UnsupportedMVPExpression));
+
+        result.Diagnostics
+            .Should()
+            .NotContain(diagnostic => diagnostic.IsType(ErrorType.MissingReturnPath));
     }
 
     private static string CreateRoot(string body)
