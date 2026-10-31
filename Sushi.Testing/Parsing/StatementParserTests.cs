@@ -155,7 +155,7 @@ public class StatementParserTests
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase(TestName = "Statement Parser Should Preserve Semicolon After Missing Return Expression")]
+    [TestCase(TestName = "Statement Parser Should Parse Bare Return")]
     public void ParserShould_5()
     {
         const string source = "{ return ; }";
@@ -169,22 +169,17 @@ public class StatementParserTests
             .BeOfType<ReturnStatementSyntax>()
             .Subject;
 
-        IntegerLiteralExpressionSyntax literal = statement.Expression
+        statement.Expression
             .Should()
-            .BeOfType<IntegerLiteralExpressionSyntax>()
-            .Subject;
-
-        literal.LiteralToken.IsMissing
-            .Should()
-            .BeTrue();
-
-        literal.Span.Start
-            .Should()
-            .Be(source.IndexOf(';', StringComparison.Ordinal));
+            .BeNull();
 
         statement.SemicolonToken.IsMissing
             .Should()
             .BeFalse();
+
+        statement.SemicolonToken.Span.Start
+            .Should()
+            .Be(source.IndexOf(';', StringComparison.Ordinal));
 
         block.CloseBraceToken.IsMissing
             .Should()
@@ -192,7 +187,7 @@ public class StatementParserTests
 
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+            .BeEmpty();
 
         cursor.Position
             .Should()
