@@ -39,21 +39,21 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     /// </param>
     /// <returns>
     /// The project compilation result.
-    /// </returns>
+    /// </returns>  
     public async Task<MVPCompilationResult> CompileAsync(string projectOrFolderPath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectOrFolderPath);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         string projectPath = ResolveProjectPath(projectOrFolderPath);
-        string projectDirectory = Path.GetDirectoryName(projectPath) ?? throw new InvalidOperationException($"Project \"{projectPath}\" does not have a containing directory.");
+        string projectDirectory = Path.GetDirectoryName(projectPath)
+            ?? throw new InvalidOperationException($"Project \"{projectPath}\" has no containing directory.");
 
         SourceSnapshot projectSnapshot = await LoadSnapshot(projectPath, cancellationToken);
-
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
-        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(projectSnapshot, diagnosticReporter, cancellationToken);
+        ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(
+            projectSnapshot, diagnosticReporter, cancellationToken);
 
         if (diagnosticReporter.HasErrors())
         {
@@ -61,7 +61,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         }
 
         ProjectDefinition project = projectResult.Project
-            ?? throw new InvalidOperationException("Project analysis completed without errors but did not produce a project definition.");
+            ?? throw new InvalidOperationException("Project analysis succeeded without producing a project definition.");
 
         IReadOnlyList<string> sourcePaths = DiscoverSourcePaths(projectDirectory, project);
 
@@ -70,17 +70,17 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             throw new InvalidOperationException($"Project \"{project.Name}\" did not select any Sushi source files.");
         }
 
-        List<BoundFunction> functions = [];
+        List<SourceAnalysisResult> sources = [];
 
         foreach (string sourcePath in sourcePaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            SourceSnapshot sourceSnapshot = await LoadSnapshot(sourcePath, cancellationToken);
+            SourceSnapshot snapshot = await LoadSnapshot(sourcePath, cancellationToken);
+            SourceAnalysisResult source = (SourceAnalysisResult)await this.sourceAnalyzer.Analyze(
+                snapshot, diagnosticReporter, cancellationToken);
 
-            SourceAnalysisResult sourceResult = (SourceAnalysisResult)await this.sourceAnalyzer.Analyze(sourceSnapshot, diagnosticReporter, cancellationToken);
-
-            functions.AddRange(sourceResult.Functions);
+            sources.Add(source);
         }
 
         if (diagnosticReporter.HasErrors())
@@ -88,19 +88,36 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
         }
 
-        BoundFunction entryFunction = SelectMVPEntryFunction(functions);
+        BoundActivity? root = RootActivityAnalyzer.SelectRoot(
+            sources, projectSnapshot, diagnosticReporter, cancellationToken);
 
-        if (entryFunction.Parameters.Count != 0)
+        if (diagnosticReporter.HasErrors() || root is null)
         {
-            throw new NotSupportedException("The executable MVP requires a parameterless entry function. Parameterized functions may be emitted as LLVM functions but cannot be selected as the temporary process entry.");
+            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
         }
 
-        IRFunction structuredFunction = BoundFunctionIRConverter.Convert(entryFunction, cancellationToken);
-        LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structuredFunction, cancellationToken);
+        if (root.Lifetime is not ActivityLifetime.Task)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedRootActivityLifetime, root.Declaration.LifetimeKeyword.Span);
+            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+        }
+
+        LoweredFunction? entry = BindAndLowerRootLifecycleMethod(
+            root.Entry, "__sushi_root_entry", diagnosticReporter, cancellationToken);
+
+        LoweredFunction? stop = root.Stop is null
+            ? null
+            : BindAndLowerRootLifecycleMethod(root.Stop, "__sushi_root_stop", diagnosticReporter, cancellationToken);
+
+        if (diagnosticReporter.HasErrors() || entry is null || (root.Stop is not null && stop is null))
+        {
+            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+        }
 
         string outputPath = GetMVPOutputPath(projectDirectory, project);
 
-        NativeExecutableArtifact executable = await executableBuilder.BuildAsync(loweredFunction, outputPath, cancellationToken);
+        NativeExecutableArtifact executable = await executableBuilder.BuildRootActivityAsync(
+            entry, stop, outputPath, cancellationToken);
 
         return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable);
     }
@@ -198,5 +215,59 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         byte[] bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken);
 
         return SourceSnapshot.FromUtf8(new Uri(fullPath), version: null, bytes);
+    }
+
+    
+    /// <summary>
+    /// Binds one supported root lifecycle body and lowers it under a private compiler-generated symbol.
+    /// </summary>
+    /// <param name="method">
+    /// The validated activity lifecycle declaration.
+    /// </param>
+    /// <param name="symbol">
+    /// The compiler-owned native symbol.</param>
+    /// <param name="diagnosticReporter">Receives semantic and MVP-subset diagnostics.</param>
+    /// <param name="cancellationToken">Cancels binding and lowering.</param>
+    /// <returns>The lowered function, or null if the method cannot be compiled.</returns>
+    private static LoweredFunction? BindAndLowerRootLifecycleMethod(BoundActivityMethod method, string symbol, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (method.Declaration.Parameters.Count != 0)
+        {
+            diagnosticReporter.GenerateError(
+                ErrorType.UnsupportedRootLifecycleParameters,
+                method.Declaration.OpenParenthesisToken.Span);
+
+            return null;
+        }
+
+        if (method.Declaration.Body.Statements.Count > 1)
+        {
+            diagnosticReporter.GenerateError(
+                ErrorType.UnsupportedRootLifecycleBody,
+                method.Declaration.Body.Span);
+
+            return null;
+        }
+
+        BoundBlock? body = FunctionDeclarationBinder.BindBody(
+            method.Declaration.Body,
+            BoundType.Void,
+            [],
+            diagnosticReporter,
+            cancellationToken);
+
+        if (body is null)
+        {
+            return null;
+        }
+
+        BoundFunction function = new(method.Accessibility, symbol, BoundType.Void, body);
+        IRFunction structured = BoundFunctionIRConverter.Convert(function, cancellationToken);
+
+        return IRFunctionLowerer.Lower(structured, cancellationToken);
     }
 }

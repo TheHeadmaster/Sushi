@@ -9,7 +9,7 @@ namespace Sushi.Testing.Compilation;
 [TestFixture]
 public class MVPProjectCompilerTests
 {
-    [TestCase(TestName = "MVP Project Compiler Should Compile Sushi Source Into Runnable Native Executable")]
+    [TestCase(TestName = "MVP Project Compiler Should Bootstrap Task Root Activity")]
     public async Task CompileAsyncShould_0()
     {
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", Guid.NewGuid().ToString("N"));
@@ -42,8 +42,17 @@ public class MVPProjectCompilerTests
                 package Example;
                 namespace Example;
 
-                public int32 launch() {
-                    return 42;
+                public root activity Application : task
+                {
+                    public entry void Launch()
+                    {
+                        return;
+                    }
+
+                    public stop void Shutdown()
+                    {
+                        return;
+                    }
                 }
                 """,
                 CancellationToken.None);
@@ -84,7 +93,7 @@ public class MVPProjectCompilerTests
 
             process.ExitCode
                 .Should()
-                .Be(42);
+                .Be(0);
         }
         finally
         {

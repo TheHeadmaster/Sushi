@@ -23,4 +23,21 @@ public interface IModuleEmitter
     /// An owned <see cref="IModuleArtifact"/>. The caller is responsible for disposing it.
     /// </returns>
     public IModuleArtifact Emit(string moduleName, LoweredFunction function, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Emits a collection of lowered functions into one verified backend module.
+    /// </summary>
+    /// <param name="moduleName">
+    /// The generated module's identity.
+    /// </param>
+    /// <param name="functions">
+    /// Functions to emit in deterministic order, with unique symbols.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels module emission.
+    /// </param>
+    /// <returns>
+    /// An owned verified module artifact.
+    /// </returns>
+    public IModuleArtifact Emit(string moduleName, IReadOnlyList<LoweredFunction> functions, CancellationToken cancellationToken);
 }

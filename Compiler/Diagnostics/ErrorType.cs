@@ -49,6 +49,9 @@ public enum ErrorType
     DuplicateRootActivity = 316,
     UnsupportedMultipleActivityStopMethods = 317,
     ReturnValueInVoidFunction = 318,
-    MissingReturnValue = 319
+    MissingReturnValue = 319,
+    UnsupportedRootActivityLifetime = 320,
+    UnsupportedRootLifecycleParameters = 321,
+    UnsupportedRootLifecycleBody = 322
     #endregion
 }

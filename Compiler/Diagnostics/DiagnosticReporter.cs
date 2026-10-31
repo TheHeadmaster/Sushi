@@ -45,7 +45,10 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.DuplicateRootActivity] = "An executable Sushi project cannot declare multiple root activities.",
         [ErrorType.UnsupportedMultipleActivityStopMethods] = "The current compiler subset supports at most one stop method per activity.",
         [ErrorType.ReturnValueInVoidFunction] = "A void function cannot return a value.",
-        [ErrorType.MissingReturnValue] = "A value-returning function requires an expression after return."
+        [ErrorType.MissingReturnValue] = "A value-returning function requires an expression after return.",
+        [ErrorType.UnsupportedRootActivityLifetime] = "The current native bootstrap supports task root activities only.",
+        [ErrorType.UnsupportedRootLifecycleParameters] = "The current native bootstrap requires parameterless root lifecycle methods.",
+        [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement."
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()

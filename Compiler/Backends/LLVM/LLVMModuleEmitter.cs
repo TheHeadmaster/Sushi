@@ -13,10 +13,33 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
     /// <inheritdoc />
     public IModuleArtifact Emit(string moduleName, LoweredFunction function, CancellationToken cancellationToken)
     {
-        ArgumentException.ThrowIfNullOrEmpty(moduleName);
         ArgumentNullException.ThrowIfNull(function);
+        return this.Emit(moduleName, [function], cancellationToken);
+    }
 
-        cancellationToken.ThrowIfCancellationRequested();
+    /// <inheritdoc />
+    public IModuleArtifact Emit(string moduleName, IReadOnlyList<LoweredFunction> functions, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(moduleName);
+        ArgumentNullException.ThrowIfNull(functions);
+
+        if (functions.Count == 0)
+        {
+            throw new ArgumentException("A module must contain at least one function.", nameof(functions));
+        }
+
+        HashSet<string> symbols = new(StringComparer.Ordinal);
+
+        foreach (LoweredFunction function in functions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ArgumentNullException.ThrowIfNull(function);
+
+            if (!symbols.Add(function.Name))
+            {
+                throw new ArgumentException($"Function symbol \"{function.Name}\" is duplicated.", nameof(functions));
+            }
+        }
 
         LLVMContextRef context = LLVMContextRef.Create();
         LLVMModuleRef module = default;
@@ -27,9 +50,13 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
 
             using LLVMBuilderRef builder = context.CreateBuilder();
 
-            EmitFunction(module, builder, function, cancellationToken);
-            VerifyModule(module);
+            foreach (LoweredFunction function in functions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                EmitFunction(module, builder, function, cancellationToken);
+            }
 
+            VerifyModule(module);
             return new LLVMModuleArtifact(context, module);
         }
         catch

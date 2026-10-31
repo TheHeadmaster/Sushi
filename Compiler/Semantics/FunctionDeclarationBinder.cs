@@ -106,7 +106,7 @@ public sealed class FunctionDeclarationBinder
         return valid ? parameters : null;
     }
 
-    private static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    internal static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         List<BoundStatement> statements = [];
 
