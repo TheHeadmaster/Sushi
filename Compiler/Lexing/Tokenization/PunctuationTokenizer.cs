@@ -11,6 +11,7 @@ public sealed class PunctuationTokenizer : ILexTokenizer
         (byte)'.',
         (byte)',',
         (byte)';',
+        (byte)':',
         (byte)'(',
         (byte)')',
         (byte)'{',
