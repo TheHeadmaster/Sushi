@@ -1,4 +1,3 @@
-
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
@@ -106,8 +105,8 @@ public sealed class FunctionDeclarationBinder
     }
 
     /// <summary>
-    /// Binds all statements in a callable body, including branches and syntactically
-    /// present statements that cannot be reached during execution.
+    /// Binds every statement in a callable body, including branches and
+    /// syntactically present statements that cannot be reached during execution.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
@@ -144,6 +143,7 @@ public sealed class FunctionDeclarationBinder
             {
                 ReturnStatementSyntax returnStatement => BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken),
                 IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken),
+                ExpressionStatementSyntax expressionStatement => ReportUnsupportedExpressionStatement(expressionStatement, diagnosticReporter),
                 _ => null
             };
 
@@ -157,6 +157,12 @@ public sealed class FunctionDeclarationBinder
         }
 
         return valid ? new BoundBlock(statements) : null;
+    }
+
+    private static BoundStatement? ReportUnsupportedExpressionStatement(ExpressionStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
+    {
+        diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
+        return null;
     }
 
     private static BoundIfStatement? BindConditionalStatement(

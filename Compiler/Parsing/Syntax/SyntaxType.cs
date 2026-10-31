@@ -1,4 +1,3 @@
-
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
@@ -53,5 +52,8 @@ public enum SyntaxType
     ColonToken,
     IfStatement,
     IfKeyword,
-    ElseKeyword
+    ElseKeyword,
+    CallArgument,
+    InvocationExpression,
+    ExpressionStatement
 }

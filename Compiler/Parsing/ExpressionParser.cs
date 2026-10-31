@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
-/// Supports integer and Boolean literals, grouping, prefix unary operators,
+/// Supports literals, names, invocation syntax, grouping, unary operators,
 /// arithmetic, shifts, bitwise operators, comparisons, and logical operators.
 /// Diagnoses non-associative comparison chains while preserving recovered syntax.
 /// </summary>
@@ -72,20 +72,18 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
             this.cancellationToken.ThrowIfCancellationRequested();
 
             bool invalidChain = this.IsUnparenthesizedComparisonChain(left, bindingPower);
-
             this.cursor.TryAdvance(out _);
 
             SyntaxToken operatorToken = new(syntaxType, candidate);
             ExpressionSyntax right = this.ParseExpression(bindingPower + 1, diagnosticReporter, out bool rightIncomplete);
 
+            left = invalidChain
+                ? new InvalidComparisonChainSyntax(left, operatorToken, right)
+                : new BinaryExpressionSyntax(left, operatorToken, right);
+
             if (invalidChain)
             {
                 diagnosticReporter.GenerateError(ErrorType.NonAssociativeComparison, candidate.Span);
-                left = new InvalidComparisonChainSyntax(left, operatorToken, right);
-            }
-            else
-            {
-                left = new BinaryExpressionSyntax(left, operatorToken, right);
             }
 
             if (rightIncomplete)
@@ -140,21 +138,28 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
 
         if (this.cursor.TryConsumeIdentifier(out LexToken identifier))
         {
-            incomplete = false;
             SyntaxType type = identifier.Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken;
-            return new IdentifierExpressionSyntax(new SyntaxToken(type, identifier));
+            IdentifierExpressionSyntax name = new(new SyntaxToken(type, identifier));
+
+            if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
+            {
+                return this.ParseInvocation(name, openingParenthesis, diagnosticReporter, out incomplete);
+            }
+
+            incomplete = false;
+            return name;
         }
 
-        if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken openingParenthesis))
+        if (this.cursor.TryConsumePunctuation((byte)'(', out LexToken opening))
         {
-            SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, openingParenthesis);
+            SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, opening);
             ExpressionSyntax expression = this.ParseExpression(BindingPower.Lowest, diagnosticReporter, out bool innerIncomplete);
 
             SyntaxToken closeToken;
 
-            if (this.cursor.TryConsumePunctuation((byte)')', out LexToken closingParenthesis))
+            if (this.cursor.TryConsumePunctuation((byte)')', out LexToken closing))
             {
-                closeToken = new SyntaxToken(SyntaxType.CloseParenthesisToken, closingParenthesis);
+                closeToken = new SyntaxToken(SyntaxType.CloseParenthesisToken, closing);
             }
             else
             {
@@ -168,13 +173,99 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         }
 
         int missingPosition = this.cursor.Position;
-
         this.ReportExpectedSyntax("Expected expression.", missingPosition, diagnosticReporter);
-
         incomplete = true;
 
         return new IntegerLiteralExpressionSyntax(SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, missingPosition));
     }
+
+    private InvocationExpressionSyntax ParseInvocation(IdentifierExpressionSyntax target, LexToken openingParenthesis, IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        SyntaxToken openToken = new(SyntaxType.OpenParenthesisToken, openingParenthesis);
+        List<CallArgumentSyntax> arguments = [];
+        List<SyntaxToken> separators = [];
+        incomplete = false;
+
+        if (!this.IsPunctuationAhead((byte)')'))
+        {
+            while (true)
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                CallArgumentSyntax argument = this.ParseCallArgument(diagnosticReporter, out bool argumentIncomplete);
+                arguments.Add(argument);
+                incomplete |= argumentIncomplete;
+
+                if (argumentIncomplete || !this.cursor.TryConsumePunctuation((byte)',', out LexToken comma))
+                {
+                    break;
+                }
+
+                separators.Add(new SyntaxToken(SyntaxType.CommaToken, comma));
+
+                if (this.IsPunctuationAhead((byte)')'))
+                {
+                    int position = this.cursor.Position;
+                    this.ReportExpectedSyntax("Expected expression after invocation argument comma.", position, diagnosticReporter);
+
+                    ExpressionSyntax missing = new IntegerLiteralExpressionSyntax(
+                        SyntaxToken.Missing(SyntaxType.IntegerLiteralToken, this.cursor.Snapshot, position));
+
+                    arguments.Add(new CallArgumentSyntax(null, null, missing));
+                    incomplete = true;
+                    break;
+                }
+            }
+        }
+
+        SyntaxToken closeToken;
+
+        if (this.cursor.TryConsumePunctuation((byte)')', out LexToken closingParenthesis))
+        {
+            closeToken = new SyntaxToken(SyntaxType.CloseParenthesisToken, closingParenthesis);
+        }
+        else
+        {
+            int position = this.cursor.Position;
+            this.ReportExpectedSyntax("Expected \")\" after invocation arguments.", position, diagnosticReporter);
+            closeToken = SyntaxToken.Missing(SyntaxType.CloseParenthesisToken, this.cursor.Snapshot, position);
+        }
+
+        incomplete |= closeToken.IsMissing;
+
+        return new InvocationExpressionSyntax(target, openToken, arguments, separators, closeToken);
+    }
+
+    private CallArgumentSyntax ParseCallArgument(IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        SyntaxToken? name = null;
+        SyntaxToken? colon = null;
+
+        if (this.cursor.TryPeek(out LexToken candidate)
+            && candidate.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
+            && this.cursor.TryPeek(out LexToken separator, lookahead: 1)
+            && this.IsPunctuation(separator, (byte)':'))
+        {
+            this.cursor.TryAdvance(out LexToken identifier);
+            this.cursor.TryConsumePunctuation((byte)':', out LexToken colonToken);
+
+            SyntaxType type = identifier.Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken;
+            name = new SyntaxToken(type, identifier);
+            colon = new SyntaxToken(SyntaxType.ColonToken, colonToken);
+        }
+
+        ExpressionSyntax expression = this.ParseExpression(BindingPower.Lowest, diagnosticReporter, out incomplete);
+
+        return new CallArgumentSyntax(name, colon, expression);
+    }
+
+    private bool IsPunctuationAhead(byte punctuation)
+        => this.cursor.TryPeek(out LexToken token) && this.IsPunctuation(token, punctuation);
+
+    private bool IsPunctuation(LexToken token, byte punctuation)
+        => token.Type is LexTokenType.Punctuation
+            && token.Span.Length == 1
+            && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
 
     private bool TryGetPrefixUnarySyntaxType(LexToken token, out SyntaxType syntaxType)
     {
@@ -218,7 +309,6 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         if (token.Type is LexTokenType.Operator)
         {
             ReadOnlySpan<byte> spelling = this.cursor.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
-
             bindingPower = GetBindingPowerForSpelling(spelling);
 
             if (bindingPower != BindingPower.Lowest)

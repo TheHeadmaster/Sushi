@@ -1,4 +1,3 @@
-
 using Sushi.Diagnostics;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
@@ -7,7 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks, returns, and conditional statements using a shared lexical cursor.
+/// Parses braced statement blocks, returns, conditionals, and candidate invocation statements
+/// using the source file's shared lexical cursor.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -28,7 +28,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     /// Receives syntax diagnostics.
     /// </param>
     /// <returns>
-    /// The parsed block containing supported statements in source order.
+    /// The parsed block containing supported statement syntax in source order.
     /// </returns>
     public BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
     {
@@ -48,7 +48,27 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     }
 
     private StatementSyntax ParseStatement(IDiagnosticReporter diagnosticReporter)
-        => this.IsKeywordAhead("if"u8) ? this.ParseIfStatement(diagnosticReporter) : this.ParseReturnStatement(diagnosticReporter);
+    {
+        if (this.IsKeywordAhead("if"u8))
+        {
+            return this.ParseIfStatement(diagnosticReporter);
+        }
+
+        if (this.IsKeywordAhead("return"u8))
+        {
+            return this.ParseReturnStatement(diagnosticReporter);
+        }
+
+        return this.ParseExpressionStatement(diagnosticReporter);
+    }
+
+    private ExpressionStatementSyntax ParseExpressionStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        ExpressionSyntax expression = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after invocation statement.", diagnosticReporter);
+
+        return new ExpressionStatementSyntax(expression, semicolon);
+    }
 
     private IfStatementSyntax ParseIfStatement(IDiagnosticReporter diagnosticReporter)
     {
@@ -107,7 +127,20 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     }
 
     private bool IsStatementAhead()
-        => this.IsKeywordAhead("return"u8) || this.IsKeywordAhead("if"u8);
+        => this.IsKeywordAhead("return"u8)
+            || this.IsKeywordAhead("if"u8)
+            || this.IsInvocationAhead();
+
+    private bool IsInvocationAhead()
+    {
+        if (!this.cursor.TryPeek(out LexToken target) || target.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier))
+        {
+            return false;
+        }
+
+        return this.cursor.TryPeek(out LexToken opening, lookahead: 1)
+            && this.IsPunctuation(opening, (byte)'(');
+    }
 
     private bool IsKeywordAhead(ReadOnlySpan<byte> keyword)
         => this.cursor.TryPeek(out LexToken token)
