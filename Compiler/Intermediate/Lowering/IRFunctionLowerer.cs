@@ -1,5 +1,4 @@
-﻿
-namespace Sushi.Intermediate.Lowering;
+﻿namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
@@ -91,10 +90,28 @@ public sealed class IRFunctionLowerer
                         this.LowerVoidConditional(conditional);
                         break;
 
+                    case IRVoidCallStatement call:
+                        this.LowerVoidCall(call);
+                        break;
+
                     default:
                         throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported in the current void lowering subset.");
                 }
             }
+        }
+
+        private void LowerVoidCall(IRVoidCallStatement call)
+        {
+            List<LoweredCallArgument> arguments = [];
+
+            foreach (IRCallArgument argument in call.Arguments)
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+                LoweredValue value = this.LowerExpression(argument.Expression);
+                arguments.Add(new LoweredCallArgument(argument.ParameterIndex, value));
+            }
+
+            this.current.Instructions.Add(new LoweredVoidCallInstruction(call.Symbol, call.ParameterTypes, arguments));
         }
 
         private void LowerVoidConditional(IRIfStatement conditional)

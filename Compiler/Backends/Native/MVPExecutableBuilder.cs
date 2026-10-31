@@ -1,5 +1,4 @@
-﻿
-using Sushi.Backends.LLVM;
+﻿using Sushi.Backends.LLVM;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
 
@@ -49,14 +48,38 @@ public sealed class MVPExecutableBuilder(IModuleEmitter moduleEmitter, IObjectEm
     }
 
     /// <summary>
-    /// Builds an executable that starts one task root, invokes its entry and optional stop hook,
-    /// and returns process status zero after normal termination.
+    /// Builds an executable containing a synchronous task root without additional package functions.
     /// </summary>
     /// <param name="entry">
-    /// The compiled, parameterless void root entry method.
+    /// The compiled root entry method.
     /// </param>
     /// <param name="stop">
-    /// The optional compiled, parameterless void stop method.
+    /// The optional compiled stop method.
+    /// </param>
+    /// <param name="outputPath">
+    /// The requested executable path.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels compilation and linking.
+    /// </param>
+    /// <returns>
+    /// The linked executable.
+    /// </returns>
+    public Task<NativeExecutableArtifact> BuildRootActivityAsync(LoweredFunction entry, LoweredFunction? stop, string outputPath, CancellationToken cancellationToken)
+        => this.BuildRootActivityAsync(entry, stop, [], outputPath, cancellationToken);
+
+    /// <summary>
+    /// Builds a task-root executable with additional package functions available
+    /// for direct invocation by root lifecycle methods.
+    /// </summary>
+    /// <param name="entry">
+    /// The compiled root entry method.
+    /// </param>
+    /// <param name="stop">
+    /// The optional compiled stop method.
+    /// </param>
+    /// <param name="packageFunctions">
+    /// Additional functions included in the same native module.
     /// </param>
     /// <param name="outputPath">
     /// The requested executable path.
@@ -67,9 +90,15 @@ public sealed class MVPExecutableBuilder(IModuleEmitter moduleEmitter, IObjectEm
     /// <returns>
     /// The linked native executable.
     /// </returns>
-    public Task<NativeExecutableArtifact> BuildRootActivityAsync(LoweredFunction entry, LoweredFunction? stop, string outputPath, CancellationToken cancellationToken)
+    public Task<NativeExecutableArtifact> BuildRootActivityAsync(
+        LoweredFunction entry,
+        LoweredFunction? stop,
+        IReadOnlyList<LoweredFunction> packageFunctions,
+        string outputPath,
+        CancellationToken cancellationToken)
     {
         ValidateRootLifecycleMethod(entry);
+        ArgumentNullException.ThrowIfNull(packageFunctions);
 
         if (stop is not null)
         {
@@ -81,7 +110,12 @@ public sealed class MVPExecutableBuilder(IModuleEmitter moduleEmitter, IObjectEm
             }
         }
 
-        IReadOnlyList<LoweredFunction> functions = stop is null ? [entry] : [entry, stop];
+        List<LoweredFunction> functions = [.. packageFunctions, entry];
+
+        if (stop is not null)
+        {
+            functions.Add(stop);
+        }
 
         return this.BuildCoreAsync(
             functions,

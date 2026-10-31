@@ -1,4 +1,3 @@
-
 using Sushi.Semantics;
 
 namespace Sushi.Intermediate;
@@ -58,6 +57,10 @@ public sealed class BoundFunctionIRConverter
                 ConvertExpression(conditional.Condition, cancellationToken),
                 ConvertBlock(conditional.Then, cancellationToken),
                 conditional.Else is null ? null : ConvertBlock(conditional.Else, cancellationToken)),
+            BoundVoidCallStatement call => new IRVoidCallStatement(
+                call.Symbol,
+                [.. call.ParameterTypes.Select(ConvertType)],
+                [.. call.Arguments.Select(argument => new IRCallArgument(argument.ParameterIndex, ConvertExpression(argument.Expression, cancellationToken)))]),
             _ => throw new NotSupportedException($"Bound statement type \"{statement.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }

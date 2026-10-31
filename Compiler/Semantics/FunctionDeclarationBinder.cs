@@ -105,8 +105,8 @@ public sealed class FunctionDeclarationBinder
     }
 
     /// <summary>
-    /// Binds every statement in a callable body, including branches and
-    /// syntactically present statements that cannot be reached during execution.
+    /// Binds every statement in a callable body, including unreachable statements.
+    /// A supplied package-call catalog enables the restricted direct-call subset.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
@@ -123,10 +123,13 @@ public sealed class FunctionDeclarationBinder
     /// <param name="cancellationToken">
     /// Cancels binding.
     /// </param>
+    /// <param name="callables">
+    /// Optional project-resolved package callables enabled for the current body.
+    /// </param>
     /// <returns>
     /// The bound block, or null when one or more statements are invalid.
     /// </returns>
-    internal static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    internal static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, IReadOnlyList<PackageCallable>? callables = null)
     {
         ArgumentNullException.ThrowIfNull(block);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -142,8 +145,8 @@ public sealed class FunctionDeclarationBinder
             BoundStatement? boundStatement = statement switch
             {
                 ReturnStatementSyntax returnStatement => BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken),
-                IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken),
-                ExpressionStatementSyntax expressionStatement => ReportUnsupportedExpressionStatement(expressionStatement, diagnosticReporter),
+                IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables),
+                ExpressionStatementSyntax expressionStatement => BindExpressionStatement(expressionStatement, returnType, parameters, callables, diagnosticReporter, cancellationToken),
                 _ => null
             };
 
@@ -159,18 +162,18 @@ public sealed class FunctionDeclarationBinder
         return valid ? new BoundBlock(statements) : null;
     }
 
-    private static BoundStatement? ReportUnsupportedExpressionStatement(ExpressionStatementSyntax statement, IDiagnosticReporter diagnosticReporter)
+    private static BoundStatement? BindExpressionStatement(ExpressionStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IReadOnlyList<PackageCallable>? callables, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
+        if (returnType is BoundType.Void && callables is not null)
+        {
+            return PackageInvocationBinder.Bind(statement, callables, parameters, diagnosticReporter, cancellationToken);
+        }
+
         diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
         return null;
     }
 
-    private static BoundIfStatement? BindConditionalStatement(
-        IfStatementSyntax statement,
-        BoundType returnType,
-        IReadOnlyList<BoundParameter> parameters,
-        IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
+    private static BoundIfStatement? BindConditionalStatement(IfStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, IReadOnlyList<PackageCallable>? callables)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -190,7 +193,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken);
-        BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken);
+        BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables);
 
         BoundBlock? elseBody = null;
         bool validElse = true;
@@ -207,13 +210,13 @@ public sealed class FunctionDeclarationBinder
             }
             else
             {
-                elseBody = BindBody(elseBlock, returnType, parameters, diagnosticReporter, cancellationToken);
+                elseBody = BindBody(elseBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables);
                 validElse = elseBody is not null;
             }
         }
         else if (statement.ElseIf is IfStatementSyntax elseIf)
         {
-            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken);
+            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken, callables);
 
             if (alternative is null)
             {

@@ -1,5 +1,4 @@
-﻿
-using LLVMSharp.Interop;
+﻿using LLVMSharp.Interop;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
 
@@ -53,6 +52,12 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
             foreach (LoweredFunction function in functions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                DeclareFunction(module, function);
+            }
+
+            foreach (LoweredFunction function in functions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 EmitFunction(module, builder, function, cancellationToken);
             }
 
@@ -71,10 +76,8 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         }
     }
 
-    private static void EmitFunction(LLVMModuleRef module, LLVMBuilderRef builder, LoweredFunction function, CancellationToken cancellationToken)
+    private static void DeclareFunction(LLVMModuleRef module, LoweredFunction function)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         LLVMTypeRef returnType = ConvertType(module.Context, function.ReturnType);
         LLVMTypeRef[] parameterTypes = [.. function.Parameters.Select(parameter => ConvertType(module.Context, parameter.Type))];
         LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(returnType, parameterTypes);
@@ -82,8 +85,19 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
 
         foreach (IRParameter parameter in function.Parameters)
         {
-            cancellationToken.ThrowIfCancellationRequested();
             llvmFunction.GetParam((uint)parameter.Index).Name = parameter.Name;
+        }
+    }
+
+    private static void EmitFunction(LLVMModuleRef module, LLVMBuilderRef builder, LoweredFunction function, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        LLVMValueRef llvmFunction = module.GetNamedFunction(function.Name);
+
+        if (llvmFunction.Handle == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"Function \"{function.Name}\" was not declared before emission.");
         }
 
         FunctionEmitter emitter = new(module, llvmFunction, function, builder, cancellationToken);
@@ -199,6 +213,10 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         {
             switch (instruction)
             {
+                case LoweredVoidCallInstruction call:
+                    this.EmitVoidCall(call);
+                    return;
+
                 case LoweredBooleanNotInstruction negation:
                     this.EmitBooleanNegation(negation);
                     return;
@@ -234,6 +252,28 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                 default:
                     throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
             }
+        }
+
+        private void EmitVoidCall(LoweredVoidCallInstruction instruction)
+        {
+            LLVMValueRef callee = this.module.GetNamedFunction(instruction.Symbol);
+
+            if (callee.Handle == IntPtr.Zero)
+            {
+                throw new InvalidOperationException($"Call target \"{instruction.Symbol}\" has no declaration in the current LLVM module.");
+            }
+
+            LLVMTypeRef[] parameterTypes = [.. instruction.ParameterTypes.Select(type => ConvertType(this.context, type))];
+            LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(this.context.VoidType, parameterTypes);
+            LLVMValueRef[] arguments = new LLVMValueRef[parameterTypes.Length];
+
+            foreach (LoweredCallArgument argument in instruction.Arguments)
+            {
+                this.cancellationToken.ThrowIfCancellationRequested();
+                arguments[argument.ParameterIndex] = this.EmitValue(argument.Value);
+            }
+
+            this.builder.BuildCall2(functionType, callee, arguments);
         }
 
         private void EmitBooleanNegation(LoweredBooleanNotInstruction instruction)
