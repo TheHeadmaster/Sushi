@@ -8,7 +8,7 @@ using Sushi.Diagnostics;
 namespace Sushi.Testing.Compilation;
 
 /// <summary>
-/// Verifies project-level compilation and native execution of the supported task-root lifecycle.
+/// Verifies project compilation and native execution of the supported synchronous task-root lifecycle.
 /// </summary>
 [TestFixture]
 public class RootActivityCompilationTests
@@ -17,7 +17,6 @@ public class RootActivityCompilationTests
     [TestCase(false, TestName = "Task Root Without Stop Should Execute Successfully")]
     public async Task TaskRootShould_0(bool includeStop)
     {
-        string directory = CreateTestDirectory();
         string stopMethod = includeStop ? "public stop void Cleanup() { return; }" : string.Empty;
 
         string source = $$"""
@@ -33,36 +32,40 @@ public class RootActivityCompilationTests
             }
             """;
 
-        try
-        {
-            MVPCompilationResult result = await CompileAsync(directory, source);
+        await AssertRunnableRoot(source);
+    }
 
-            result.Diagnostics.Should().BeEmpty();
-            result.Succeeded.Should().BeTrue();
+    [TestCase("if (true) { return; }", TestName = "Task Root Should Execute Conditional Early Return")]
+    [TestCase("if (false) { return; }", TestName = "Task Root Should Fall Through False Conditional")]
+    [TestCase("if (false) { return; } else { return; }", TestName = "Task Root Should Execute Else Branch")]
+    [TestCase("if (false) { return; } else if (true) { return; } else { return; }", TestName = "Task Root Should Execute Else If Chain")]
+    [TestCase("if (true and not false) { return; }", TestName = "Task Root Should Execute Boolean Conditional")]
+    [TestCase("return; return;", TestName = "Task Root Should Accept Multiple Returns")]
+    [TestCase("return; if (true) { return; }", TestName = "Task Root Should Accept Valid Unreachable Statements")]
+    public async Task ConditionalRootShould_0(string entryBody)
+    {
+        string source = $$"""
+            package Example;
+            namespace Example;
 
-            string executablePath = result.Executable!.FilePath;
-
-            File.Exists(executablePath).Should().BeTrue();
-
-            using Process process = new()
+            public root activity Application : task
             {
-                StartInfo = new ProcessStartInfo
+                public entry void Launch()
                 {
-                    FileName = executablePath,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
+                    {{entryBody}}
                 }
-            };
 
-            process.Start().Should().BeTrue();
-            await process.WaitForExitAsync();
+                public stop void Cleanup()
+                {
+                    if ((6 * 7) == 42)
+                    {
+                        return;
+                    }
+                }
+            }
+            """;
 
-            process.ExitCode.Should().Be(0);
-        }
-        finally
-        {
-            DeleteTestDirectory(directory);
-        }
+        await AssertRunnableRoot(source);
     }
 
     [TestCase(TestName = "Executable Project Should Reject Missing Root Activity")]
@@ -118,23 +121,6 @@ public class RootActivityCompilationTests
             ErrorType.UnsupportedRootLifecycleParameters);
     }
 
-    [TestCase(TestName = "Native Bootstrap Should Reject Multiple Return Statements")]
-    public async Task MultipleReturnsShould_0()
-    {
-        await AssertCompilationError(
-            """
-            public root activity Application : task
-            {
-                public entry void Start()
-                {
-                    return;
-                    return;
-                }
-            }
-            """,
-            ErrorType.UnsupportedRootLifecycleBody);
-    }
-
     [TestCase(TestName = "Root Entry Should Reject Value Bearing Return")]
     public async Task InvalidEntryReturnShould_0()
     {
@@ -162,6 +148,134 @@ public class RootActivityCompilationTests
             ErrorType.ReturnValueInVoidFunction);
     }
 
+    [TestCase(TestName = "Root Entry Should Reject Non Boolean Condition")]
+    public async Task InvalidConditionShould_0()
+    {
+        await AssertCompilationError(
+            """
+            public root activity Application : task
+            {
+                public entry void Start()
+                {
+                    if (42)
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            ErrorType.UnsupportedMVPExpression);
+    }
+
+    [TestCase(TestName = "Root Entry Should Check Unreachable Conditional Branches")]
+    public async Task InvalidUnreachableBranchShould_0()
+    {
+        await AssertCompilationError(
+            """
+            public root activity Application : task
+            {
+                public entry void Start()
+                {
+                    if (true)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        return 42;
+                    }
+                }
+            }
+            """,
+            ErrorType.ReturnValueInVoidFunction);
+    }
+
+    [TestCase(TestName = "Root Entry Should Check Statements After Unconditional Return")]
+    public async Task InvalidUnreachableStatementShould_0()
+    {
+        await AssertCompilationError(
+            """
+            public root activity Application : task
+            {
+                public entry void Start()
+                {
+                    return;
+
+                    if (42)
+                    {
+                        return;
+                    }
+                }
+            }
+            """,
+            ErrorType.UnsupportedMVPExpression);
+    }
+
+    [TestCase(TestName = "Root Entry Should Reject Unbraced Conditional Branch")]
+    public async Task InvalidUnbracedBranchShould_0()
+    {
+        await AssertCompilationError(
+            """
+            public root activity Application : task
+            {
+                public entry void Start()
+                {
+                    if (true)
+                        return;
+                }
+            }
+            """,
+            ErrorType.ExpectedSyntax);
+    }
+
+    private static async Task AssertRunnableRoot(string source)
+    {
+        string directory = CreateTestDirectory();
+
+        try
+        {
+            MVPCompilationResult result = await CompileAsync(directory, source);
+
+            result.Diagnostics
+                .Should()
+                .BeEmpty();
+
+            result.Succeeded
+                .Should()
+                .BeTrue();
+
+            string executablePath = result.Executable!.FilePath;
+
+            File.Exists(executablePath)
+                .Should()
+                .BeTrue();
+
+            using Process process = new()
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start()
+                .Should()
+                .BeTrue();
+
+            await process.WaitForExitAsync();
+
+            process.ExitCode
+                .Should()
+                .Be(0);
+        }
+        finally
+        {
+            DeleteTestDirectory(directory);
+        }
+    }
+
     private static async Task AssertCompilationError(string declarations, ErrorType expected)
     {
         string directory = CreateTestDirectory();
@@ -171,8 +285,13 @@ public class RootActivityCompilationTests
             string source = $"package Example;\nnamespace Example;\n\n{declarations}";
             MVPCompilationResult result = await CompileAsync(directory, source);
 
-            result.Succeeded.Should().BeFalse();
-            result.Executable.Should().BeNull();
+            result.Succeeded
+                .Should()
+                .BeFalse();
+
+            result.Executable
+                .Should()
+                .BeNull();
 
             result.Diagnostics
                 .Should()

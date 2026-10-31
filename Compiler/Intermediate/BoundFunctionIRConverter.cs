@@ -4,7 +4,7 @@ using Sushi.Semantics;
 namespace Sushi.Intermediate;
 
 /// <summary>
-/// Converts semantically bound package-level functions into structured Sushi IR.
+/// Converts semantically bound functions into structured Sushi IR.
 /// </summary>
 public sealed class BoundFunctionIRConverter
 {
@@ -54,6 +54,10 @@ public sealed class BoundFunctionIRConverter
         {
             BoundReturnStatement returnStatement => new IRReturnStatement(
                 returnStatement.Expression is null ? null : ConvertExpression(returnStatement.Expression, cancellationToken)),
+            BoundIfStatement conditional => new IRIfStatement(
+                ConvertExpression(conditional.Condition, cancellationToken),
+                ConvertBlock(conditional.Then, cancellationToken),
+                conditional.Else is null ? null : ConvertBlock(conditional.Else, cancellationToken)),
             _ => throw new NotSupportedException($"Bound statement type \"{statement.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }

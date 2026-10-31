@@ -7,8 +7,7 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks using the cursor shared with declaration parsing.
-/// Currently supports return statements and delegates expression syntax to ExpressionParser.
+/// Parses braced statement blocks, returns, and conditional statements using a shared lexical cursor.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -23,36 +22,68 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     private readonly ExpressionParser expressions = new(cursor, cancellationToken);
 
     /// <summary>
-    /// Parses a braced statement block at the current cursor position, synthesizing missing braces when necessary.
+    /// Parses a braced statement block, preserving source-backed and recovered punctuation.
     /// </summary>
     /// <param name="diagnosticReporter">
-    /// Receives diagnostics for expected block syntax.
+    /// Receives syntax diagnostics.
     /// </param>
     /// <returns>
-    /// The parsed block containing the currently supported statements.
+    /// The parsed block containing supported statements in source order.
     /// </returns>
     public BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-        SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin function body.", diagnosticReporter);
+        SyntaxToken openBrace = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin statement block.", diagnosticReporter);
         List<StatementSyntax> statements = [];
 
-        while (this.IsReturnStatementAhead())
+        while (this.IsStatementAhead())
         {
             this.cancellationToken.ThrowIfCancellationRequested();
-            statements.Add(this.ParseReturnStatement(diagnosticReporter));
+            statements.Add(this.ParseStatement(diagnosticReporter));
         }
 
-        SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end function body.", diagnosticReporter);
+        SyntaxToken closeBrace = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end statement block.", diagnosticReporter);
         return new BlockSyntax(openBrace, statements, closeBrace);
+    }
+
+    private StatementSyntax ParseStatement(IDiagnosticReporter diagnosticReporter)
+        => this.IsKeywordAhead("if"u8) ? this.ParseIfStatement(diagnosticReporter) : this.ParseReturnStatement(diagnosticReporter);
+
+    private IfStatementSyntax ParseIfStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken ifKeyword = this.ParseKeyword("if"u8, SyntaxType.IfKeyword, "Expected \"if\" keyword.", diagnosticReporter);
+        SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after if.", diagnosticReporter);
+        ExpressionSyntax condition = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after if condition.", diagnosticReporter);
+        BlockSyntax thenBlock = this.ParseBlock(diagnosticReporter);
+
+        SyntaxToken? elseKeyword = null;
+        BlockSyntax? elseBlock = null;
+        IfStatementSyntax? elseIf = null;
+
+        if (this.cursor.TryConsumeKeyword("else"u8, out LexToken elseToken))
+        {
+            elseKeyword = new SyntaxToken(SyntaxType.ElseKeyword, elseToken);
+
+            if (this.IsKeywordAhead("if"u8))
+            {
+                elseIf = this.ParseIfStatement(diagnosticReporter);
+            }
+            else
+            {
+                elseBlock = this.ParseBlock(diagnosticReporter);
+            }
+        }
+
+        return new IfStatementSyntax(ifKeyword, openParenthesis, condition, closeParenthesis, thenBlock, elseKeyword, elseBlock, elseIf);
     }
 
     private ReturnStatementSyntax ParseReturnStatement(IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-        SyntaxToken returnKeyword = this.ParseReturnKeyword(diagnosticReporter);
+        SyntaxToken returnKeyword = this.ParseKeyword("return"u8, SyntaxType.ReturnKeyword, "Expected \"return\" keyword.", diagnosticReporter);
 
         ExpressionSyntax? expression = this.cursor.TryPeek(out LexToken next) && this.IsPunctuation(next, (byte)';')
             ? null
@@ -63,24 +94,25 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
     }
 
-    private SyntaxToken ParseReturnKeyword(IDiagnosticReporter diagnosticReporter)
+    private SyntaxToken ParseKeyword(ReadOnlySpan<byte> spelling, SyntaxType syntaxType, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
     {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (this.cursor.TryConsumeKeyword("return"u8, out LexToken token))
+        if (this.cursor.TryConsumeKeyword(spelling, out LexToken token))
         {
-            return new SyntaxToken(SyntaxType.ReturnKeyword, token);
+            return new SyntaxToken(syntaxType, token);
         }
 
         int position = this.cursor.Position;
-        this.AccumulateExpectedDiagnostic("Expected \"return\" keyword.", position, diagnosticReporter);
-        return SyntaxToken.Missing(SyntaxType.ReturnKeyword, this.cursor.Snapshot, position);
+        this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
+        return SyntaxToken.Missing(syntaxType, this.cursor.Snapshot, position);
     }
 
-    private bool IsReturnStatementAhead()
+    private bool IsStatementAhead()
+        => this.IsKeywordAhead("return"u8) || this.IsKeywordAhead("if"u8);
+
+    private bool IsKeywordAhead(ReadOnlySpan<byte> keyword)
         => this.cursor.TryPeek(out LexToken token)
             && token.Type is LexTokenType.Keyword
-            && this.cursor.TokenTextEquals(token, "return"u8);
+            && this.cursor.TokenTextEquals(token, keyword);
 
     private bool IsPunctuation(LexToken token, byte punctuation)
         => token.Type is LexTokenType.Punctuation

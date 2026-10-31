@@ -62,19 +62,72 @@ public sealed class IRFunctionLowerer
 
         private void LowerVoidBody(IRBlock body)
         {
-            if (body.Statements.Count == 0)
+            this.LowerVoidStatements(body);
+
+            if (!this.current.IsTerminated)
             {
                 this.current.Terminate(new LoweredReturnTerminator());
-                return;
             }
+        }
 
-            if (body.Statements.Count == 1 && body.Statements[0] is IRReturnStatement { Expression: null })
+        private void LowerVoidStatements(IRBlock body)
+        {
+            foreach (IRStatement statement in body.Statements)
             {
-                this.current.Terminate(new LoweredReturnTerminator());
-                return;
+                this.cancellationToken.ThrowIfCancellationRequested();
+
+                if (this.current.IsTerminated)
+                {
+                    break;
+                }
+
+                switch (statement)
+                {
+                    case IRReturnStatement { Expression: null }:
+                        this.current.Terminate(new LoweredReturnTerminator());
+                        break;
+
+                    case IRIfStatement conditional:
+                        this.LowerVoidConditional(conditional);
+                        break;
+
+                    default:
+                        throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported in the current void lowering subset.");
+                }
+            }
+        }
+
+        private void LowerVoidConditional(IRIfStatement conditional)
+        {
+            LoweredValue condition = this.LowerExpression(conditional.Condition);
+
+            BlockBuilder thenBlock = this.CreateBlock("if.then");
+            BlockBuilder? elseBlock = conditional.Else is null ? null : this.CreateBlock("if.else");
+            BlockBuilder mergeBlock = this.CreateBlock("if.merge");
+
+            this.current.Terminate(new LoweredConditionalBranchTerminator(
+                condition, thenBlock.Name, elseBlock?.Name ?? mergeBlock.Name));
+
+            this.current = thenBlock;
+            this.LowerVoidStatements(conditional.Then);
+
+            if (!this.current.IsTerminated)
+            {
+                this.current.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
             }
 
-            throw new NotSupportedException("The current lowering pass supports empty void bodies or a single bare return statement.");
+            if (elseBlock is not null)
+            {
+                this.current = elseBlock;
+                this.LowerVoidStatements(conditional.Else!);
+
+                if (!this.current.IsTerminated)
+                {
+                    this.current.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
+                }
+            }
+
+            this.current = mergeBlock;
         }
 
         private void LowerValueReturningBody(IRBlock body)
@@ -315,6 +368,8 @@ public sealed class IRFunctionLowerer
         public string Name { get; } = name;
 
         public List<LoweredInstruction> Instructions { get; } = [];
+
+        public bool IsTerminated => this.terminator is not null;
 
         public void Terminate(LoweredTerminator value)
         {

@@ -5,7 +5,7 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Binds the currently supported package-level function semantics.
+/// Binds the currently supported package-level function semantics and reusable callable bodies.
 /// </summary>
 public sealed class FunctionDeclarationBinder
 {
@@ -28,7 +28,6 @@ public sealed class FunctionDeclarationBinder
     {
         ArgumentNullException.ThrowIfNull(declaration);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!TryBindAccessibility(declaration.AccessModifier, out Accessibility accessibility)
@@ -106,30 +105,123 @@ public sealed class FunctionDeclarationBinder
         return valid ? parameters : null;
     }
 
+    /// <summary>
+    /// Binds all statements in a callable body, including branches and syntactically
+    /// present statements that cannot be reached during execution.
+    /// </summary>
+    /// <param name="block">
+    /// The parsed statement block.
+    /// </param>
+    /// <param name="returnType">
+    /// The enclosing callable's declared return type.
+    /// </param>
+    /// <param name="parameters">
+    /// The named parameters available to expressions.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives static semantic diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels binding.
+    /// </param>
+    /// <returns>
+    /// The bound block, or null when one or more statements are invalid.
+    /// </returns>
     internal static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(block);
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+
         List<BoundStatement> statements = [];
+        bool valid = true;
 
         foreach (StatementSyntax statement in block.Statements)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (statement is not ReturnStatementSyntax returnStatement)
+            BoundStatement? boundStatement = statement switch
             {
-                return null;
+                ReturnStatementSyntax returnStatement => BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken),
+                IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken),
+                _ => null
+            };
+
+            if (boundStatement is null)
+            {
+                valid = false;
+                continue;
             }
 
-            BoundReturnStatement? boundReturn = BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken);
-
-            if (boundReturn is null)
-            {
-                return null;
-            }
-
-            statements.Add(boundReturn);
+            statements.Add(boundStatement);
         }
 
-        return new BoundBlock(statements);
+        return valid ? new BoundBlock(statements) : null;
+    }
+
+    private static BoundIfStatement? BindConditionalStatement(
+        IfStatementSyntax statement,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!statement.IfKeyword.IsSourceBacked
+            || !statement.OpenParenthesisToken.IsSourceBacked
+            || !statement.CloseParenthesisToken.IsSourceBacked
+            || !statement.ThenBlock.OpenBraceToken.IsSourceBacked
+            || !statement.ThenBlock.CloseBraceToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        if (returnType is not BoundType.Void)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
+            return null;
+        }
+
+        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken);
+        BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken);
+
+        BoundBlock? elseBody = null;
+        bool validElse = true;
+
+        if (statement.ElseKeyword is SyntaxToken elseKeyword && !elseKeyword.IsSourceBacked)
+        {
+            validElse = false;
+        }
+        else if (statement.ElseBlock is BlockSyntax elseBlock)
+        {
+            if (!elseBlock.OpenBraceToken.IsSourceBacked || !elseBlock.CloseBraceToken.IsSourceBacked)
+            {
+                validElse = false;
+            }
+            else
+            {
+                elseBody = BindBody(elseBlock, returnType, parameters, diagnosticReporter, cancellationToken);
+                validElse = elseBody is not null;
+            }
+        }
+        else if (statement.ElseIf is IfStatementSyntax elseIf)
+        {
+            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken);
+
+            if (alternative is null)
+            {
+                validElse = false;
+            }
+            else
+            {
+                elseBody = new BoundBlock([alternative]);
+            }
+        }
+
+        return condition is null || thenBody is null || !validElse
+            ? null
+            : new BoundIfStatement(condition, thenBody, elseBody);
     }
 
     private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)

@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.FileSystemGlobbing;
+﻿
+using Microsoft.Extensions.FileSystemGlobbing;
 using Sushi.Analysis;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
@@ -10,26 +11,22 @@ using Sushi.Source;
 namespace Sushi.Compilation;
 
 /// <summary>
-/// Coordinates the temporary executable MVP from project configuration and Sushi source through native linking.
+/// Compiles executable Sushi projects by resolving their unique root activity,
+/// lowering its supported lifecycle methods, and producing a native executable.
 /// </summary>
-/// <remarks>
-/// The MVP requires exactly one successfully bound function across the project's selected source files.
-/// Selecting that function as the process root is an implementation convention and does not define Sushi
-/// source-level entry-point semantics.
-/// </remarks>
 public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 {
     private readonly SourceAnalyzer sourceAnalyzer = new();
 
     /// <summary>
-    /// Creates a project compiler using the temporary default executable pipeline.
+    /// Creates a project compiler using the current native executable pipeline.
     /// </summary>
     internal MVPProjectCompiler() : this(new MVPExecutableBuilder())
     {
     }
 
     /// <summary>
-    /// Compiles a Sushi project into a native executable using the current MVP backend pipeline.
+    /// Compiles a Sushi project into a native executable using its declared root activity.
     /// </summary>
     /// <param name="projectOrFolderPath">
     /// A <c>.susproj</c> path or a directory containing exactly one Sushi project file.
@@ -39,7 +36,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     /// </param>
     /// <returns>
     /// The project compilation result.
-    /// </returns>  
+    /// </returns>
     public async Task<MVPCompilationResult> CompileAsync(string projectOrFolderPath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectOrFolderPath);
@@ -187,18 +184,6 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         ];
     }
 
-    private static BoundFunction SelectMVPEntryFunction(IReadOnlyList<BoundFunction> functions)
-    {
-        ArgumentNullException.ThrowIfNull(functions);
-
-        return functions.Count switch
-        {
-            1 => functions[0],
-            0 => throw new NotSupportedException("The executable MVP requires exactly one successfully bound Sushi function, but the project contains none."),
-            _ => throw new NotSupportedException($"The executable MVP requires exactly one successfully bound Sushi function, but the project contains {functions.Count}.")
-        };
-    }
-
     private static string GetMVPOutputPath(string projectDirectory, ProjectDefinition project)
     {
         string target = project.Build.DefaultTarget
@@ -217,7 +202,6 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         return SourceSnapshot.FromUtf8(new Uri(fullPath), version: null, bytes);
     }
 
-    
     /// <summary>
     /// Binds one supported root lifecycle body and lowers it under a private compiler-generated symbol.
     /// </summary>
@@ -225,11 +209,22 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     /// The validated activity lifecycle declaration.
     /// </param>
     /// <param name="symbol">
-    /// The compiler-owned native symbol.</param>
-    /// <param name="diagnosticReporter">Receives semantic and MVP-subset diagnostics.</param>
-    /// <param name="cancellationToken">Cancels binding and lowering.</param>
-    /// <returns>The lowered function, or null if the method cannot be compiled.</returns>
-    private static LoweredFunction? BindAndLowerRootLifecycleMethod(BoundActivityMethod method, string symbol, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    /// The compiler-owned native symbol.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives semantic and executable-subset diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels binding and lowering.
+    /// </param>
+    /// <returns>
+    /// The lowered function, or null if the method cannot be compiled.
+    /// </returns>
+    private static LoweredFunction? BindAndLowerRootLifecycleMethod(
+        BoundActivityMethod method,
+        string symbol,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -240,15 +235,6 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             diagnosticReporter.GenerateError(
                 ErrorType.UnsupportedRootLifecycleParameters,
                 method.Declaration.OpenParenthesisToken.Span);
-
-            return null;
-        }
-
-        if (method.Declaration.Body.Statements.Count > 1)
-        {
-            diagnosticReporter.GenerateError(
-                ErrorType.UnsupportedRootLifecycleBody,
-                method.Declaration.Body.Span);
 
             return null;
         }

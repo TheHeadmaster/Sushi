@@ -50,5 +50,8 @@ public enum SyntaxType
     StopKeyword,
     TaskKeyword,
     PersistentKeyword,
-    ColonToken
+    ColonToken,
+    IfStatement,
+    IfKeyword,
+    ElseKeyword
 }
