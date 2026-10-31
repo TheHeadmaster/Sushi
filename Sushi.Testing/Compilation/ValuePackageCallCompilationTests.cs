@@ -82,6 +82,7 @@ public class ValuePackageCallCompilationTests
         }
         """;
 
+
     [TestCase("Ensure(Calculate(), 21);", TestName = "Nested Return Values Should Reach Native Caller")]
     [TestCase("Ensure(PlusOne(20), 41);", TestName = "Call Results Should Participate In Arithmetic")]
     [TestCase("Ensure(Subtract(right: Double(2), left: 10), 6);", TestName = "Named Calls Should Map Nested Results To Parameters")]
@@ -282,6 +283,123 @@ public class ValuePackageCallCompilationTests
         result.Diagnostics
             .Should()
             .Contain(diagnostic => diagnostic.IsType(ErrorType.UnsupportedMVPExpression));
+    }
+
+    [TestCase("Log(); return 42;", TestName = "Value Function Should Diagnose Statement Before Return")]
+    [TestCase("return 42; Log();", TestName = "Value Function Should Diagnose Unreachable Statement After Return")]
+    [TestCase("return 42; return 7;", TestName = "Value Function Should Diagnose Multiple Returns")]
+    [TestCase("Log();", TestName = "Value Function Should Diagnose Missing Return After Invocation")]
+    [TestCase("", TestName = "Value Function Should Diagnose Empty Body")]
+    public async Task UnsupportedValueShould_0(string body)
+    {
+        string helper = $$"""
+            package Example;
+            namespace Example;
+
+            public void Log()
+            {
+                return;
+            }
+
+            public int32 Calculate()
+            {
+                {{body}}
+            }
+            """;
+
+        using TestProject project = await TestProject.Create(CreateRoot("return;"), helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+
+        result.Executable
+            .Should()
+            .BeNull();
+
+        SushiDiagnostic diagnostic = result.Diagnostics
+            .Should()
+            .ContainSingle(item => item.IsType(ErrorType.UnsupportedMVPExpression))
+            .Which;
+
+        diagnostic.Message
+            .Should()
+            .Contain("exactly one return statement producing a value");
+
+        diagnostic.Span.Snapshot.Uri.LocalPath
+            .Should()
+            .EndWith("Helpers.sus");
+    }
+
+    [TestCase(TestName = "Invalid Return Value Should Preserve Specific Diagnostic Without Unsupported Body Error")]
+    public async Task InvalidReturnValueShould_0()
+    {
+        const string helper = """
+            package Example;
+            namespace Example;
+
+            public int32 Calculate()
+            {
+                return;
+            }
+            """;
+
+        using TestProject project = await TestProject.Create(CreateRoot("return;"), helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+
+        result.Executable
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .ContainSingle()
+            .Which
+            .IsType(ErrorType.MissingReturnValue)
+            .Should()
+            .BeTrue();
+    }
+
+    [TestCase(TestName = "Void Function Should Continue Supporting Invocation Followed By Return")]
+    public async Task VoidFunctionShould_0()
+    {
+        const string helper = """
+            package Example;
+            namespace Example;
+
+            public void Log()
+            {
+                return;
+            }
+
+            public void Run()
+            {
+                Log();
+                return;
+            }
+            """;
+
+        using TestProject project = await TestProject.Create(CreateRoot("Run();"), helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+
+        int exitCode = await RunExecutable(result.Executable!.FilePath);
+
+        exitCode
+            .Should()
+            .Be(0);
     }
 
     private static string CreateRoot(string body)

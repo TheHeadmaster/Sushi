@@ -216,7 +216,23 @@ public sealed class FunctionDeclarationBinder
             statements.Add(boundStatement);
         }
 
-        return valid ? new BoundBlock(statements) : null;
+        if (!valid)
+        {
+            return null;
+        }
+        
+        if (returnType is not BoundType.Void
+            && (statements.Count != 1 || statements[0] is not BoundReturnStatement { Expression: not null }))
+        {
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                ErrorType.UnsupportedMVPExpression,
+                "The current executable MVP requires a value-returning function body to contain exactly one return statement producing a value.",
+                block.Span);
+        
+            return null;
+        }
+        
+        return new BoundBlock(statements);
     }
 
     private static BoundStatement? BindExpressionStatement(
