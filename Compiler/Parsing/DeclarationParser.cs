@@ -1,3 +1,4 @@
+
 using Sushi.Diagnostics;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
@@ -6,7 +7,7 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses package, namespace, and function declarations from a shared lexical cursor.
+/// Parses package, namespace, function, and activity declarations from a shared lexical cursor.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared with the source-file parser.
@@ -48,9 +49,67 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         return new FunctionDeclarationSyntax(accessModifier, returnType, name, openParenthesis, parameters, separators, closeParenthesis, body);
     }
 
-    /// <summary>Parses a namespace declaration at the current cursor position.</summary>
-    /// <param name="diagnosticReporter">Receives syntax diagnostics for the declaration.</param>
-    /// <returns>The parsed namespace declaration.</returns>
+    /// <summary>
+    /// Parses an activity declaration and preserves unsupported members for later validation.
+    /// </summary>
+    /// <param name="diagnosticReporter">
+    /// Receives syntax and recovery diagnostics.
+    /// </param>
+    /// <returns>
+    /// The parsed activity declaration with members in source order.
+    /// </returns>
+    public ActivityDeclarationSyntax ParseActivityDeclaration(IDiagnosticReporter diagnosticReporter)
+    {
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+        this.cancellationToken.ThrowIfCancellationRequested();
+
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+
+        SyntaxToken accessModifier = this.ParseAccessModifier(localDiagnostics);
+        SyntaxToken? rootKeyword = this.cursor.TryConsumeKeyword("root"u8, out LexToken root)
+            ? new SyntaxToken(SyntaxType.RootKeyword, root)
+            : null;
+
+        SyntaxToken activityKeyword = this.ParseKeyword("activity"u8, SyntaxType.ActivityKeyword, "Expected \"activity\" keyword.", localDiagnostics);
+        SyntaxToken name = this.ParseNameComponent("Expected activity name.", skipUnknown: false, localDiagnostics);
+        SyntaxToken colonToken = this.ParsePunctuation((byte)':', SyntaxType.ColonToken, "Expected \":\" before activity lifetime.", localDiagnostics);
+        SyntaxToken lifetimeKeyword = this.ParseActivityLifetime(localDiagnostics);
+        SyntaxToken openBraceToken = this.ParsePunctuation((byte)'{', SyntaxType.OpenBraceToken, "Expected \"{\" to begin activity body.", localDiagnostics);
+
+        List<ActivityMemberSyntax> members = [];
+
+        while (this.cursor.TryPeek(out LexToken next) && !this.IsPunctuation(next, (byte)'}'))
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            if (this.IsActivityMethodDeclarationAhead())
+            {
+                members.Add(this.ParseActivityMethodDeclaration(localDiagnostics));
+            }
+            else
+            {
+                members.Add(this.ParseUnsupportedActivityMember(localDiagnostics));
+            }
+        }
+
+        SyntaxToken closeBraceToken = this.ParsePunctuation((byte)'}', SyntaxType.CloseBraceToken, "Expected \"}\" to end activity body.", localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
+
+        return new ActivityDeclarationSyntax(
+            accessModifier, rootKeyword, activityKeyword, name, colonToken,
+            lifetimeKeyword, openBraceToken, members, closeBraceToken);
+    }
+
+    /// <summary>
+    /// Parses a namespace declaration at the current cursor position.
+    /// </summary>
+    /// <param name="diagnosticReporter">
+    /// Receives syntax diagnostics for the declaration.
+    /// </param>
+    /// <returns>
+    /// The parsed namespace declaration.
+    /// </returns>
     public NamespaceDeclarationSyntax ParseNamespaceDeclaration(IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -66,9 +125,15 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         return new NamespaceDeclarationSyntax(namespaceKeyword, name, semicolonToken);
     }
 
-    /// <summary>Parses a package declaration at the current cursor position.</summary>
-    /// <param name="diagnosticReporter">Receives syntax diagnostics for the declaration.</param>
-    /// <returns>The parsed package declaration.</returns>
+    /// <summary>
+    /// Parses a package declaration at the current cursor position.
+    /// </summary>
+    /// <param name="diagnosticReporter">
+    /// Receives syntax diagnostics for the declaration.
+    /// </param>
+    /// <returns>
+    /// The parsed package declaration.
+    /// </returns>
     public PackageDeclarationSyntax ParsePackageDeclaration(IDiagnosticReporter diagnosticReporter)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -84,6 +149,108 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         return new PackageDeclarationSyntax(packageKeyword, name, semicolonToken);
     }
 
+    private ActivityMethodDeclarationSyntax ParseActivityMethodDeclaration(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken accessModifier = this.ParseAccessModifier(diagnosticReporter);
+        SyntaxToken lifecycleModifier = this.ParseLifecycleModifier(diagnosticReporter);
+        SyntaxToken returnType = this.ParseReturnType(diagnosticReporter);
+        SyntaxToken name = this.ParseNameComponent("Expected activity method name.", skipUnknown: false, diagnosticReporter);
+        SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after activity method name.", diagnosticReporter);
+        (IReadOnlyList<ParameterSyntax> parameters, IReadOnlyList<SyntaxToken> separators) = this.ParseParameters(diagnosticReporter);
+        SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after activity method parameters.", diagnosticReporter);
+        BlockSyntax body = this.statements.ParseBlock(diagnosticReporter);
+
+        return new ActivityMethodDeclarationSyntax(
+            accessModifier, lifecycleModifier, returnType, name, openParenthesis,
+            parameters, separators, closeParenthesis, body);
+    }
+
+    private UnsupportedActivityMemberSyntax ParseUnsupportedActivityMember(IDiagnosticReporter diagnosticReporter)
+    {
+        int start = this.cursor.Position;
+        int end = start;
+        int braceDepth = 0;
+
+        while (this.cursor.TryPeek(out LexToken next))
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            if (braceDepth == 0 && this.IsPunctuation(next, (byte)'}'))
+            {
+                break;
+            }
+
+            if (end > start && braceDepth == 0 && this.IsActivityMethodDeclarationAhead())
+            {
+                break;
+            }
+
+            this.cursor.TryAdvance(out LexToken consumed);
+            end = consumed.Span.End;
+
+            if (this.IsPunctuation(consumed, (byte)'{'))
+            {
+                braceDepth++;
+            }
+            else if (this.IsPunctuation(consumed, (byte)'}'))
+            {
+                braceDepth--;
+
+                if (braceDepth == 0)
+                {
+                    break;
+                }
+            }
+            else if (braceDepth == 0 && this.IsPunctuation(consumed, (byte)';'))
+            {
+                break;
+            }
+        }
+
+        SourceSpan span = new(this.cursor.Snapshot, start, end);
+
+        diagnosticReporter.GenerateErrorWithCustomMessage(
+            ErrorType.ExpectedSyntax,
+            "Unsupported activity member syntax.",
+            span);
+
+        return new UnsupportedActivityMemberSyntax(span);
+    }
+
+    private SyntaxToken ParseActivityLifetime(IDiagnosticReporter diagnosticReporter)
+    {
+        if (this.cursor.TryConsumeKeyword("task"u8, out LexToken task))
+        {
+            return new SyntaxToken(SyntaxType.TaskKeyword, task);
+        }
+
+        if (this.cursor.TryConsumeKeyword("persistent"u8, out LexToken persistent))
+        {
+            return new SyntaxToken(SyntaxType.PersistentKeyword, persistent);
+        }
+
+        int position = this.cursor.Position;
+        this.AccumulateExpectedDiagnostic("Expected \"task\" or \"persistent\" activity lifetime.", position, diagnosticReporter);
+        return SyntaxToken.Missing(SyntaxType.TaskKeyword, this.cursor.Snapshot, position);
+    }
+
+    private SyntaxToken ParseLifecycleModifier(IDiagnosticReporter diagnosticReporter)
+    {
+        if (this.cursor.TryConsumeKeyword("entry"u8, out LexToken entry))
+        {
+            return new SyntaxToken(SyntaxType.EntryKeyword, entry);
+        }
+
+        if (this.cursor.TryConsumeKeyword("stop"u8, out LexToken stop))
+        {
+            return new SyntaxToken(SyntaxType.StopKeyword, stop);
+        }
+
+        int position = this.cursor.Position;
+        this.AccumulateExpectedDiagnostic("Expected \"entry\" or \"stop\" modifier.", position, diagnosticReporter);
+        return SyntaxToken.Missing(SyntaxType.EntryKeyword, this.cursor.Snapshot, position);
+    }
+
     private (IReadOnlyList<ParameterSyntax> Parameters, IReadOnlyList<SyntaxToken> Separators) ParseParameters(IDiagnosticReporter diagnosticReporter)
     {
         List<ParameterSyntax> parameters = [];
@@ -97,6 +264,7 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         while (true)
         {
             this.cancellationToken.ThrowIfCancellationRequested();
+
             SyntaxToken type = this.ParseParameterType(diagnosticReporter);
             SyntaxToken name = this.ParseNameComponent("Expected parameter name.", skipUnknown: false, diagnosticReporter);
             parameters.Add(new ParameterSyntax(type, name));
@@ -109,8 +277,10 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
                 {
                     int position = this.cursor.Position;
                     this.AccumulateExpectedDiagnostic("Expected parameter declaration after comma.", position, diagnosticReporter);
+
                     SyntaxToken missingType = SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
                     SyntaxToken missingName = SyntaxToken.Missing(SyntaxType.IdentifierToken, this.cursor.Snapshot, position);
+
                     parameters.Add(new ParameterSyntax(missingType, missingName));
                     break;
                 }
@@ -204,33 +374,23 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         return SyntaxToken.Missing(type, this.cursor.Snapshot, position);
     }
 
-    private SyntaxToken ParseNamespaceKeyword(IDiagnosticReporter diagnosticReporter)
+    private SyntaxToken ParseKeyword(ReadOnlySpan<byte> spelling, SyntaxType type, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
     {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (this.cursor.TryConsumeKeyword("namespace"u8, out LexToken token))
+        if (this.cursor.TryConsumeKeyword(spelling, out LexToken token))
         {
-            return new SyntaxToken(SyntaxType.NamespaceKeyword, token);
+            return new SyntaxToken(type, token);
         }
 
         int position = this.cursor.Position;
-        this.AccumulateExpectedDiagnostic("Expected \"namespace\" keyword.", position, diagnosticReporter);
-        return SyntaxToken.Missing(SyntaxType.NamespaceKeyword, this.cursor.Snapshot, position);
+        this.AccumulateExpectedDiagnostic(diagnosticMessage, position, diagnosticReporter);
+        return SyntaxToken.Missing(type, this.cursor.Snapshot, position);
     }
+
+    private SyntaxToken ParseNamespaceKeyword(IDiagnosticReporter diagnosticReporter)
+        => this.ParseKeyword("namespace"u8, SyntaxType.NamespaceKeyword, "Expected \"namespace\" keyword.", diagnosticReporter);
 
     private SyntaxToken ParsePackageKeyword(IDiagnosticReporter diagnosticReporter)
-    {
-        ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
-        if (this.cursor.TryConsumeKeyword("package"u8, out LexToken token))
-        {
-            return new SyntaxToken(SyntaxType.PackageKeyword, token);
-        }
-
-        int position = this.cursor.Position;
-        this.AccumulateExpectedDiagnostic("Expected \"package\" keyword.", position, diagnosticReporter);
-        return SyntaxToken.Missing(SyntaxType.PackageKeyword, this.cursor.Snapshot, position);
-    }
+        => this.ParseKeyword("package"u8, SyntaxType.PackageKeyword, "Expected \"package\" keyword.", diagnosticReporter);
 
     private QualifiedNameSyntax ParseQualifiedName(string declarationKind, IDiagnosticReporter diagnosticReporter)
     {
@@ -278,7 +438,7 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
         => this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, diagnosticMessage, diagnosticReporter);
 
     /// <summary>
-    /// Determines whether the next significant elements form the supported function-declaration prefix.
+    /// Determines whether the next significant elements form a supported function declaration prefix.
     /// </summary>
     /// <returns>
     /// Whether a function declaration begins at the cursor.
@@ -292,6 +452,31 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
             && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
             && this.cursor.TryPeek(out LexToken openParenthesis, lookahead: 3)
             && this.IsPunctuation(openParenthesis, (byte)'(');
+
+    /// <summary>
+    /// Determines whether the next declaration starts with an activity or root activity prefix.
+    /// </summary>
+    /// <returns>
+    /// Whether the parser should recognize an activity declaration.
+    /// </returns>
+    public bool IsActivityDeclarationAhead()
+    {
+        if (!this.cursor.TryPeek(out LexToken accessModifier) || !this.IsAccessModifier(accessModifier))
+        {
+            return false;
+        }
+
+        return this.cursor.TryPeek(out LexToken next, lookahead: 1)
+            && next.Type is LexTokenType.Keyword
+            && (this.cursor.TokenTextEquals(next, "root"u8) || this.cursor.TokenTextEquals(next, "activity"u8));
+    }
+
+    private bool IsActivityMethodDeclarationAhead()
+        => this.cursor.TryPeek(out LexToken accessModifier)
+            && this.IsAccessModifier(accessModifier)
+            && this.cursor.TryPeek(out LexToken lifecycle, lookahead: 1)
+            && lifecycle.Type is LexTokenType.Keyword
+            && (this.cursor.TokenTextEquals(lifecycle, "entry"u8) || this.cursor.TokenTextEquals(lifecycle, "stop"u8));
 
     private bool IsAccessModifier(LexToken token)
         => token.Type is LexTokenType.Keyword
@@ -343,10 +528,10 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
     /// The following syntax token.
     /// </param>
     /// <param name="message">
-    /// The diagnostic message when the tokens are separated.
+    /// The diagnostic message when tokens are separated.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// The reporter used to accumulate the diagnostic.
+    /// The reporter receiving diagnostics.
     /// </param>
     private void RequireSyntacticAdjacency(SyntaxToken left, SyntaxToken right, string message, IDiagnosticReporter diagnosticReporter)
     {

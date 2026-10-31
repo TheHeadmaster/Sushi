@@ -1,3 +1,4 @@
+
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Lexing.Tokenization;
@@ -53,18 +54,38 @@ public sealed class SourceParser
         }
 
         List<FunctionDeclarationSyntax> functionDeclarations = [];
+        List<ActivityDeclarationSyntax> activityDeclarations = [];
 
-        while (declarations.IsFunctionDeclarationAhead())
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            functionDeclarations.Add(declarations.ParseFunctionDeclaration(localDiagnostics));
+
+            if (declarations.IsActivityDeclarationAhead())
+            {
+                activityDeclarations.Add(declarations.ParseActivityDeclaration(localDiagnostics));
+            }
+            else if (declarations.IsFunctionDeclarationAhead())
+            {
+                functionDeclarations.Add(declarations.ParseFunctionDeclaration(localDiagnostics));
+            }
+            else
+            {
+                break;
+            }
         }
 
         SourceSpan? unparsedContentSpan = cursor.TryPeek(out LexToken next)
             ? new SourceSpan(cursor.Snapshot, next.Span.Start, cursor.Snapshot.SourceLength)
             : null;
 
-        SourceFileSyntax sourceFile = new(cursor.Snapshot, packageDeclarations, namespaceDeclarations, functionDeclarations, unparsedContentSpan);
+        SourceFileSyntax sourceFile = new(
+            cursor.Snapshot,
+            packageDeclarations,
+            namespaceDeclarations,
+            functionDeclarations,
+            activityDeclarations,
+            unparsedContentSpan);
+
         diagnosticReporter.CommitReporter(localDiagnostics);
         return new ParserResult(new ConcreteSyntaxTree(lexerResult, sourceFile));
     }
@@ -99,6 +120,35 @@ public sealed class SourceParser
     }
 
     /// <summary>
+    /// Parses an activity declaration beginning at the first significant lexical element.
+    /// </summary>
+    /// <param name="lexerResult">
+    /// The complete lexical result, including trivia and recovery elements.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// The reporter receiving syntax and recovery diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// The token used to cancel parsing.
+    /// </param>
+    /// <returns>
+    /// The parsed activity declaration, including recovered syntax.
+    /// </returns>
+    public static ParserResult ParseActivityDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lexerResult);
+        ArgumentNullException.ThrowIfNull(diagnosticReporter);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        IDiagnosticReporter localDiagnostics = new DiagnosticReporter();
+        DeclarationParser declarations = new(new ParserCursor(lexerResult, cancellationToken), cancellationToken);
+        ActivityDeclarationSyntax declaration = declarations.ParseActivityDeclaration(localDiagnostics);
+
+        diagnosticReporter.CommitReporter(localDiagnostics);
+        return new ParserResult(new ConcreteSyntaxTree(lexerResult, declaration));
+    }
+
+    /// <summary>
     /// Parses a package declaration beginning at the first significant lexical element.
     /// </summary>
     /// <param name="lexerResult">
@@ -108,8 +158,10 @@ public sealed class SourceParser
     /// The diagnostic reporter used to accumulate diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel parsing.</param>
-    /// <returns>The parsed package declaration.
+    /// The token used to cancel parsing.
+    /// </param>
+    /// <returns>
+    /// The parsed package declaration.
     /// </returns>
     public static ParserResult ParsePackageDeclaration(LexerResult lexerResult, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {

@@ -1,3 +1,4 @@
+
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
@@ -39,5 +40,15 @@ public enum SyntaxType
     InvalidComparisonChain,
     Parameter,
     IdentifierExpression,
-    CommaToken
+    CommaToken,
+    ActivityDeclaration,
+    ActivityMethodDeclaration,
+    UnsupportedActivityMember,
+    ActivityKeyword,
+    RootKeyword,
+    EntryKeyword,
+    StopKeyword,
+    TaskKeyword,
+    PersistentKeyword,
+    ColonToken
 }
