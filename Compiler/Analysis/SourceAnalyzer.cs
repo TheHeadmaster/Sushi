@@ -1,4 +1,3 @@
-
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Parsing;
@@ -9,28 +8,51 @@ using Sushi.Source;
 namespace Sushi.Analysis;
 
 /// <summary>
-/// Coordinates lexical, syntactic, and initial semantic analysis for a Sushi source snapshot.
+/// Coordinates lexical, syntactic, and initial semantic analysis of Sushi
+/// source snapshots, including a signature-first project compilation mode.
 /// </summary>
 public sealed class SourceAnalyzer : Analyzer
 {
     private readonly SourceLexer lexer = new();
 
     /// <summary>
-    /// Analyzes a Sushi source snapshot and produces its syntax and supported semantic declarations.
+    /// Analyzes a source snapshot and binds all supported declarations and bodies.
     /// </summary>
     /// <param name="snapshot">
-    /// The authoritative source snapshot to analyze.
+    /// The authoritative source snapshot.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// The diagnostic reporter used to accumulate diagnostics.
+    /// Receives analysis diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel analysis.
+    /// Cancels analysis.
     /// </param>
     /// <returns>
-    /// The source analysis result, including parsed syntax and bound declarations.
+    /// The analyzed syntax and complete supported semantic declarations.
     /// </returns>
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+        => this.AnalyzeCore(snapshot, diagnosticReporter, cancellationToken, signatureOnly: false);
+
+    /// <summary>
+    /// Analyzes syntax, package identity, activity declarations, and function
+    /// signatures without binding bodies before project-wide name resolution.
+    /// </summary>
+    /// <param name="snapshot">
+    /// The authoritative source snapshot.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives lexical, syntactic, and signature diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels analysis.
+    /// </param>
+    /// <returns>
+    /// Declarations ready for the project-wide function-body binding pass.
+    /// </returns>
+    internal Task<AnalysisResult> AnalyzeDeclarations(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+        => this.AnalyzeCore(snapshot, diagnosticReporter, cancellationToken, signatureOnly: true);
+
+    private Task<AnalysisResult> AnalyzeCore(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, bool signatureOnly)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -48,7 +70,7 @@ public sealed class SourceAnalyzer : Analyzer
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
-        SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, cancellationToken);
+        SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, cancellationToken, signatureOnly);
         cancellationToken.ThrowIfCancellationRequested();
 
         diagnosticReporter.CommitReporter(localDiagnostics);

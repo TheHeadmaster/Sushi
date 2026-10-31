@@ -1,17 +1,19 @@
-﻿using Microsoft.Extensions.FileSystemGlobbing;
+﻿
+using Microsoft.Extensions.FileSystemGlobbing;
 using Sushi.Analysis;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
+using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
 
 namespace Sushi.Compilation;
 
 /// <summary>
-/// Compiles executable Sushi projects by resolving their unique root activity,
-/// lowering supported lifecycle and package functions, and producing a native executable.
+/// Compiles executable Sushi projects through signature collection, function
+/// body binding, root lifecycle resolution, lowering, and native emission.
 /// </summary>
 public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 {
@@ -25,16 +27,16 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     }
 
     /// <summary>
-    /// Compiles a Sushi project into a native executable using its declared root activity.
+    /// Compiles a project into a native executable using its declared root activity.
     /// </summary>
     /// <param name="projectOrFolderPath">
-    /// A <c>.susproj</c> path or a directory containing exactly one Sushi project file.
+    /// A .susproj path or directory containing exactly one Sushi project file.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel compilation.
+    /// Cancels compilation and native linking.
     /// </param>
     /// <returns>
-    /// The project compilation result.
+    /// The resulting executable and all static diagnostics.
     /// </returns>
     public async Task<MVPCompilationResult> CompileAsync(string projectOrFolderPath, CancellationToken cancellationToken)
     {
@@ -53,7 +55,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         if (diagnosticReporter.HasErrors())
         {
-            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+            return Failed(diagnosticReporter);
         }
 
         ProjectDefinition project = projectResult.Project
@@ -73,7 +75,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             cancellationToken.ThrowIfCancellationRequested();
 
             SourceSnapshot snapshot = await LoadSnapshot(sourcePath, cancellationToken);
-            SourceAnalysisResult source = (SourceAnalysisResult)await this.sourceAnalyzer.Analyze(
+            SourceAnalysisResult source = (SourceAnalysisResult)await this.sourceAnalyzer.AnalyzeDeclarations(
                 snapshot, diagnosticReporter, cancellationToken);
 
             sources.Add(source);
@@ -81,7 +83,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         if (diagnosticReporter.HasErrors())
         {
-            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+            return Failed(diagnosticReporter);
         }
 
         BoundActivity? root = RootActivityAnalyzer.SelectRoot(
@@ -89,40 +91,62 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         if (diagnosticReporter.HasErrors() || root is null)
         {
-            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+            return Failed(diagnosticReporter);
         }
 
         if (root.Lifetime is not ActivityLifetime.Task)
         {
             diagnosticReporter.GenerateError(ErrorType.UnsupportedRootActivityLifetime, root.Declaration.LifetimeKeyword.Span);
-            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
+            return Failed(diagnosticReporter);
         }
 
-        IReadOnlyList<PackageCallable> callables = SelectRootPackageCallables(sources, root, cancellationToken);
+        IReadOnlyList<ProjectCallable> catalog = CollectProjectCallables(sources, diagnosticReporter, cancellationToken);
+
+        if (diagnosticReporter.HasErrors())
+        {
+            return Failed(diagnosticReporter);
+        }
+
+        SourceAnalysisResult rootSource = sources.Single(source => ReferenceEquals(source.Snapshot, root.Declaration.Span.Snapshot));
+        IReadOnlyList<PackageCallable> rootCallables = SelectVisibleCallables(rootSource, catalog);
 
         LoweredFunction? entry = BindAndLowerRootLifecycleMethod(
-            root.Entry, "__sushi_root_entry", callables, diagnosticReporter, cancellationToken);
+            root.Entry, "__sushi_root_entry", rootCallables, diagnosticReporter, cancellationToken);
 
         LoweredFunction? stop = root.Stop is null
             ? null
-            : BindAndLowerRootLifecycleMethod(root.Stop, "__sushi_root_stop", callables, diagnosticReporter, cancellationToken);
-
-        if (diagnosticReporter.HasErrors() || entry is null || (root.Stop is not null && stop is null))
-        {
-            return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable: null);
-        }
+            : BindAndLowerRootLifecycleMethod(root.Stop, "__sushi_root_stop", rootCallables, diagnosticReporter, cancellationToken);
 
         List<LoweredFunction> packageFunctions = [];
 
-        foreach (PackageCallable callable in callables)
+        foreach (ProjectCallable item in catalog)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            BoundFunction sourceFunction = callable.Function;
-            BoundFunction nativeFunction = new(sourceFunction.Accessibility, callable.Symbol, sourceFunction.ReturnType, sourceFunction.Parameters, sourceFunction.Body);
+            IReadOnlyList<PackageCallable> visible = SelectVisibleCallables(item.Source, catalog);
+            FunctionBindResult result = FunctionDeclarationBinder.Bind(item.Declaration, diagnosticReporter, cancellationToken, visible);
+
+            if (result.Function is null)
+            {
+                continue;
+            }
+
+            if (!BelongsToSameScope(item.Source, rootSource)
+                || item.Callable.Function.Accessibility is Accessibility.Private or Accessibility.Protected)
+            {
+                continue;
+            }
+
+            BoundFunction function = result.Function;
+            BoundFunction nativeFunction = new(function.Accessibility, item.Callable.Symbol, function.ReturnType, function.Parameters, function.Body);
             IRFunction structured = BoundFunctionIRConverter.Convert(nativeFunction, cancellationToken);
 
             packageFunctions.Add(IRFunctionLowerer.Lower(structured, cancellationToken));
+        }
+
+        if (diagnosticReporter.HasErrors() || entry is null || (root.Stop is not null && stop is null))
+        {
+            return Failed(diagnosticReporter);
         }
 
         string outputPath = GetMVPOutputPath(projectDirectory, project);
@@ -133,41 +157,60 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         return new MVPCompilationResult(diagnosticReporter.ReportDiagnostics(), executable);
     }
 
-    private static IReadOnlyList<PackageCallable> SelectRootPackageCallables(
+    private static MVPCompilationResult Failed(IDiagnosticReporter diagnosticReporter)
+        => new(diagnosticReporter.ReportDiagnostics(), executable: null);
+
+    private static IReadOnlyList<ProjectCallable> CollectProjectCallables(
         IReadOnlyList<SourceAnalysisResult> sources,
-        BoundActivity root,
+        IDiagnosticReporter diagnosticReporter,
         CancellationToken cancellationToken)
     {
-        SourceSnapshot rootSnapshot = root.Declaration.Span.Snapshot;
-        SourceAnalysisResult rootSource = sources.Single(source => ReferenceEquals(source.Snapshot, rootSnapshot));
-
-        List<PackageCallable> functions = [];
+        List<ProjectCallable> catalog = [];
 
         foreach (SourceAnalysisResult source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (source.Package?.QualifiedName != rootSource.Package?.QualifiedName
-                || source.Namespace?.QualifiedName != rootSource.Namespace?.QualifiedName)
+            SourceFileSyntax syntax = (SourceFileSyntax)source.SyntaxTree.Root;
+
+            if (source.Functions.Count != syntax.FunctionDeclarations.Count)
             {
+                diagnosticReporter.GenerateErrorWithCustomMessage(
+                    ErrorType.UnsupportedMVPExpression,
+                    "A project function has a signature unsupported by the current executable subset.",
+                    syntax.Span);
+
                 continue;
             }
 
-            foreach (BoundFunction function in source.Functions)
+            for (int i = 0; i < syntax.FunctionDeclarations.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (function.Accessibility is Accessibility.Private or Accessibility.Protected)
-                {
-                    continue;
-                }
+                BoundFunction signature = source.Functions[i];
+                FunctionDeclarationSyntax declaration = syntax.FunctionDeclarations[i];
+                string symbol = $"__sushi_package_function_{catalog.Count}";
 
-                functions.Add(new PackageCallable(function, $"__sushi_package_function_{functions.Count}"));
+                catalog.Add(new ProjectCallable(source, declaration, new PackageCallable(signature, symbol)));
             }
         }
 
-        return functions;
+        return catalog;
     }
+
+    private static IReadOnlyList<PackageCallable> SelectVisibleCallables(SourceAnalysisResult source, IReadOnlyList<ProjectCallable> catalog)
+        => [.. catalog
+            .Where(item => BelongsToSameScope(item.Source, source))
+            .Where(item => item.Callable.Function.Accessibility is not (Accessibility.Private or Accessibility.Protected))
+            .Select(item => item.Callable)];
+
+    private static bool BelongsToSameScope(SourceAnalysisResult left, SourceAnalysisResult right)
+        => left.Package is not null
+            && right.Package is not null
+            && left.Namespace is not null
+            && right.Namespace is not null
+            && StringComparer.Ordinal.Equals(left.Package.QualifiedName, right.Package.QualifiedName)
+            && StringComparer.Ordinal.Equals(left.Namespace.QualifiedName, right.Namespace.QualifiedName);
 
     private static string ResolveProjectPath(string projectOrFolderPath)
     {
@@ -253,26 +296,26 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     }
 
     /// <summary>
-    /// Binds one supported root lifecycle body and lowers it under a private
-    /// compiler-generated symbol.
+    /// Binds one supported root lifecycle body with the project-level callables
+    /// visible in its source package and namespace.
     /// </summary>
     /// <param name="method">
-    /// The validated activity lifecycle declaration.
+    /// The validated lifecycle method declaration.
     /// </param>
     /// <param name="symbol">
     /// The compiler-owned native symbol.
     /// </param>
     /// <param name="callables">
-    /// Package functions eligible for the restricted invocation subset.
+    /// The visible package callable signatures.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives semantic and executable-subset diagnostics.
+    /// Receives static diagnostics.
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels binding and lowering.
     /// </param>
     /// <returns>
-    /// The lowered function, or null if the method cannot be compiled.
+    /// A lowered lifecycle method, or null on failure.
     /// </returns>
     private static LoweredFunction? BindAndLowerRootLifecycleMethod(
         BoundActivityMethod method,
@@ -288,10 +331,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         if (method.Declaration.Parameters.Count != 0)
         {
-            diagnosticReporter.GenerateError(
-                ErrorType.UnsupportedRootLifecycleParameters,
-                method.Declaration.OpenParenthesisToken.Span);
-
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedRootLifecycleParameters, method.Declaration.OpenParenthesisToken.Span);
             return null;
         }
 
@@ -313,4 +353,6 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         return IRFunctionLowerer.Lower(structured, cancellationToken);
     }
+
+    private sealed record ProjectCallable(SourceAnalysisResult Source, FunctionDeclarationSyntax Declaration, PackageCallable Callable);
 }

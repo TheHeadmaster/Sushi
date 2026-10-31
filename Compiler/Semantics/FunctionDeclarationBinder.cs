@@ -4,26 +4,85 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Binds the currently supported package-level function semantics and reusable callable bodies.
+/// Binds supported package-level function declarations, their signatures,
+/// and their statement bodies.
 /// </summary>
 public sealed class FunctionDeclarationBinder
 {
     /// <summary>
-    /// Binds a function declaration when it belongs to the currently supported executable semantic subset.
+    /// Binds a complete function using the standalone source-analysis rules.
     /// </summary>
     /// <param name="declaration">
-    /// The declaration to bind.
+    /// The parsed function declaration.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// The diagnostic reporter used to accumulate diagnostics.
+    /// Receives static diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The cancellation token used to cancel binding.
+    /// Cancels binding.
     /// </param>
     /// <returns>
-    /// The bound function declaration.
+    /// The bound function, or null when binding fails.
     /// </returns>
     public static FunctionBindResult Bind(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+        => Bind(declaration, diagnosticReporter, cancellationToken, null);
+
+    /// <summary>
+    /// Binds a complete function with a project-resolved package-call context.
+    /// </summary>
+    /// <param name="declaration">
+    /// The parsed function declaration.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives static diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels binding.
+    /// </param>
+    /// <param name="callables">
+    /// Optional package functions eligible for direct invocation.
+    /// </param>
+    /// <returns>
+    /// The complete bound function, or null on failure.
+    /// </returns>
+    internal static FunctionBindResult Bind(
+        FunctionDeclarationSyntax declaration,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
+    {
+        FunctionBindResult signatureResult = BindSignature(declaration, diagnosticReporter, cancellationToken);
+        BoundFunction? signature = signatureResult.Function;
+
+        if (signature is null)
+        {
+            return new FunctionBindResult(null);
+        }
+
+        BoundBlock? body = BindBody(declaration.Body, signature.ReturnType, signature.Parameters, diagnosticReporter, cancellationToken, callables);
+
+        return body is null
+            ? new FunctionBindResult(null)
+            : new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType, signature.Parameters, body));
+    }
+
+    /// <summary>
+    /// Binds the declaration contract while deliberately leaving the body
+    /// unbound. The placeholder body is replaced by the full project binding pass.
+    /// </summary>
+    /// <param name="declaration">
+    /// The parsed function declaration.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives signature diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels binding.
+    /// </param>
+    /// <returns>
+    /// A signature-bearing function with an empty placeholder body, or null on failure.
+    /// </returns>
+    internal static FunctionBindResult BindSignature(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(declaration);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -48,16 +107,9 @@ public sealed class FunctionDeclarationBinder
 
         IReadOnlyList<BoundParameter>? parameters = BindParameters(declaration.Parameters, diagnosticReporter, cancellationToken);
 
-        if (parameters is null)
-        {
-            return new FunctionBindResult(null);
-        }
-
-        BoundBlock? body = BindBody(declaration.Body, returnType, parameters, diagnosticReporter, cancellationToken);
-
-        return body is null
+        return parameters is null
             ? new FunctionBindResult(null)
-            : new FunctionBindResult(new BoundFunction(accessibility, name, returnType, parameters, body));
+            : new FunctionBindResult(new BoundFunction(accessibility, name, returnType, parameters, new BoundBlock([])));
     }
 
     private static IReadOnlyList<BoundParameter>? BindParameters(IReadOnlyList<ParameterSyntax> declarations, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
@@ -106,30 +158,35 @@ public sealed class FunctionDeclarationBinder
 
     /// <summary>
     /// Binds every statement in a callable body, including unreachable statements.
-    /// A supplied package-call catalog enables the restricted direct-call subset.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
     /// </param>
     /// <param name="returnType">
-    /// The enclosing callable's declared return type.
+    /// The enclosing function's declared return type.
     /// </param>
     /// <param name="parameters">
-    /// The named parameters available to expressions.
+    /// The enclosing function's parameters.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives static semantic diagnostics.
+    /// Receives static diagnostics.
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels binding.
     /// </param>
     /// <param name="callables">
-    /// Optional project-resolved package callables enabled for the current body.
+    /// Optional package functions visible to the current body.
     /// </param>
     /// <returns>
-    /// The bound block, or null when one or more statements are invalid.
+    /// The bound block, or null if any statement fails validation.
     /// </returns>
-    internal static BoundBlock? BindBody(BlockSyntax block, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, IReadOnlyList<PackageCallable>? callables = null)
+    internal static BoundBlock? BindBody(
+        BlockSyntax block,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables = null)
     {
         ArgumentNullException.ThrowIfNull(block);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -144,9 +201,9 @@ public sealed class FunctionDeclarationBinder
 
             BoundStatement? boundStatement = statement switch
             {
-                ReturnStatementSyntax returnStatement => BindReturnStatement(returnStatement, returnType, parameters, diagnosticReporter, cancellationToken),
+                ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, cancellationToken, callables),
                 IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables),
-                ExpressionStatementSyntax expressionStatement => BindExpressionStatement(expressionStatement, returnType, parameters, callables, diagnosticReporter, cancellationToken),
+                ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken),
                 _ => null
             };
 
@@ -162,9 +219,14 @@ public sealed class FunctionDeclarationBinder
         return valid ? new BoundBlock(statements) : null;
     }
 
-    private static BoundStatement? BindExpressionStatement(ExpressionStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IReadOnlyList<PackageCallable>? callables, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundStatement? BindExpressionStatement(
+        ExpressionStatementSyntax statement,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken)
     {
-        if (returnType is BoundType.Void && callables is not null)
+        if (callables is not null)
         {
             return PackageInvocationBinder.Bind(statement, callables, parameters, diagnosticReporter, cancellationToken);
         }
@@ -173,7 +235,13 @@ public sealed class FunctionDeclarationBinder
         return null;
     }
 
-    private static BoundIfStatement? BindConditionalStatement(IfStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, IReadOnlyList<PackageCallable>? callables)
+    private static BoundIfStatement? BindConditionalStatement(
+        IfStatementSyntax statement,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -192,7 +260,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken);
+        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken, callables);
         BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables);
 
         BoundBlock? elseBody = null;
@@ -233,7 +301,13 @@ public sealed class FunctionDeclarationBinder
             : new BoundIfStatement(condition, thenBody, elseBody);
     }
 
-    private static BoundReturnStatement? BindReturnStatement(ReturnStatementSyntax statement, BoundType returnType, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundReturnStatement? BindReturnStatement(
+        ReturnStatementSyntax statement,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
@@ -261,8 +335,8 @@ public sealed class FunctionDeclarationBinder
 
         BoundExpression? expression = returnType switch
         {
-            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
-            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken),
+            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables),
+            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables),
             _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
         };
 

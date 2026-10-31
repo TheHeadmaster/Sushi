@@ -6,26 +6,49 @@ using Sushi.Source;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Binds file-level semantic information and validates invariants that span complete declarations.
+/// Binds file-level semantic information and validates invariants spanning
+/// complete declarations.
 /// </summary>
 public sealed class SourceFileBinder
 {
     /// <summary>
-    /// Binds semantic information from a parsed Sushi source file.
+    /// Binds a source file using its ordinary complete function-body analysis.
     /// </summary>
     /// <param name="sourceFile">
-    /// The source-file syntax to bind.
+    /// The parsed source file.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// The diagnostic reporter used to accumulate diagnostics.
+    /// Receives semantic diagnostics.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel binding.
+    /// Cancels binding.
     /// </param>
     /// <returns>
-    /// The bound package, namespace, functions, and valid activity declarations.
+    /// Bound package, namespace, functions, and activity declarations.
     /// </returns>
     public static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+        => Bind(sourceFile, diagnosticReporter, cancellationToken, signatureOnly: false);
+
+    /// <summary>
+    /// Binds source-file declarations, optionally deferring function-body binding
+    /// until a project-wide callable catalog is available.
+    /// </summary>
+    /// <param name="sourceFile">
+    /// The parsed source file.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives semantic diagnostics.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels binding.
+    /// </param>
+    /// <param name="signatureOnly">
+    /// Whether package functions should expose only their signatures.
+    /// </param>
+    /// <returns>
+    /// File-level semantic declarations for the selected binding phase.
+    /// </returns>
+    internal static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, bool signatureOnly)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -43,7 +66,9 @@ public sealed class SourceFileBinder
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, localDiagnostics, cancellationToken);
+            FunctionBindResult result = signatureOnly
+                ? FunctionDeclarationBinder.BindSignature(declaration, localDiagnostics, cancellationToken)
+                : FunctionDeclarationBinder.Bind(declaration, localDiagnostics, cancellationToken);
 
             if (result.Function is not null)
             {

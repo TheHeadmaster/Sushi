@@ -3,12 +3,12 @@
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
 /// conditional evaluation, checked arithmetic, integer comparisons,
-/// and fixed-width integer operations.
+/// fixed-width operations, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
     /// <summary>
-    /// Converts a structured IR function into its lowered control-flow representation.
+    /// Converts a structured function into lowered control-flow representation.
     /// </summary>
     /// <param name="function">
     /// The structured function to lower.
@@ -17,7 +17,7 @@ public sealed class IRFunctionLowerer
     /// Cancels lowering.
     /// </param>
     /// <returns>
-    /// A function containing ordered basic blocks, typed SSA values, and explicit control-flow edges.
+    /// A function with ordered basic blocks, typed SSA values, and explicit edges.
     /// </returns>
     public static LoweredFunction Lower(IRFunction function, CancellationToken cancellationToken)
     {
@@ -102,16 +102,31 @@ public sealed class IRFunctionLowerer
 
         private void LowerVoidCall(IRVoidCallStatement call)
         {
-            List<LoweredCallArgument> arguments = [];
+            List<LoweredCallArgument> arguments = this.LowerCallArguments(call.Arguments);
+            this.current.Instructions.Add(new LoweredVoidCallInstruction(call.Symbol, call.ParameterTypes, arguments));
+        }
 
-            foreach (IRCallArgument argument in call.Arguments)
+        private LoweredValue LowerValueCall(IRCallExpression call)
+        {
+            List<LoweredCallArgument> arguments = this.LowerCallArguments(call.Arguments);
+            LoweredTemporaryValue destination = this.CreateTemporary(call.Type);
+
+            this.current.Instructions.Add(new LoweredValueCallInstruction(destination, call.Symbol, call.ParameterTypes, arguments));
+            return destination;
+        }
+
+        private List<LoweredCallArgument> LowerCallArguments(IReadOnlyList<IRCallArgument> arguments)
+        {
+            List<LoweredCallArgument> lowered = [with(arguments.Count)];
+
+            foreach (IRCallArgument argument in arguments)
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
                 LoweredValue value = this.LowerExpression(argument.Expression);
-                arguments.Add(new LoweredCallArgument(argument.ParameterIndex, value));
+                lowered.Add(new LoweredCallArgument(argument.ParameterIndex, value));
             }
 
-            this.current.Instructions.Add(new LoweredVoidCallInstruction(call.Symbol, call.ParameterTypes, arguments));
+            return lowered;
         }
 
         private void LowerVoidConditional(IRIfStatement conditional)
@@ -167,6 +182,7 @@ public sealed class IRFunctionLowerer
                 IRIntegerConstant integer => new LoweredIntegerConstant(integer.Value),
                 IRBooleanConstant boolean => new LoweredBooleanConstant(boolean.Value),
                 IRParameterReferenceExpression parameter => new LoweredParameterValue(parameter.Index, parameter.Type),
+                IRCallExpression call => this.LowerValueCall(call),
                 IRBooleanNotExpression negation => this.LowerBooleanNegation(negation),
                 IRBooleanBinaryExpression binary => this.LowerBooleanBinary(binary),
                 IRIntegerUnaryExpression unary => this.LowerIntegerUnary(unary),

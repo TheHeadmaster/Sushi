@@ -6,15 +6,13 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Binds Boolean expressions, preserving exact integer comparisons,
-/// concrete runtime comparisons, and conditional evaluation semantics.
+/// Binds Boolean expressions, preserving exact integer comparisons, runtime
+/// comparisons, short-circuit evaluation, and value-producing package calls.
 /// </summary>
 internal static class BooleanExpressionBinder
 {
     /// <summary>
-    /// Binds a Boolean expression against the enclosing Boolean result context.
-    /// All syntactically present operands are statically validated, including
-    /// operands skipped by runtime short-circuit evaluation.
+    /// Binds a Boolean expression without an enclosing parameter or call scope.
     /// </summary>
     /// <param name="expression">
     /// The expression to bind.
@@ -26,50 +24,62 @@ internal static class BooleanExpressionBinder
     /// Cancels recursive binding.
     /// </param>
     /// <returns>
-    /// The typed expression, or null when binding fails.
+    /// The Boolean expression, or null when binding fails.
     /// </returns>
     public static BoundExpression? Bind(ExpressionSyntax expression, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         return Bind(expression, [], diagnosticReporter, cancellationToken);
     }
 
     /// <summary>
-    /// Binds an expression with the named parameters of its enclosing function.
+    /// Binds a Boolean expression using enclosing parameter and package-call
+    /// contexts, validating all syntactically present operands.
     /// </summary>
     /// <param name="expression">
-    /// The Boolean expression.
+    /// The parsed Boolean expression.
     /// </param>
     /// <param name="parameters">
-    /// The declared parameters in positional order.
+    /// Parameters of the enclosing callable.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives semantic diagnostics.
+    /// Receives binding diagnostics.
     /// </param>
     /// <param name="cancellationToken">
     /// Cancels recursive binding.
     /// </param>
+    /// <param name="callables">
+    /// Optional package functions available to direct calls.
+    /// </param>
     /// <returns>
-    /// The typed Boolean expression, or null after a diagnostic.
+    /// The typed expression, or null on failure.
     /// </returns>
-    internal static BoundExpression? Bind(ExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    internal static BoundExpression? Bind(
+        ExpressionSyntax expression,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables = null)
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
-
         cancellationToken.ThrowIfCancellationRequested();
 
         return ContainsInvalidComparisonChain(expression)
             ? null
-            : BindExpression(expression, parameters, diagnosticReporter, cancellationToken);
+            : BindExpression(expression, parameters, diagnosticReporter, cancellationToken, callables);
     }
 
-    private static BoundExpression? BindExpression(ExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindExpression(
+        ExpressionSyntax expression,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -81,21 +91,24 @@ internal static class BooleanExpressionBinder
             case IdentifierExpressionSyntax identifier:
                 return BindParameterReference(identifier, parameters, diagnosticReporter);
 
+            case InvocationExpressionSyntax invocation when callables is not null:
+                return PackageInvocationBinder.BindValue(invocation, BoundType.Bool, callables, parameters, diagnosticReporter, cancellationToken);
+
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
-                return BindExpression(grouped.Expression, parameters, diagnosticReporter, cancellationToken);
+                return BindExpression(grouped.Expression, parameters, diagnosticReporter, cancellationToken, callables);
 
             case ParenthesizedExpressionSyntax:
             case IntegerLiteralExpressionSyntax { LiteralToken.IsMissing: true }:
                 return null;
 
             case UnaryExpressionSyntax unary when unary.OperatorToken.Type is SyntaxType.NotKeyword:
-                return BindNegation(unary, parameters, diagnosticReporter, cancellationToken);
+                return BindNegation(unary, parameters, diagnosticReporter, cancellationToken, callables);
 
             case BinaryExpressionSyntax binary when TryGetBooleanBinaryOperator(binary.OperatorToken, out BooleanBinaryOperator operation):
-                return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, cancellationToken);
+                return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, cancellationToken, callables);
 
             case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out IntegerComparisonOperator comparisonOperator):
-                return BindIntegerComparison(comparison, comparisonOperator, parameters, diagnosticReporter, cancellationToken);
+                return BindIntegerComparison(comparison, comparisonOperator, parameters, diagnosticReporter, cancellationToken, callables);
 
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
@@ -123,25 +136,41 @@ internal static class BooleanExpressionBinder
         return new BoundParameterReferenceExpression(parameter);
     }
 
-    private static BoundExpression? BindNegation(UnaryExpressionSyntax expression, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindNegation(
+        UnaryExpressionSyntax expression,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
-        BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, cancellationToken);
-
+        BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, cancellationToken, callables);
         return operand is null ? null : new BoundBooleanNotExpression(operand);
     }
 
-    private static BoundExpression? BindBooleanBinary(BinaryExpressionSyntax expression, BooleanBinaryOperator operation, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindBooleanBinary(
+        BinaryExpressionSyntax expression,
+        BooleanBinaryOperator operation,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
-        BoundExpression? left = BindExpression(expression.Left, parameters, diagnosticReporter, cancellationToken);
-        BoundExpression? right = BindExpression(expression.Right, parameters, diagnosticReporter, cancellationToken);
+        BoundExpression? left = BindExpression(expression.Left, parameters, diagnosticReporter, cancellationToken, callables);
+        BoundExpression? right = BindExpression(expression.Right, parameters, diagnosticReporter, cancellationToken, callables);
 
         return left is null || right is null ? null : new BoundBooleanBinaryExpression(operation, left, right);
     }
 
-    private static BoundExpression? BindIntegerComparison(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindIntegerComparison(
+        BinaryExpressionSyntax expression,
+        IntegerComparisonOperator operation,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
-        bool runtimeLeft = ContainsRuntimeIdentifier(expression.Left);
-        bool runtimeRight = ContainsRuntimeIdentifier(expression.Right);
+        bool runtimeLeft = ContainsRuntimeValue(expression.Left);
+        bool runtimeRight = ContainsRuntimeValue(expression.Right);
 
         if (!runtimeLeft && !runtimeRight)
         {
@@ -152,21 +181,28 @@ internal static class BooleanExpressionBinder
 
         if (runtimeLeft && runtimeRight)
         {
-            BoundExpression? left = IntegerExpressionBinder.Bind(expression.Left, parameters, diagnosticReporter, cancellationToken);
-            BoundExpression? right = IntegerExpressionBinder.Bind(expression.Right, parameters, diagnosticReporter, cancellationToken);
+            BoundExpression? left = IntegerExpressionBinder.Bind(expression.Left, parameters, diagnosticReporter, cancellationToken, callables);
+            BoundExpression? right = IntegerExpressionBinder.Bind(expression.Right, parameters, diagnosticReporter, cancellationToken, callables);
 
             return left is null || right is null ? null : new BoundIntegerComparisonExpression(operation, left, right);
         }
 
-        return BindComparisonWithExactConstant(expression, operation, runtimeLeft, parameters, diagnosticReporter, cancellationToken);
+        return BindComparisonWithExactConstant(expression, operation, runtimeLeft, parameters, diagnosticReporter, cancellationToken, callables);
     }
 
-    private static BoundExpression? BindComparisonWithExactConstant(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, bool runtimeLeft, IReadOnlyList<BoundParameter> parameters, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+    private static BoundExpression? BindComparisonWithExactConstant(
+        BinaryExpressionSyntax expression,
+        IntegerComparisonOperator operation,
+        bool runtimeLeft,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables)
     {
         ExpressionSyntax runtimeSyntax = runtimeLeft ? expression.Left : expression.Right;
         ExpressionSyntax exactSyntax = runtimeLeft ? expression.Right : expression.Left;
 
-        BoundExpression? operand = IntegerExpressionBinder.Bind(runtimeSyntax, parameters, diagnosticReporter, cancellationToken);
+        BoundExpression? operand = IntegerExpressionBinder.Bind(runtimeSyntax, parameters, diagnosticReporter, cancellationToken, callables);
         bool validConstant = IntegerConstantExpressionBinder.TryEvaluateUntyped(exactSyntax, diagnosticReporter, cancellationToken, out BigInteger exact);
 
         if (operand is null || !validConstant)
@@ -185,8 +221,8 @@ internal static class BooleanExpressionBinder
         }
 #pragma warning restore IDE0078 // Use pattern matching
 
-        // Every int32 has the same relation to an exact integer outside the
-        // int32 domain. Still evaluate the runtime operand to preserve failures.
+        // An int32 value has a statically known relation to an exact integer
+        // outside the int32 domain, but its operand must still be evaluated.
         BigInteger boundary = exact > int.MaxValue ? int.MaxValue : int.MinValue;
         bool result = runtimeLeft
             ? EvaluateIntegerComparison(operation, boundary, exact)
@@ -195,7 +231,12 @@ internal static class BooleanExpressionBinder
         return new BoundIntegerRangeComparisonExpression(operand, result);
     }
 
-    private static bool TryEvaluateIntegerComparison(BinaryExpressionSyntax expression, IntegerComparisonOperator operation, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, out bool value)
+    private static bool TryEvaluateIntegerComparison(
+        BinaryExpressionSyntax expression,
+        IntegerComparisonOperator operation,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        out bool value)
     {
         value = default;
 
@@ -242,7 +283,7 @@ internal static class BooleanExpressionBinder
             return true;
         }
 
-        if (token.Type is not SyntaxType.OperatorToken || token.Span.Length != 1)
+        if (token.Type is not SyntaxType.OperatorToken || !token.IsSourceBacked || token.Span.Length != 1)
         {
             return false;
         }
@@ -311,13 +352,13 @@ internal static class BooleanExpressionBinder
         }
     }
 
-    private static bool ContainsRuntimeIdentifier(ExpressionSyntax expression)
+    private static bool ContainsRuntimeValue(ExpressionSyntax expression)
         => expression switch
         {
-            IdentifierExpressionSyntax => true,
-            ParenthesizedExpressionSyntax grouped => ContainsRuntimeIdentifier(grouped.Expression),
-            UnaryExpressionSyntax unary => ContainsRuntimeIdentifier(unary.Operand),
-            BinaryExpressionSyntax binary => ContainsRuntimeIdentifier(binary.Left) || ContainsRuntimeIdentifier(binary.Right),
+            IdentifierExpressionSyntax or InvocationExpressionSyntax => true,
+            ParenthesizedExpressionSyntax grouped => ContainsRuntimeValue(grouped.Expression),
+            UnaryExpressionSyntax unary => ContainsRuntimeValue(unary.Operand),
+            BinaryExpressionSyntax binary => ContainsRuntimeValue(binary.Left) || ContainsRuntimeValue(binary.Right),
             _ => false
         };
 
@@ -328,6 +369,7 @@ internal static class BooleanExpressionBinder
             ParenthesizedExpressionSyntax grouped => ContainsInvalidComparisonChain(grouped.Expression),
             UnaryExpressionSyntax unary => ContainsInvalidComparisonChain(unary.Operand),
             BinaryExpressionSyntax binary => ContainsInvalidComparisonChain(binary.Left) || ContainsInvalidComparisonChain(binary.Right),
+            InvocationExpressionSyntax invocation => invocation.Arguments.Any(argument => ContainsInvalidComparisonChain(argument.Expression)),
             _ => false
         };
 

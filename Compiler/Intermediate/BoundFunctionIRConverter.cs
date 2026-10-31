@@ -1,3 +1,4 @@
+
 using Sushi.Semantics;
 
 namespace Sushi.Intermediate;
@@ -8,16 +9,16 @@ namespace Sushi.Intermediate;
 public sealed class BoundFunctionIRConverter
 {
     /// <summary>
-    /// Converts a bound function into structured Sushi IR.
+    /// Converts a complete bound function into typed structured IR.
     /// </summary>
     /// <param name="function">
-    /// The semantically bound function to convert.
+    /// The function to convert.
     /// </param>
     /// <param name="cancellationToken">
-    /// The token used to cancel conversion.
+    /// Cancels conversion.
     /// </param>
     /// <returns>
-    /// The equivalent structured Sushi IR function.
+    /// Structured IR preserving statement and expression evaluation order.
     /// </returns>
     public static IRFunction Convert(BoundFunction function, CancellationToken cancellationToken)
     {
@@ -51,16 +52,19 @@ public sealed class BoundFunctionIRConverter
 
         return statement switch
         {
-            BoundReturnStatement returnStatement => new IRReturnStatement(
-                returnStatement.Expression is null ? null : ConvertExpression(returnStatement.Expression, cancellationToken)),
+            BoundReturnStatement result => new IRReturnStatement(
+                result.Expression is null ? null : ConvertExpression(result.Expression, cancellationToken)),
+
             BoundIfStatement conditional => new IRIfStatement(
                 ConvertExpression(conditional.Condition, cancellationToken),
                 ConvertBlock(conditional.Then, cancellationToken),
                 conditional.Else is null ? null : ConvertBlock(conditional.Else, cancellationToken)),
+
             BoundVoidCallStatement call => new IRVoidCallStatement(
                 call.Symbol,
                 [.. call.ParameterTypes.Select(ConvertType)],
                 [.. call.Arguments.Select(argument => new IRCallArgument(argument.ParameterIndex, ConvertExpression(argument.Expression, cancellationToken)))]),
+
             _ => throw new NotSupportedException($"Bound statement type \"{statement.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
@@ -71,27 +75,40 @@ public sealed class BoundFunctionIRConverter
 
         return expression switch
         {
-            BoundIntegerLiteralExpression integerLiteral => new IRIntegerConstant(integerLiteral.Value),
-            BoundBooleanConstantExpression booleanConstant => new IRBooleanConstant(booleanConstant.Value),
+            BoundCallExpression call => new IRCallExpression(
+                call.Symbol,
+                ConvertType(call.Type),
+                [.. call.ParameterTypes.Select(ConvertType)],
+                [.. call.Arguments.Select(argument => new IRCallArgument(argument.ParameterIndex, ConvertExpression(argument.Expression, cancellationToken)))]),
+
+            BoundIntegerLiteralExpression integer => new IRIntegerConstant(integer.Value),
+            BoundBooleanConstantExpression boolean => new IRBooleanConstant(boolean.Value),
             BoundParameterReferenceExpression reference => new IRParameterReferenceExpression(reference.Parameter.Index, ConvertType(reference.Type)),
+
             BoundBooleanNotExpression negation => new IRBooleanNotExpression(ConvertExpression(negation.Operand, cancellationToken)),
+
             BoundBooleanBinaryExpression binary => new IRBooleanBinaryExpression(
                 ConvertBooleanOperator(binary.Operator),
                 ConvertExpression(binary.Left, cancellationToken),
                 ConvertExpression(binary.Right, cancellationToken)),
+
             BoundIntegerUnaryExpression unary => new IRIntegerUnaryExpression(
                 ConvertIntegerUnaryOperator(unary.Operator),
                 ConvertExpression(unary.Operand, cancellationToken)),
-            BoundIntegerBinaryExpression integerBinary => new IRIntegerBinaryExpression(
-                ConvertIntegerBinaryOperator(integerBinary.Operator),
-                ConvertExpression(integerBinary.Left, cancellationToken),
-                ConvertExpression(integerBinary.Right, cancellationToken)),
+
+            BoundIntegerBinaryExpression binary => new IRIntegerBinaryExpression(
+                ConvertIntegerBinaryOperator(binary.Operator),
+                ConvertExpression(binary.Left, cancellationToken),
+                ConvertExpression(binary.Right, cancellationToken)),
+
             BoundIntegerComparisonExpression comparison => new IRIntegerComparisonExpression(
                 ConvertIntegerComparisonOperator(comparison.Operator),
                 ConvertExpression(comparison.Left, cancellationToken),
                 ConvertExpression(comparison.Right, cancellationToken)),
+
             BoundIntegerRangeComparisonExpression range => new IRIntegerRangeComparisonExpression(
                 ConvertExpression(range.Operand, cancellationToken), range.Result),
+
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }

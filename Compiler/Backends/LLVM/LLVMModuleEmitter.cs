@@ -217,6 +217,10 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                     this.EmitVoidCall(call);
                     return;
 
+                case LoweredValueCallInstruction call:
+                    this.EmitValueCall(call);
+                    return;
+
                 case LoweredBooleanNotInstruction negation:
                     this.EmitBooleanNegation(negation);
                     return;
@@ -255,25 +259,34 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         }
 
         private void EmitVoidCall(LoweredVoidCallInstruction instruction)
+            => this.EmitCall(instruction.Symbol, IRType.Void, instruction.ParameterTypes, instruction.Arguments);
+
+        private void EmitValueCall(LoweredValueCallInstruction instruction)
         {
-            LLVMValueRef callee = this.module.GetNamedFunction(instruction.Symbol);
+            LLVMValueRef result = this.EmitCall(instruction.Symbol, instruction.Destination.Type, instruction.ParameterTypes, instruction.Arguments);
+            this.RegisterTemporary(instruction.Destination, result);
+        }
+
+        private LLVMValueRef EmitCall(string symbol, IRType returnType, IReadOnlyList<IRType> parameterTypes, IReadOnlyList<LoweredCallArgument> arguments)
+        {
+            LLVMValueRef callee = this.module.GetNamedFunction(symbol);
 
             if (callee.Handle == IntPtr.Zero)
             {
-                throw new InvalidOperationException($"Call target \"{instruction.Symbol}\" has no declaration in the current LLVM module.");
+                throw new InvalidOperationException($"Call target \"{symbol}\" has no declaration in the current LLVM module.");
             }
 
-            LLVMTypeRef[] parameterTypes = [.. instruction.ParameterTypes.Select(type => ConvertType(this.context, type))];
-            LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(this.context.VoidType, parameterTypes);
-            LLVMValueRef[] arguments = new LLVMValueRef[parameterTypes.Length];
+            LLVMTypeRef[] types = [.. parameterTypes.Select(type => ConvertType(this.context, type))];
+            LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(ConvertType(this.context, returnType), types);
+            LLVMValueRef[] values = new LLVMValueRef[types.Length];
 
-            foreach (LoweredCallArgument argument in instruction.Arguments)
+            foreach (LoweredCallArgument argument in arguments)
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
-                arguments[argument.ParameterIndex] = this.EmitValue(argument.Value);
+                values[argument.ParameterIndex] = this.EmitValue(argument.Value);
             }
 
-            this.builder.BuildCall2(functionType, callee, arguments);
+            return this.builder.BuildCall2(functionType, callee, values);
         }
 
         private void EmitBooleanNegation(LoweredBooleanNotInstruction instruction)

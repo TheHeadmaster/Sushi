@@ -4,32 +4,32 @@ using Sushi.Parsing.Syntax;
 namespace Sushi.Semantics;
 
 /// <summary>
-/// Resolves direct package-level void invocation statements against the callable
-/// declarations available to the current executable root.
+/// Resolves direct package-function invocations without introducing incomplete
+/// overload-ranking rules. Named arguments bind statically while retaining
+/// their original evaluation order.
 /// </summary>
 internal static class PackageInvocationBinder
 {
     /// <summary>
-    /// Binds a direct invocation statement without introducing overload-ranking
-    /// rules or relaxing the language's mandatory argument contracts.
+    /// Binds an invocation used as a standalone statement, requiring a void result.
     /// </summary>
     /// <param name="statement">
-    /// The parsed expression statement.
+    /// The complete expression statement.
     /// </param>
     /// <param name="callables">
-    /// The package functions visible to this restricted compilation context.
+    /// Candidate package-level functions in the current resolution scope.
     /// </param>
     /// <param name="parameters">
-    /// The enclosing callable's own parameters.
+    /// Parameters available in the caller.
     /// </param>
     /// <param name="diagnosticReporter">
-    /// Receives static diagnostics.
+    /// Receives binding errors.
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancels binding.
+    /// Cancels recursive binding.
     /// </param>
     /// <returns>
-    /// The bound call, or null when the invocation is unsupported or invalid.
+    /// A void call statement, or null following a binding failure.
     /// </returns>
     public static BoundVoidCallStatement? Bind(
         ExpressionStatementSyntax statement,
@@ -39,51 +39,140 @@ internal static class PackageInvocationBinder
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(statement);
+
+        if (!statement.SemicolonToken.IsSourceBacked || statement.Expression is not InvocationExpressionSyntax invocation)
+        {
+            ReportError(statement, "Only a void invocation may appear as an expression statement in the current subset.", diagnosticReporter);
+            return null;
+        }
+
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken);
+
+        if (resolved is null)
+        {
+            return null;
+        }
+
+        if (resolved.Callable.Function.ReturnType is not BoundType.Void)
+        {
+            ReportError(statement, "A value-producing invocation cannot stand alone as a statement.", diagnosticReporter);
+            return null;
+        }
+
+        return new BoundVoidCallStatement(
+            resolved.Callable.Symbol,
+            [.. resolved.Callable.Function.Parameters.Select(parameter => parameter.Type)],
+            resolved.Arguments);
+    }
+
+    /// <summary>
+    /// Binds an invocation in a context requiring a concrete result type.
+    /// The expected type validates the selected callable but does not select
+    /// between competing overloads.
+    /// </summary>
+    /// <param name="invocation">
+    /// The parsed invocation expression.
+    /// </param>
+    /// <param name="expectedType">
+    /// The required result type of the enclosing expression.
+    /// </param>
+    /// <param name="callables">
+    /// Candidate package-level functions.
+    /// </param>
+    /// <param name="parameters">
+    /// Parameters available within the caller.
+    /// </param>
+    /// <param name="diagnosticReporter">
+    /// Receives binding errors.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels recursive binding.
+    /// </param>
+    /// <returns>
+    /// The typed call expression, or null when resolution fails.
+    /// </returns>
+    public static BoundCallExpression? BindValue(
+        InvocationExpressionSyntax invocation,
+        BoundType expectedType,
+        IReadOnlyList<PackageCallable> callables,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(invocation);
+
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken);
+
+        if (resolved is null)
+        {
+            return null;
+        }
+
+        BoundType actualType = resolved.Callable.Function.ReturnType;
+
+        if (actualType is BoundType.Void || actualType != expectedType)
+        {
+            ReportError(invocation, "The selected callable does not produce the required value type.", diagnosticReporter);
+            return null;
+        }
+
+        return new BoundCallExpression(
+            resolved.Callable.Symbol,
+            actualType,
+            [.. resolved.Callable.Function.Parameters.Select(parameter => parameter.Type)],
+            resolved.Arguments);
+    }
+
+    private static ResolvedCall? Resolve(
+        InvocationExpressionSyntax invocation,
+        IReadOnlyList<PackageCallable> callables,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(callables);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (!statement.SemicolonToken.IsSourceBacked
-            || statement.Expression is not InvocationExpressionSyntax invocation
-            || invocation.Target is not IdentifierExpressionSyntax target
+        if (invocation.Target is not IdentifierExpressionSyntax target
             || !invocation.OpenParenthesisToken.IsSourceBacked
-            || !invocation.CloseParenthesisToken.IsSourceBacked)
+            || !invocation.CloseParenthesisToken.IsSourceBacked
+            || invocation.ArgumentSeparators.Any(separator => !separator.IsSourceBacked))
         {
-            return ReportUnsupported(statement, "The current executable subset supports direct package-function invocation statements.");
+            ReportError(invocation, "The invocation contains unsupported or recovered target syntax.", diagnosticReporter);
+            return null;
         }
 
         string? name = IdentifierBinder.Bind(target.IdentifierToken);
 
         if (name is null)
         {
-            return ReportUnsupported(statement, "The invocation target must be a source-backed identifier.");
+            ReportError(invocation, "The invocation target must be a source-backed identifier.", diagnosticReporter);
+            return null;
         }
 
         PackageCallable[] candidates = [.. callables.Where(candidate => StringComparer.Ordinal.Equals(candidate.Name, name))];
 
         if (candidates.Length == 0)
         {
-            return ReportUnsupported(statement, $"Package function \"{name}\" is not available in this invocation context.");
+            ReportError(invocation, $"Package function \"{name}\" is not available in this scope.", diagnosticReporter);
+            return null;
         }
 
-        if (candidates.Length != 1)
+        if (candidates.Length > 1)
         {
-            return ReportUnsupported(statement, $"Function \"{name}\" requires overload resolution, which is outside the current executable subset.");
+            ReportError(invocation, $"Function \"{name}\" requires overload resolution, which is not supported by this slice.", diagnosticReporter);
+            return null;
         }
 
         PackageCallable selected = candidates[0];
-
-        if (selected.Function.ReturnType is not BoundType.Void)
-        {
-            return ReportUnsupported(statement, $"Invocation of \"{name}\" produces a value and cannot stand alone as a statement.");
-        }
-
         BoundParameter[] targetParameters = [.. selected.Function.Parameters];
         bool[] supplied = new bool[targetParameters.Length];
         List<BoundCallArgument> arguments = [];
-        bool namedSeen = false;
+
         bool valid = true;
+        bool namedSeen = false;
         int nextPositional = 0;
 
         foreach (CallArgumentSyntax argument in invocation.Arguments)
@@ -96,15 +185,15 @@ internal static class PackageInvocationBinder
             {
                 namedSeen = true;
                 string? label = argument.Name is SyntaxToken token ? IdentifierBinder.Bind(token) : null;
-                parameterIndex = Array.FindIndex(targetParameters, parameter => StringComparer.Ordinal.Equals(parameter.Name, label));
+                parameterIndex = Array.FindIndex(targetParameters, candidate => StringComparer.Ordinal.Equals(candidate.Name, label));
             }
             else
             {
                 parameterIndex = nextPositional++;
-                
+
                 if (namedSeen)
                 {
-                    ReportArgumentError(argument, "Positional arguments cannot follow named arguments.", diagnosticReporter);
+                    ReportError(argument, "Positional arguments cannot follow named arguments.", diagnosticReporter);
                     valid = false;
                     continue;
                 }
@@ -112,63 +201,55 @@ internal static class PackageInvocationBinder
 
             if (parameterIndex < 0 || parameterIndex >= targetParameters.Length)
             {
-                ReportArgumentError(argument, "The argument does not identify a parameter of the selected callable.", diagnosticReporter);
+                ReportError(argument, "The argument does not identify a parameter of the selected callable.", diagnosticReporter);
                 valid = false;
                 continue;
             }
 
             if (supplied[parameterIndex])
             {
-                ReportArgumentError(argument, "A callable parameter cannot be supplied more than once.", diagnosticReporter);
+                ReportError(argument, "A callable parameter cannot be supplied more than once.", diagnosticReporter);
                 valid = false;
                 continue;
             }
 
             supplied[parameterIndex] = true;
-            BoundType requiredType = targetParameters[parameterIndex].Type;
 
-            BoundExpression? expression = requiredType switch
+            BoundType parameterType = targetParameters[parameterIndex].Type;
+            BoundExpression? boundValue = parameterType switch
             {
-                BoundType.Int32 => IntegerExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken),
-                BoundType.Bool => BooleanExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken),
+                BoundType.Int32 => IntegerExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables),
+                BoundType.Bool => BooleanExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables),
                 _ => null
             };
 
-            if (expression is null || expression.Type != requiredType)
+            if (boundValue is null)
             {
-                if (expression is not null)
-                {
-                    ReportArgumentError(argument, "The argument type does not match its declared parameter type.", diagnosticReporter);
-                }
-
                 valid = false;
                 continue;
             }
 
-            arguments.Add(new BoundCallArgument(parameterIndex, expression));
+            if (boundValue.Type != parameterType)
+            {
+                ReportError(argument, "The argument type differs from the selected parameter type.", diagnosticReporter);
+                valid = false;
+                continue;
+            }
+
+            arguments.Add(new BoundCallArgument(parameterIndex, boundValue));
         }
 
-        if (supplied.Any(isSupplied => !isSupplied))
+        if (supplied.Any(value => !value))
         {
-            diagnosticReporter.GenerateErrorWithCustomMessage(
-                ErrorType.UnsupportedMVPExpression,
-                $"Invocation of \"{name}\" must supply every required parameter in the current subset.",
-                invocation.Span);
-
+            ReportError(invocation, "Every required parameter must be supplied in the current invocation subset.", diagnosticReporter);
             valid = false;
         }
 
-        return valid
-            ? new BoundVoidCallStatement(selected.Symbol, [.. targetParameters.Select(parameter => parameter.Type)], arguments)
-            : null;
-
-        BoundVoidCallStatement? ReportUnsupported(ExpressionStatementSyntax invalid, string message)
-        {
-            diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.UnsupportedMVPExpression, message, invalid.Span);
-            return null;
-        }
+        return valid ? new ResolvedCall(selected, arguments) : null;
     }
 
-    private static void ReportArgumentError(CallArgumentSyntax argument, string message, IDiagnosticReporter diagnosticReporter)
-        => diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.UnsupportedMVPExpression, message, argument.Span);
+    private static void ReportError(SyntaxNode node, string message, IDiagnosticReporter diagnosticReporter)
+        => diagnosticReporter.GenerateErrorWithCustomMessage(ErrorType.UnsupportedMVPExpression, message, node.Span);
+
+    private sealed record ResolvedCall(PackageCallable Callable, IReadOnlyList<BoundCallArgument> Arguments);
 }
