@@ -166,8 +166,8 @@ public sealed class FunctionDeclarationBinder
     }
 
     /// <summary>
-    /// Binds every statement, including unreachable statements, in a lexical
-    /// scope shared with the containing function's declaration context.
+    /// Binds every statement, including unreachable statements, within a lexical
+    /// scope. Local declarations and assignments share the enclosing function's bindings.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
@@ -224,6 +224,7 @@ public sealed class FunctionDeclarationBinder
                     IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
                     ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken, context),
                     LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, cancellationToken, context),
+                    LocalAssignmentStatementSyntax assignment => BindLocalAssignment(assignment, parameters, callables, diagnosticReporter, cancellationToken, context),
                     _ => null
                 };
 
@@ -276,12 +277,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? initializer = type.Value switch
-        {
-            BoundType.Int32 => IntegerExpressionBinder.Bind(declaration.Initializer, parameters, diagnosticReporter, cancellationToken, callables, locals),
-            BoundType.Bool => BooleanExpressionBinder.Bind(declaration.Initializer, parameters, diagnosticReporter, cancellationToken, callables, locals),
-            _ => null
-        };
+        BoundExpression? initializer = BindValue(declaration.Initializer, type.Value, parameters, callables, diagnosticReporter, cancellationToken, locals);
 
         if (initializer is null)
         {
@@ -296,6 +292,58 @@ public sealed class FunctionDeclarationBinder
 
         return new BoundLocalDeclarationStatement(local!, initializer);
     }
+
+    private static BoundLocalAssignmentStatement? BindLocalAssignment(
+        LocalAssignmentStatementSyntax assignment,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        if (!assignment.NameToken.IsSourceBacked
+            || !assignment.EqualsToken.IsSourceBacked
+            || !assignment.SemicolonToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        string? name = IdentifierBinder.Bind(assignment.NameToken);
+        BoundExpression? target = name is null ? null : locals.Resolve(name);
+
+        if (target is null)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, assignment.NameToken.Span);
+            return null;
+        }
+
+        if (target is not BoundLocalReferenceExpression local)
+        {
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                ErrorType.UnsupportedMVPExpression,
+                "Only initialized local variables may be assignment targets in the current executable subset.",
+                assignment.NameToken.Span);
+            return null;
+        }
+
+        BoundExpression? value = BindValue(assignment.Value, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        return value is null ? null : new BoundLocalAssignmentStatement(local.Local, value);
+    }
+
+    private static BoundExpression? BindValue(
+        ExpressionSyntax expression,
+        BoundType expectedType,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+        => expectedType switch
+        {
+            BoundType.Int32 => IntegerExpressionBinder.Bind(expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
+            BoundType.Bool => BooleanExpressionBinder.Bind(expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
+            _ => throw new NotSupportedException($"Value type \"{expectedType}\" is not supported by this executable subset.")
+        };
 
     private static bool IsReservedLocalName(string name)
         => name.All(character => character == '_')
@@ -416,13 +464,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? expression = returnType switch
-        {
-            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
-            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
-            _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
-        };
-
+        BoundExpression? expression = BindValue(statement.Expression, returnType, parameters, callables, diagnosticReporter, cancellationToken, locals);
         return expression is null ? null : new BoundReturnStatement(expression);
     }
 

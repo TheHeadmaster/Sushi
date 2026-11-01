@@ -136,6 +136,7 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         private readonly Dictionary<string, LLVMBasicBlockRef> blocks = new(StringComparer.Ordinal);
         private readonly Dictionary<string, LLVMBasicBlockRef> exitBlocks = new(StringComparer.Ordinal);
         private readonly Dictionary<int, (LLVMValueRef Value, IRType Type)> temporaries = [];
+        private readonly Dictionary<int, (LLVMValueRef Address, IRType Type)> localSlots = [];
         private readonly List<(LLVMValueRef Phi, LoweredBooleanPhiInstruction Instruction)> pendingPhis = [];
 
         private LLVMBasicBlockRef arithmeticFailureBlock;
@@ -161,6 +162,8 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                 this.blocks.Add(block.Name, this.function.AppendBasicBlock(block.Name));
             }
 
+            this.AllocateLocalSlots();
+
             foreach (LoweredBasicBlock block in this.loweredFunction.Blocks)
             {
                 this.cancellationToken.ThrowIfCancellationRequested();
@@ -170,6 +173,33 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
             this.EmitFailureBlock(this.arithmeticFailureBlock);
             this.EmitFailureBlock(this.shiftFailureBlock);
             this.ConnectPhiIncomingValues();
+        }
+
+        private void AllocateLocalSlots()
+        {
+            this.builder.PositionAtEnd(this.GetBlock(this.loweredFunction.EntryBlock.Name));
+
+            foreach (LoweredBasicBlock block in this.loweredFunction.Blocks)
+            {
+                foreach (LoweredLocalStoreInstruction store in block.Instructions.OfType<LoweredLocalStoreInstruction>())
+                {
+                    this.cancellationToken.ThrowIfCancellationRequested();
+
+                    if (this.localSlots.TryGetValue(store.Index, out (LLVMValueRef Address, IRType Type) existing))
+                    {
+                        if (existing.Type != store.Type)
+                        {
+                            throw new InvalidOperationException($"Local slot {store.Index} is used with inconsistent types.");
+                        }
+
+                        continue;
+                    }
+
+                    LLVMTypeRef type = ConvertType(this.context, store.Type);
+                    LLVMValueRef address = this.builder.BuildAlloca(type, $"sushi.local.{store.Index}");
+                    this.localSlots.Add(store.Index, (address, store.Type));
+                }
+            }
         }
 
         private void EmitBlock(LoweredBasicBlock block)
@@ -221,6 +251,14 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                     this.EmitValueCall(call);
                     return;
 
+                case LoweredLocalStoreInstruction store:
+                    this.EmitLocalStore(store);
+                    return;
+
+                case LoweredLocalLoadInstruction load:
+                    this.EmitLocalLoad(load);
+                    return;
+
                 case LoweredBooleanNotInstruction negation:
                     this.EmitBooleanNegation(negation);
                     return;
@@ -256,6 +294,37 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                 default:
                     throw new NotSupportedException($"Lowered instruction type \"{instruction.GetType().Name}\" is not supported by the LLVM backend.");
             }
+        }
+
+        private void EmitLocalStore(LoweredLocalStoreInstruction instruction)
+        {
+            LLVMValueRef address = this.GetLocalSlot(instruction.Index, instruction.Type);
+            LLVMValueRef value = this.EmitValue(instruction.Value);
+            this.builder.BuildStore(value, address);
+        }
+
+        private void EmitLocalLoad(LoweredLocalLoadInstruction instruction)
+        {
+            LLVMValueRef address = this.GetLocalSlot(instruction.Index, instruction.Destination.Type);
+            LLVMTypeRef type = ConvertType(this.context, instruction.Destination.Type);
+            LLVMValueRef value = this.builder.BuildLoad2(type, address, $"sushi.local.value.{instruction.Destination.Index}");
+
+            this.RegisterTemporary(instruction.Destination, value);
+        }
+
+        private LLVMValueRef GetLocalSlot(int index, IRType type)
+        {
+            if (!this.localSlots.TryGetValue(index, out (LLVMValueRef Address, IRType Type) slot))
+            {
+                throw new InvalidOperationException($"Local slot {index} has no allocated storage.");
+            }
+
+            if (slot.Type != type)
+            {
+                throw new InvalidOperationException($"Local slot {index} is accessed with an inconsistent type.");
+            }
+
+            return slot.Address;
         }
 
         private void EmitVoidCall(LoweredVoidCallInstruction instruction)

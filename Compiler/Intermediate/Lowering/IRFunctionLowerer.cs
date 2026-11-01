@@ -3,7 +3,7 @@
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
 /// conditional evaluation, checked arithmetic, integer comparisons,
-/// fixed-width operations, local initialization, and function-call argument order.
+/// fixed-width operations, local storage, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -32,7 +32,7 @@ public sealed class IRFunctionLowerer
     {
         private readonly CancellationToken cancellationToken;
         private readonly List<BlockBuilder> blocks = [];
-        private readonly Dictionary<int, LoweredValue> localValues = [];
+        private readonly Dictionary<int, IRType> localTypes = [];
         private BlockBuilder current;
         private int nextBlockIndex;
         private int nextTemporaryIndex;
@@ -106,6 +106,10 @@ public sealed class IRFunctionLowerer
                         this.LowerLocalDeclaration(local);
                         break;
 
+                    case IRLocalAssignmentStatement assignment:
+                        this.LowerLocalAssignment(assignment);
+                        break;
+
                     default:
                         throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported by the current lowering subset.");
                 }
@@ -144,30 +148,42 @@ public sealed class IRFunctionLowerer
         {
             LoweredValue value = this.LowerExpression(declaration.Initializer);
 
-            if (value.Type != declaration.Type)
-            {
-                throw new InvalidOperationException("The lowered initializer does not match its declared local type.");
-            }
-
-            if (!this.localValues.TryAdd(declaration.Index, value))
+            if (!this.localTypes.TryAdd(declaration.Index, declaration.Type))
             {
                 throw new InvalidOperationException($"Local declaration index {declaration.Index} has already been initialized.");
             }
+
+            this.current.Instructions.Add(new LoweredLocalStoreInstruction(declaration.Index, declaration.Type, value));
+        }
+
+        private void LowerLocalAssignment(IRLocalAssignmentStatement assignment)
+        {
+            this.ValidateLocalType(assignment.Index, assignment.Type);
+            LoweredValue value = this.LowerExpression(assignment.Value);
+            this.current.Instructions.Add(new LoweredLocalStoreInstruction(assignment.Index, assignment.Type, value));
         }
 
         private LoweredValue ReadLocal(IRLocalReferenceExpression reference)
         {
-            if (!this.localValues.TryGetValue(reference.Index, out LoweredValue? value))
+            this.ValidateLocalType(reference.Index, reference.Type);
+
+            LoweredTemporaryValue destination = this.CreateTemporary(reference.Type);
+            this.current.Instructions.Add(new LoweredLocalLoadInstruction(destination, reference.Index));
+
+            return destination;
+        }
+
+        private void ValidateLocalType(int index, IRType type)
+        {
+            if (!this.localTypes.TryGetValue(index, out IRType existingType))
             {
-                throw new InvalidOperationException($"Local declaration index {reference.Index} has not been initialized.");
+                throw new InvalidOperationException($"Local declaration index {index} has not been initialized.");
             }
 
-            if (value.Type != reference.Type)
+            if (existingType != type)
             {
-                throw new InvalidOperationException("The local reference type does not match its initialized value.");
+                throw new InvalidOperationException("The local reference or assignment type does not match its initialized value.");
             }
-
-            return value;
         }
 
         private void LowerVoidCall(IRVoidCallStatement call)

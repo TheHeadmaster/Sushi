@@ -1,7 +1,8 @@
 ﻿namespace Sushi.Intermediate;
 
 /// <summary>
-/// Establishes a function-local single-assignment value after evaluating its initializer.
+/// Establishes a typed function-local storage location and initializes it
+/// before any subsequent assignment or read.
 /// </summary>
 public sealed record IRLocalDeclarationStatement : IRStatement
 {

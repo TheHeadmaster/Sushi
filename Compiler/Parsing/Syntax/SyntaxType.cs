@@ -56,5 +56,6 @@ public enum SyntaxType
     CallArgument,
     InvocationExpression,
     ExpressionStatement,
-    LocalDeclarationStatement
+    LocalDeclarationStatement,
+    LocalAssignmentStatement
 }

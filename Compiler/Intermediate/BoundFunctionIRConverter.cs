@@ -64,6 +64,11 @@ public sealed class BoundFunctionIRConverter
                 ConvertType(local.Local.Type),
                 ConvertExpression(local.Initializer, cancellationToken)),
 
+            BoundLocalAssignmentStatement assignment => new IRLocalAssignmentStatement(
+                assignment.Local.Index,
+                ConvertType(assignment.Local.Type),
+                ConvertExpression(assignment.Value, cancellationToken)),
+
             BoundVoidCallStatement call => new IRVoidCallStatement(
                 call.Symbol,
                 [.. call.ParameterTypes.Select(ConvertType)],

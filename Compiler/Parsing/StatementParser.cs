@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses braced statement blocks, returns, conditionals, initialized local
-/// declarations, and candidate invocation statements using a shared lexical cursor.
+/// declarations, local assignments, and candidate invocation statements.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -64,6 +64,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return this.ParseLocalDeclaration(diagnosticReporter);
         }
 
+        if (this.IsLocalAssignmentAhead())
+        {
+            return this.ParseLocalAssignment(diagnosticReporter);
+        }
+
         return this.ParseExpressionStatement(diagnosticReporter);
     }
 
@@ -94,6 +99,19 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after local declaration.", diagnosticReporter);
 
         return new LocalDeclarationStatementSyntax(typeToken, nameToken, equalsToken, initializer, semicolon);
+    }
+
+    private LocalAssignmentStatementSyntax ParseLocalAssignment(IDiagnosticReporter diagnosticReporter)
+    {
+        this.cursor.TryConsumeIdentifier(out LexToken name);
+        this.cursor.TryAdvance(out LexToken assignment);
+
+        SyntaxToken nameToken = new(GetIdentifierSyntaxType(name), name);
+        SyntaxToken equalsToken = new(SyntaxType.OperatorToken, assignment);
+        ExpressionSyntax value = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after assignment.", diagnosticReporter);
+
+        return new LocalAssignmentStatementSyntax(nameToken, equalsToken, value, semicolon);
     }
 
     private ExpressionStatementSyntax ParseExpressionStatement(IDiagnosticReporter diagnosticReporter)
@@ -164,6 +182,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         => this.IsKeywordAhead("return"u8)
             || this.IsKeywordAhead("if"u8)
             || this.IsLocalDeclarationAhead()
+            || this.IsLocalAssignmentAhead()
             || this.IsInvocationAhead();
 
     private bool IsLocalDeclarationAhead()
@@ -177,6 +196,18 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
 
         return this.cursor.TryPeek(out LexToken name, lookahead: 1)
             && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier;
+    }
+
+    private bool IsLocalAssignmentAhead()
+    {
+        if (!this.cursor.TryPeek(out LexToken name)
+            || name.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier)
+            || !this.cursor.TryPeek(out LexToken assignment, lookahead: 1))
+        {
+            return false;
+        }
+
+        return assignment.Type is LexTokenType.Operator && this.cursor.TokenTextEquals(assignment, "="u8);
     }
 
     private bool IsInvocationAhead()
