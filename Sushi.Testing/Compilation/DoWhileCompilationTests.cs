@@ -288,7 +288,7 @@ public class DoWhileCompilationTests
     }
 
     [TestCase("do { } while (1)", ErrorType.UnsupportedMVPExpression, TestName = "Post Test Condition Must Be Boolean")]
-    [TestCase("do { Missing(); } while (false)", ErrorType.UnknownIdentifier, TestName = "Post Test Body Must Be Checked Even When Condition Is False")]
+    [TestCase("do { Missing(); } while (false)", ErrorType.UnsupportedMVPExpression, TestName = "Post Test Body Must Be Checked Even When Condition Is False")]
     [TestCase("do { break break; } while (false)", ErrorType.UnsupportedMVPExpression, TestName = "Excessive Break Depth Must Be Rejected")]
     [TestCase("do { continue continue; } while (false)", ErrorType.UnsupportedMVPExpression, TestName = "Excessive Continue Depth Must Be Rejected")]
     [TestCase("do { int32 inner = 1; } while (false) inner = 2;", ErrorType.UnknownIdentifier, TestName = "Post Test Body Local Must Not Escape Scope")]
