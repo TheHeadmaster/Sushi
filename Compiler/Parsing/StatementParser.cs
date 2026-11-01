@@ -6,7 +6,7 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks, pre-test and post-test loops, conditionals,
+/// Parses braced statements, conditionals, all supported ordinary loop forms,
 /// loop transfers, returns, initialized locals, assignments, and invocations.
 /// </summary>
 /// <param name="cursor">
@@ -64,6 +64,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return this.ParseDoWhileStatement(diagnosticReporter);
         }
 
+        if (this.IsKeywordAhead("for"u8))
+        {
+            return this.ParseForStatement(diagnosticReporter);
+        }
+
         if (this.IsKeywordAhead("break"u8))
         {
             return this.ParseLoopTransfer("break"u8, SyntaxType.BreakKeyword, diagnosticReporter);
@@ -113,6 +118,172 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after do while condition.", diagnosticReporter);
 
         return new DoWhileStatementSyntax(doKeyword, body, whileKeyword, openParenthesis, condition, closeParenthesis);
+    }
+
+    private ForStatementSyntax ParseForStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken forKeyword = this.ParseKeyword("for"u8, SyntaxType.ForKeyword, "Expected \"for\" keyword.", diagnosticReporter);
+        SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after for.", diagnosticReporter);
+
+        IReadOnlyList<ForHeaderOperationSyntax> initialization = this.ParseForHeaderOperations((byte)';', allowDeclarations: true, diagnosticReporter);
+        SyntaxToken initializationSemicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after for initialization.", diagnosticReporter);
+
+        ExpressionSyntax? condition = this.IsPunctuationAhead((byte)';') ? null : this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken conditionSemicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after for condition.", diagnosticReporter);
+
+        IReadOnlyList<ForHeaderOperationSyntax> iteration = this.ParseForHeaderOperations((byte)')', allowDeclarations: false, diagnosticReporter);
+        SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after for iteration.", diagnosticReporter);
+        BlockSyntax body = this.ParseBlock(diagnosticReporter);
+
+        return new ForStatementSyntax(forKeyword, openParenthesis, initialization, initializationSemicolon, condition, conditionSemicolon, iteration, closeParenthesis, body);
+    }
+
+    private IReadOnlyList<ForHeaderOperationSyntax> ParseForHeaderOperations(byte closingPunctuation, bool allowDeclarations, IDiagnosticReporter diagnosticReporter)
+    {
+        List<ForHeaderOperationSyntax> operations = [];
+
+        if (this.IsPunctuationAhead(closingPunctuation))
+        {
+            return operations;
+        }
+
+        while (true)
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            if (!this.IsForHeaderOperationAhead(allowDeclarations))
+            {
+                this.AccumulateExpectedDiagnostic("Expected an initialized declaration, assignment, or integer update in for header.", this.cursor.Position, diagnosticReporter);
+                this.SkipInvalidForHeaderClause(closingPunctuation);
+                break;
+            }
+
+            operations.Add(this.ParseForHeaderOperation(allowDeclarations, diagnosticReporter));
+
+            if (!this.cursor.TryConsumePunctuation((byte)',', out _))
+            {
+                break;
+            }
+
+            if (this.IsPunctuationAhead(closingPunctuation))
+            {
+                this.AccumulateExpectedDiagnostic("Expected a for-header operation after comma.", this.cursor.Position, diagnosticReporter);
+                break;
+            }
+        }
+
+        return operations;
+    }
+
+    private ForHeaderOperationSyntax ParseForHeaderOperation(bool allowDeclarations, IDiagnosticReporter diagnosticReporter)
+    {
+        if (allowDeclarations && this.IsForHeaderDeclarationAhead())
+        {
+            this.cursor.TryConsumeIdentifier(out LexToken type);
+            this.cursor.TryConsumeIdentifier(out LexToken name);
+            this.cursor.TryAdvance(out LexToken equals);
+
+            ExpressionSyntax initializer = this.expressions.ParseExpression(diagnosticReporter);
+
+            return new ForHeaderOperationSyntax(
+                new SyntaxToken(GetIdentifierSyntaxType(type), type),
+                new SyntaxToken(GetIdentifierSyntaxType(name), name),
+                new SyntaxToken(SyntaxType.OperatorToken, equals),
+                initializer);
+        }
+
+        if (this.IsPrefixUpdateAhead())
+        {
+            this.cursor.TryAdvance(out LexToken operation);
+            this.cursor.TryConsumeIdentifier(out LexToken name);
+
+            return new ForHeaderOperationSyntax(
+                null,
+                new SyntaxToken(GetIdentifierSyntaxType(name), name),
+                new SyntaxToken(SyntaxType.OperatorToken, operation),
+                null,
+                isPrefix: true);
+        }
+
+        this.cursor.TryConsumeIdentifier(out LexToken target);
+        this.cursor.TryAdvance(out LexToken operatorToken);
+
+        ExpressionSyntax? value = this.IsIncrementOrDecrement(operatorToken)
+            ? null
+            : this.expressions.ParseExpression(diagnosticReporter);
+
+        return new ForHeaderOperationSyntax(
+            null,
+            new SyntaxToken(GetIdentifierSyntaxType(target), target),
+            new SyntaxToken(SyntaxType.OperatorToken, operatorToken),
+            value);
+    }
+
+    private bool IsForHeaderOperationAhead(bool allowDeclarations)
+        => allowDeclarations && this.IsForHeaderDeclarationAhead()
+            || this.IsPrefixUpdateAhead()
+            || this.IsPostfixUpdateAhead()
+            || this.IsLocalAssignmentAhead();
+
+    private bool IsForHeaderDeclarationAhead()
+    {
+        if (!this.cursor.TryPeek(out LexToken type)
+            || type.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier)
+            || !this.cursor.TryPeek(out LexToken name, lookahead: 1)
+            || name.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier)
+            || !this.cursor.TryPeek(out LexToken equals, lookahead: 2))
+        {
+            return false;
+        }
+
+        return equals.Type is LexTokenType.Operator && this.cursor.TokenTextEquals(equals, "="u8);
+    }
+
+    private bool IsPrefixUpdateAhead()
+        => this.cursor.TryPeek(out LexToken operation)
+            && this.IsIncrementOrDecrement(operation)
+            && this.cursor.TryPeek(out LexToken name, lookahead: 1)
+            && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier;
+
+    private bool IsPostfixUpdateAhead()
+        => this.cursor.TryPeek(out LexToken name)
+            && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier
+            && this.cursor.TryPeek(out LexToken operation, lookahead: 1)
+            && this.IsIncrementOrDecrement(operation);
+
+    private bool IsIncrementOrDecrement(LexToken operation)
+        => operation.Type is LexTokenType.Operator
+            && (this.cursor.TokenTextEquals(operation, "++"u8) || this.cursor.TokenTextEquals(operation, "--"u8));
+
+    private void SkipInvalidForHeaderClause(byte closingPunctuation)
+    {
+        int parenthesisDepth = 0;
+
+        while (this.cursor.TryPeek(out LexToken token))
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            if (this.IsPunctuation(token, (byte)'('))
+            {
+                parenthesisDepth++;
+            }
+            else if (this.IsPunctuation(token, (byte)')'))
+            {
+                if (parenthesisDepth == 0)
+                {
+                    break;
+                }
+
+                parenthesisDepth--;
+            }
+
+            if (parenthesisDepth == 0 && this.IsPunctuation(token, closingPunctuation))
+            {
+                break;
+            }
+
+            this.cursor.TryAdvance(out _);
+        }
     }
 
     private LoopTransferStatementSyntax ParseLoopTransfer(ReadOnlySpan<byte> spelling, SyntaxType type, IDiagnosticReporter diagnosticReporter)
@@ -243,6 +414,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             || this.IsKeywordAhead("if"u8)
             || this.IsKeywordAhead("while"u8)
             || this.IsKeywordAhead("do"u8)
+            || this.IsKeywordAhead("for"u8)
             || this.IsKeywordAhead("break"u8)
             || this.IsKeywordAhead("continue"u8)
             || this.IsLocalDeclarationAhead()
@@ -310,6 +482,9 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         => this.cursor.TryPeek(out LexToken token)
             && token.Type is LexTokenType.Keyword
             && this.cursor.TokenTextEquals(token, keyword);
+
+    private bool IsPunctuationAhead(byte punctuation)
+        => this.cursor.TryPeek(out LexToken token) && this.IsPunctuation(token, punctuation);
 
     private bool IsPunctuation(LexToken token, byte punctuation)
         => token.Type is LexTokenType.Punctuation

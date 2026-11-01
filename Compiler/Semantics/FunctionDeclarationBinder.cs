@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
+using Sushi.Source;
 
 namespace Sushi.Semantics;
 
@@ -226,6 +227,7 @@ public sealed class FunctionDeclarationBinder
                     IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
                     WhileStatementSyntax loop => BindWhileStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
                     DoWhileStatementSyntax loop => BindDoWhileStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    ForStatementSyntax loop => BindForStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
                     LoopTransferStatementSyntax transfer => BindLoopTransferStatement(transfer, diagnosticReporter, context),
                     ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken, context),
                     LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, cancellationToken, context),
@@ -321,6 +323,164 @@ public sealed class FunctionDeclarationBinder
         }
     }
 
+    private static BoundForStatement? BindForStatement(
+        ForStatementSyntax statement,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables,
+        LocalBindingContext locals)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!statement.ForKeyword.IsSourceBacked
+            || !statement.OpenParenthesisToken.IsSourceBacked
+            || !statement.InitializationSemicolon.IsSourceBacked
+            || !statement.ConditionSemicolon.IsSourceBacked
+            || !statement.CloseParenthesisToken.IsSourceBacked
+            || !statement.Body.OpenBraceToken.IsSourceBacked
+            || !statement.Body.CloseBraceToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        locals.EnterScope();
+
+        try
+        {
+            bool valid = true;
+            List<BoundStatement> initialization = [];
+
+            foreach (ForHeaderOperationSyntax operation in statement.Initialization)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: true, parameters, callables, diagnosticReporter, cancellationToken, locals);
+
+                if (bound is null)
+                {
+                    valid = false;
+                }
+                else
+                {
+                    initialization.Add(bound);
+                }
+            }
+
+            BoundExpression? condition = statement.Condition is null
+                ? new BoundBooleanConstantExpression(true)
+                : BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken, callables, locals);
+
+            List<BoundStatement> iteration = [];
+
+            foreach (ForHeaderOperationSyntax operation in statement.Iteration)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: false, parameters, callables, diagnosticReporter, cancellationToken, locals);
+
+                if (bound is null)
+                {
+                    valid = false;
+                }
+                else
+                {
+                    iteration.Add(bound);
+                }
+            }
+
+            BoundBlock? body;
+
+            locals.EnterLoop();
+
+            try
+            {
+                body = BindBody(statement.Body, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
+            }
+            finally
+            {
+                locals.ExitLoop();
+            }
+
+            return !valid || condition is null || body is null
+                ? null
+                : new BoundForStatement(new BoundBlock(initialization), condition, new BoundBlock(iteration), body);
+        }
+        finally
+        {
+            locals.ExitScope();
+        }
+    }
+
+    private static BoundStatement? BindForHeaderOperation(
+        ForHeaderOperationSyntax operation,
+        bool allowDeclarations,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        if (!operation.NameToken.IsSourceBacked
+            || !operation.OperatorToken.IsSourceBacked
+            || operation.TypeToken is SyntaxToken typeToken && !typeToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        if (operation.IsDeclaration)
+        {
+            if (!allowDeclarations || operation.Value is null || GetAssignmentOperator(operation.OperatorToken) != "=")
+            {
+                diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, operation.Span);
+                return null;
+            }
+
+            return BindInitializedLocal(operation.TypeToken!.Value, operation.NameToken, operation.Value, operation.Span,
+                parameters, callables, diagnosticReporter, cancellationToken, locals);
+        }
+
+        return operation.IsIncrementOrDecrement
+            ? BindIntegerUpdate(operation, diagnosticReporter, locals)
+            : BindAssignmentOperation(operation.NameToken, operation.OperatorToken, operation.Value!,
+                parameters, callables, diagnosticReporter, cancellationToken, locals);
+    }
+
+    private static BoundLocalAssignmentStatement? BindIntegerUpdate(
+        ForHeaderOperationSyntax operation,
+        IDiagnosticReporter diagnosticReporter,
+        LocalBindingContext locals)
+    {
+        string? name = IdentifierBinder.Bind(operation.NameToken);
+        BoundExpression? target = name is null ? null : locals.Resolve(name);
+
+        if (target is null)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, operation.NameToken.Span);
+            return null;
+        }
+
+        if (target is not BoundLocalReferenceExpression { Type: BoundType.Int32 } local)
+        {
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                ErrorType.UnsupportedMVPExpression,
+                "Increment and decrement require a writable int32 local in the current executable subset.",
+                operation.Span);
+            return null;
+        }
+
+        IntegerBinaryOperator operationKind = GetAssignmentOperator(operation.OperatorToken) switch
+        {
+            "++" => IntegerBinaryOperator.Add,
+            "--" => IntegerBinaryOperator.Subtract,
+            _ => throw new InvalidOperationException("The for-header update operator must be ++ or --.")
+        };
+
+        BoundExpression updated = new BoundIntegerBinaryExpression(operationKind, local, new BoundIntegerLiteralExpression(1));
+        return new BoundLocalAssignmentStatement(local.Local, updated);
+    }
+
     private static BoundLoopTransferStatement? BindLoopTransferStatement(
         LoopTransferStatementSyntax statement,
         IDiagnosticReporter diagnosticReporter,
@@ -362,8 +522,23 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        string? typeName = IdentifierBinder.Bind(declaration.TypeToken);
-        string? name = IdentifierBinder.Bind(declaration.NameToken);
+        return BindInitializedLocal(declaration.TypeToken, declaration.NameToken, declaration.Initializer, declaration.Span,
+            parameters, callables, diagnosticReporter, cancellationToken, locals);
+    }
+
+    private static BoundLocalDeclarationStatement? BindInitializedLocal(
+        SyntaxToken typeToken,
+        SyntaxToken nameToken,
+        ExpressionSyntax initializer,
+        SourceSpan declarationSpan,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        string? typeName = IdentifierBinder.Bind(typeToken);
+        string? name = IdentifierBinder.Bind(nameToken);
 
         BoundType? type = typeName switch
         {
@@ -374,24 +549,24 @@ public sealed class FunctionDeclarationBinder
 
         if (type is null || name is null || IsReservedLocalName(name))
         {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.Span);
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declarationSpan);
             return null;
         }
 
-        BoundExpression? initializer = BindValue(declaration.Initializer, type.Value, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        BoundExpression? value = BindValue(initializer, type.Value, parameters, callables, diagnosticReporter, cancellationToken, locals);
 
-        if (initializer is null)
+        if (value is null)
         {
             return null;
         }
 
         if (!locals.TryDeclare(name, type.Value, out BoundLocal? local))
         {
-            diagnosticReporter.GenerateError(ErrorType.DuplicateLocal, declaration.NameToken.Span);
+            diagnosticReporter.GenerateError(ErrorType.DuplicateLocal, nameToken.Span);
             return null;
         }
 
-        return new BoundLocalDeclarationStatement(local!, initializer);
+        return new BoundLocalDeclarationStatement(local!, value);
     }
 
     private static BoundLocalAssignmentStatement? BindLocalAssignment(
@@ -409,12 +584,26 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        string? name = IdentifierBinder.Bind(assignment.NameToken);
+        return BindAssignmentOperation(assignment.NameToken, assignment.OperatorToken, assignment.Value,
+            parameters, callables, diagnosticReporter, cancellationToken, locals);
+    }
+
+    private static BoundLocalAssignmentStatement? BindAssignmentOperation(
+        SyntaxToken nameToken,
+        SyntaxToken operatorToken,
+        ExpressionSyntax valueSyntax,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        string? name = IdentifierBinder.Bind(nameToken);
         BoundExpression? target = name is null ? null : locals.Resolve(name);
 
         if (target is null)
         {
-            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, assignment.NameToken.Span);
+            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, nameToken.Span);
             return null;
         }
 
@@ -423,27 +612,28 @@ public sealed class FunctionDeclarationBinder
             diagnosticReporter.GenerateErrorWithCustomMessage(
                 ErrorType.UnsupportedMVPExpression,
                 "Only initialized local variables may be assignment targets in the current executable subset.",
-                assignment.NameToken.Span);
+                nameToken.Span);
             return null;
         }
 
-        string operation = GetAssignmentOperator(assignment.OperatorToken);
+        string operation = GetAssignmentOperator(operatorToken);
 
         BoundExpression? value = operation == "="
-            ? BindValue(assignment.Value, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals)
-            : BindCompoundAssignmentValue(assignment, operation, local, parameters, callables, diagnosticReporter, cancellationToken, locals);
+            ? BindValue(valueSyntax, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals)
+            : BindCompoundAssignmentValue(operatorToken, valueSyntax, operation, local, parameters, callables, diagnosticReporter, cancellationToken, locals);
 
         return value is null ? null : new BoundLocalAssignmentStatement(local.Local, value);
     }
 
     private static string GetAssignmentOperator(SyntaxToken token)
     {
-        Source.SourceSpan span = token.Span;
+        SourceSpan span = token.Span;
         return Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[span.Start..span.End]);
     }
 
     private static BoundExpression? BindCompoundAssignmentValue(
-        LocalAssignmentStatementSyntax assignment,
+        SyntaxToken operatorToken,
+        ExpressionSyntax valueSyntax,
         string spelling,
         BoundLocalReferenceExpression target,
         IReadOnlyList<BoundParameter> parameters,
@@ -453,13 +643,14 @@ public sealed class FunctionDeclarationBinder
         LocalBindingContext locals)
         => target.Type switch
         {
-            BoundType.Int32 => BindCompoundIntegerAssignment(assignment, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
-            BoundType.Bool => BindCompoundBooleanAssignment(assignment, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
+            BoundType.Int32 => BindCompoundIntegerAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
+            BoundType.Bool => BindCompoundBooleanAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
             _ => throw new NotSupportedException($"Local type \"{target.Type}\" is not supported by compound assignment.")
         };
 
     private static BoundExpression? BindCompoundIntegerAssignment(
-        LocalAssignmentStatementSyntax assignment,
+        SyntaxToken operatorToken,
+        ExpressionSyntax valueSyntax,
         string spelling,
         BoundLocalReferenceExpression target,
         IReadOnlyList<BoundParameter> parameters,
@@ -485,13 +676,13 @@ public sealed class FunctionDeclarationBinder
 
         if (operation is null)
         {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, assignment.OperatorToken.Span);
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, operatorToken.Span);
             return null;
         }
 
         BoundExpression? right = operation is IntegerBinaryOperator.ShiftLeft or IntegerBinaryOperator.ShiftRight
-            ? BindCompoundShiftCount(assignment.Value, parameters, callables, diagnosticReporter, cancellationToken, locals)
-            : BindValue(assignment.Value, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
+            ? BindCompoundShiftCount(valueSyntax, parameters, callables, diagnosticReporter, cancellationToken, locals)
+            : BindValue(valueSyntax, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
 
         if (right is null)
         {
@@ -500,7 +691,7 @@ public sealed class FunctionDeclarationBinder
 
         if (operation is IntegerBinaryOperator.Divide or IntegerBinaryOperator.Remainder && right is BoundIntegerLiteralExpression { Value: 0 })
         {
-            diagnosticReporter.GenerateError(ErrorType.IntegerDivisionByZero, assignment.OperatorToken.Span);
+            diagnosticReporter.GenerateError(ErrorType.IntegerDivisionByZero, operatorToken.Span);
             return null;
         }
 
@@ -508,7 +699,8 @@ public sealed class FunctionDeclarationBinder
     }
 
     private static BoundExpression? BindCompoundBooleanAssignment(
-        LocalAssignmentStatementSyntax assignment,
+        SyntaxToken operatorToken,
+        ExpressionSyntax valueSyntax,
         string spelling,
         BoundLocalReferenceExpression target,
         IReadOnlyList<BoundParameter> parameters,
@@ -527,11 +719,11 @@ public sealed class FunctionDeclarationBinder
 
         if (operation is null)
         {
-            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, assignment.OperatorToken.Span);
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, operatorToken.Span);
             return null;
         }
 
-        BoundExpression? right = BindValue(assignment.Value, BoundType.Bool, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        BoundExpression? right = BindValue(valueSyntax, BoundType.Bool, parameters, callables, diagnosticReporter, cancellationToken, locals);
         return right is null ? null : new BoundBooleanBinaryExpression(operation.Value, target, right);
     }
 
@@ -728,8 +920,7 @@ public sealed class FunctionDeclarationBinder
         {
             BoundReturnStatement => false,
             BoundIfStatement conditional => CanConditionalCompleteNormally(conditional),
-            BoundWhileStatement => true,
-            BoundDoWhileStatement => true,
+            BoundWhileStatement or BoundDoWhileStatement or BoundForStatement => true,
             _ => true
         };
 
@@ -780,7 +971,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         ReadOnlySpan<byte> spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
-
+        
         if (spelling.SequenceEqual("public"u8))
         {
             accessibility = Accessibility.Public;

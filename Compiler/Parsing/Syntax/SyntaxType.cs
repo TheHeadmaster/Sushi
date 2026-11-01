@@ -64,5 +64,7 @@ public enum SyntaxType
     BreakKeyword,
     ContinueKeyword,
     DoWhileStatement,
-    DoKeyword
+    DoKeyword,
+    ForStatement,
+    ForKeyword
 }

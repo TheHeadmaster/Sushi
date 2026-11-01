@@ -2,8 +2,8 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// pre-test and post-test loops, nested loop transfers, checked arithmetic,
-/// local storage, and function-call argument order.
+/// pre-test, post-test, and three-part loops, nested loop transfers,
+/// checked arithmetic, local storage, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -96,6 +96,10 @@ public sealed class IRFunctionLowerer
 
                     case IRDoWhileStatement loop:
                         this.LowerDoWhile(loop);
+                        break;
+
+                    case IRForStatement loop:
+                        this.LowerFor(loop);
                         break;
 
                     case IRLoopTransferStatement transfer:
@@ -210,6 +214,60 @@ public sealed class IRFunctionLowerer
             }
 
             this.current.Terminate(new LoweredConditionalBranchTerminator(condition, bodyBlock.Name, exitBlock.Name));
+            this.current = exitBlock;
+        }
+
+        private void LowerFor(IRForStatement loop)
+        {
+            if (loop.Condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A for condition must have type bool.");
+            }
+
+            this.LowerStatements(loop.Initialization);
+
+            BlockBuilder conditionBlock = this.CreateBlock("for.condition");
+            BlockBuilder bodyBlock = this.CreateBlock("for.body");
+            BlockBuilder iterationBlock = this.CreateBlock("for.iteration");
+            BlockBuilder exitBlock = this.CreateBlock("for.exit");
+
+            this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
+
+            this.current = conditionBlock;
+            LoweredValue condition = this.LowerExpression(loop.Condition);
+
+            if (condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A lowered for condition must have type bool.");
+            }
+
+            this.current.Terminate(new LoweredConditionalBranchTerminator(condition, bodyBlock.Name, exitBlock.Name));
+
+            this.current = bodyBlock;
+            this.loopTargets.Push(new LoopTargets(iterationBlock.Name, exitBlock.Name));
+
+            try
+            {
+                this.LowerStatements(loop.Body);
+            }
+            finally
+            {
+                this.loopTargets.Pop();
+            }
+
+            if (!this.current.IsTerminated)
+            {
+                this.current.Terminate(new LoweredBranchTerminator(iterationBlock.Name));
+            }
+
+            this.current = iterationBlock;
+            this.LowerStatements(loop.Iteration);
+
+            if (!this.current.IsTerminated)
+            {
+                this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
+            }
+
             this.current = exitBlock;
         }
 
