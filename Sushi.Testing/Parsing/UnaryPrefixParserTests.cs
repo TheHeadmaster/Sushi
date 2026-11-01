@@ -401,39 +401,40 @@ public class UnaryPrefixExpressionParserTests
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase(TestName = "Expression Parser Should Not Split Increment Or Decrement Into Unary Operators")]
+    [TestCase(TestName = "Expression Parser Should Recognize Decrement As One Prefix Operator")]
     public void ParserShould_11()
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("--42");
-
-        IntegerLiteralExpressionSyntax missing = expression
+    
+        IncrementDecrementExpressionSyntax update = expression
             .Should()
-            .BeOfType<IntegerLiteralExpressionSyntax>()
+            .BeOfType<IncrementDecrementExpressionSyntax>()
             .Subject;
-
-        missing.LiteralToken.IsMissing
+    
+        update.IsPrefix
             .Should()
             .BeTrue();
-
-        cursor.TryPeek(out LexToken next)
+    
+        update.IsIncrement
             .Should()
-            .BeTrue();
-
-        next.Type
+            .BeFalse();
+    
+        update.Operand
             .Should()
-            .Be(LexTokenType.Operator);
-
-        next.Span.Length
+            .BeOfType<IntegerLiteralExpressionSyntax>();
+    
+        update.OperatorToken.Span.Length
             .Should()
             .Be(2);
-
-        cursor.Index
+    
+        cursor
+            .TryPeek(out _)
             .Should()
-            .Be(0);
-
+            .BeFalse();
+    
         diagnostics
             .Should()
-            .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
+            .BeEmpty();
     }
 
     [TestCase(TestName = "Expression Parser Should Synthesize Unary Operand At EOF")]

@@ -280,6 +280,7 @@ public class ForLoopCompilationTests
     [TestCase("for (missing = 0; false; ) { }", ErrorType.UnknownIdentifier, TestName = "Unknown Initialization Target Must Be Rejected")]
     [TestCase("for (int32 index = 0; false; index += true) { }", ErrorType.UnsupportedMVPExpression, TestName = "Unreachable Iteration Must Still Be Type Checked")]
     [TestCase("for (int32 index = 0; false; index++) { Missing(); }", ErrorType.UnsupportedMVPExpression, TestName = "Unreachable For Body Must Still Be Bound")]
+    [TestCase("for (int32 i = 0; i < 3; i++) { } i++;", ErrorType.UnknownIdentifier, TestName = "For Initializer Local Must Not Be Incremented After Loop Scope")]
     public async Task InvalidForShouldProduceDiagnostic(string body, ErrorType expectedError)
     {
         using TestProject project = await TestProject.Create(CreateRoot(body), Helpers);
@@ -304,7 +305,6 @@ public class ForLoopCompilationTests
     [TestCase("for (int32 i = 0,; i < 3; i++) { }", TestName = "Trailing Initialization Comma Must Be Rejected")]
     [TestCase("for (int32 i = 0; i < 3; Double(i)) { }", TestName = "Function Call Alone Is Not Valid Iteration Operation")]
     [TestCase("for (int32 i = 0; i < 3; int32 j = 1) { }", TestName = "Iteration Clause Cannot Declare Local")]
-    [TestCase("for (int32 i = 0; i < 3; i++) { } i++;", TestName = "Standalone Increment Statements Are Not Introduced By This Slice")]
     public async Task MalformedForShouldProduceSyntaxDiagnostic(string body)
     {
         using TestProject project = await TestProject.Create(CreateRoot(body), Helpers);

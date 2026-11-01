@@ -358,26 +358,45 @@ public class PrattExpressionParserTests
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
-    [TestCase(TestName = "Expression Parser Should Not Interpret Increment As Two Addition Operators")]
+    [TestCase(TestName = "Expression Parser Should Recognize Increment As One Postfix Operator")]
     public void ParserShould_9()
     {
         (ExpressionSyntax expression, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseExpression("1++2");
-
-        expression.Should().BeOfType<IntegerLiteralExpressionSyntax>();
-
+    
+        IncrementDecrementExpressionSyntax update = expression
+            .Should()
+            .BeOfType<IncrementDecrementExpressionSyntax>()
+            .Subject;
+    
+        update.IsPrefix
+            .Should()
+            .BeFalse();
+    
+        update.IsIncrement
+            .Should()
+            .BeTrue();
+    
+        update.Operand
+            .Should()
+            .BeOfType<IntegerLiteralExpressionSyntax>();
+    
+        update.OperatorToken.Span.Length
+            .Should()
+            .Be(2);
+    
         cursor
             .TryPeek(out LexToken next)
             .Should()
             .BeTrue();
-
+    
         next.Type
             .Should()
-            .Be(LexTokenType.Operator);
-
-        next.Span.Length
+            .Be(LexTokenType.IntegerLiteral);
+    
+        next.Span.Start
             .Should()
-            .Be(2);
-
+            .Be(3);
+    
         diagnostics
             .Should()
             .BeEmpty();

@@ -239,6 +239,9 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         return equals.Type is LexTokenType.Operator && this.cursor.TokenTextEquals(equals, "="u8);
     }
 
+    private bool IsPrefixUpdateStartAhead()
+    => this.cursor.TryPeek(out LexToken token) && this.IsIncrementOrDecrement(token);
+
     private bool IsPrefixUpdateAhead()
         => this.cursor.TryPeek(out LexToken operation)
             && this.IsIncrementOrDecrement(operation)
@@ -419,7 +422,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             || this.IsKeywordAhead("continue"u8)
             || this.IsLocalDeclarationAhead()
             || this.IsLocalAssignmentAhead()
-            || this.IsPrefixUpdateAhead()
+            || this.IsPrefixUpdateStartAhead()
             || this.IsPostfixUpdateAhead()
             || this.IsPunctuationAhead((byte)'(')
             || this.IsInvocationAhead();
