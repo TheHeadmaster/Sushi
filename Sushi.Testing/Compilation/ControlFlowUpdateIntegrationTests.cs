@@ -322,13 +322,13 @@ public class ControlFlowUpdateIntegrationTests
     {
         string functions = Helpers + """
 
-            public int32 Evaluate(bool stop)
+            public int32 Evaluate(bool shouldStop)
             {
                 int32 value = 0;
 
                 while (value++ < 5)
                 {
-                    if (stop and value == 3)
+                    if (shouldStop and value == 3)
                     {
                         return ++value;
                     }
