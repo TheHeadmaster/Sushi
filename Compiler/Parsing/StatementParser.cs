@@ -6,8 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks, returns, conditionals, initialized local
-/// declarations, ordinary and compound assignments, and invocation statements.
+/// Parses braced statement blocks, conditionals, while loops, loop transfers,
+/// returns, initialized locals, assignments, and invocation statements.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -22,13 +22,13 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     private readonly ExpressionParser expressions = new(cursor, cancellationToken);
 
     /// <summary>
-    /// Parses a braced statement block, preserving source-backed and recovered punctuation.
+    /// Parses a braced block, preserving source-backed and recovered punctuation.
     /// </summary>
     /// <param name="diagnosticReporter">
     /// Receives syntax diagnostics.
     /// </param>
     /// <returns>
-    /// The parsed block containing supported statement syntax in source order.
+    /// The parsed statements in source order.
     /// </returns>
     public BlockSyntax ParseBlock(IDiagnosticReporter diagnosticReporter)
     {
@@ -54,6 +54,21 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return this.ParseIfStatement(diagnosticReporter);
         }
 
+        if (this.IsKeywordAhead("while"u8))
+        {
+            return this.ParseWhileStatement(diagnosticReporter);
+        }
+
+        if (this.IsKeywordAhead("break"u8))
+        {
+            return this.ParseLoopTransfer("break"u8, SyntaxType.BreakKeyword, diagnosticReporter);
+        }
+
+        if (this.IsKeywordAhead("continue"u8))
+        {
+            return this.ParseLoopTransfer("continue"u8, SyntaxType.ContinueKeyword, diagnosticReporter);
+        }
+
         if (this.IsKeywordAhead("return"u8))
         {
             return this.ParseReturnStatement(diagnosticReporter);
@@ -70,6 +85,34 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         }
 
         return this.ParseExpressionStatement(diagnosticReporter);
+    }
+
+    private WhileStatementSyntax ParseWhileStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken whileKeyword = this.ParseKeyword("while"u8, SyntaxType.WhileKeyword, "Expected \"while\" keyword.", diagnosticReporter);
+        SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after while.", diagnosticReporter);
+        ExpressionSyntax condition = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after while condition.", diagnosticReporter);
+        BlockSyntax body = this.ParseBlock(diagnosticReporter);
+
+        return new WhileStatementSyntax(whileKeyword, openParenthesis, condition, closeParenthesis, body);
+    }
+
+    private LoopTransferStatementSyntax ParseLoopTransfer(ReadOnlySpan<byte> spelling, SyntaxType type, IDiagnosticReporter diagnosticReporter)
+    {
+        List<SyntaxToken> keywords = [];
+
+        do
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+
+            this.cursor.TryConsumeKeyword(spelling, out LexToken token);
+            keywords.Add(new SyntaxToken(type, token));
+        }
+        while (this.IsKeywordAhead(spelling));
+
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after loop transfer.", diagnosticReporter);
+        return new LoopTransferStatementSyntax(keywords, semicolon);
     }
 
     private LocalDeclarationStatementSyntax ParseLocalDeclaration(IDiagnosticReporter diagnosticReporter)
@@ -181,6 +224,9 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     private bool IsStatementAhead()
         => this.IsKeywordAhead("return"u8)
             || this.IsKeywordAhead("if"u8)
+            || this.IsKeywordAhead("while"u8)
+            || this.IsKeywordAhead("break"u8)
+            || this.IsKeywordAhead("continue"u8)
             || this.IsLocalDeclarationAhead()
             || this.IsLocalAssignmentAhead()
             || this.IsInvocationAhead();

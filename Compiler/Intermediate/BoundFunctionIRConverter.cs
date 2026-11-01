@@ -59,6 +59,12 @@ public sealed class BoundFunctionIRConverter
                 ConvertBlock(conditional.Then, cancellationToken),
                 conditional.Else is null ? null : ConvertBlock(conditional.Else, cancellationToken)),
 
+            BoundWhileStatement loop => new IRWhileStatement(
+                ConvertExpression(loop.Condition, cancellationToken),
+                ConvertBlock(loop.Body, cancellationToken)),
+
+            BoundLoopTransferStatement transfer => new IRLoopTransferStatement(transfer.IsBreak, transfer.Depth),
+
             BoundLocalDeclarationStatement local => new IRLocalDeclarationStatement(
                 local.Local.Index,
                 ConvertType(local.Local.Type),

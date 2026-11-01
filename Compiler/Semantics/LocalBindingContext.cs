@@ -1,8 +1,8 @@
 ﻿namespace Sushi.Semantics;
 
 /// <summary>
-/// Maintains lexical local scopes and stable declaration identities within a function.
-/// Parameter bindings remain visible in every nested scope.
+/// Maintains lexical local scopes, stable declaration identities, and
+/// enclosing loop depth within a function.
 /// </summary>
 internal sealed class LocalBindingContext
 {
@@ -22,6 +22,12 @@ internal sealed class LocalBindingContext
     }
 
     /// <summary>
+    /// Gets the number of enclosing loops active at the current binding location.
+    /// Ordinary blocks and conditionals do not increase this depth.
+    /// </summary>
+    public int LoopDepth { get; private set; }
+
+    /// <summary>
     /// Begins a nested lexical block.
     /// </summary>
     public void EnterScope() => this.scopes.Push(new Dictionary<string, BoundLocal>(StringComparer.Ordinal));
@@ -30,6 +36,25 @@ internal sealed class LocalBindingContext
     /// Ends the innermost lexical block without removing outer bindings.
     /// </summary>
     public void ExitScope() => this.scopes.Pop();
+
+    /// <summary>
+    /// Begins binding a loop body, making its boundary available to
+    /// break and continue statements contained within that body.
+    /// </summary>
+    public void EnterLoop() => this.LoopDepth++;
+
+    /// <summary>
+    /// Completes binding the innermost enclosing loop body.
+    /// </summary>
+    public void ExitLoop()
+    {
+        if (this.LoopDepth == 0)
+        {
+            throw new InvalidOperationException("No active loop is available to exit.");
+        }
+
+        this.LoopDepth--;
+    }
 
     /// <summary>
     /// Declares an initialized local unless its name conflicts with a visible binding.

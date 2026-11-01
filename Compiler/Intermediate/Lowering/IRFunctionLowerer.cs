@@ -2,8 +2,8 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// conditional evaluation, checked arithmetic, integer comparisons,
-/// fixed-width operations, local storage, and function-call argument order.
+/// condition evaluation, nested loops, loop transfers, checked arithmetic,
+/// local storage, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -17,7 +17,7 @@ public sealed class IRFunctionLowerer
     /// Cancels lowering.
     /// </param>
     /// <returns>
-    /// A function with ordered basic blocks, typed SSA values, and explicit edges.
+    /// A function with typed SSA values, ordered basic blocks, and explicit edges.
     /// </returns>
     public static LoweredFunction Lower(IRFunction function, CancellationToken cancellationToken)
     {
@@ -33,6 +33,7 @@ public sealed class IRFunctionLowerer
         private readonly CancellationToken cancellationToken;
         private readonly List<BlockBuilder> blocks = [];
         private readonly Dictionary<int, IRType> localTypes = [];
+        private readonly Stack<LoopTargets> loopTargets = [];
         private BlockBuilder current;
         private int nextBlockIndex;
         private int nextTemporaryIndex;
@@ -47,7 +48,6 @@ public sealed class IRFunctionLowerer
         public LoweredFunction Lower(IRFunction function)
         {
             this.cancellationToken.ThrowIfCancellationRequested();
-
             this.returnType = function.ReturnType;
 
             if (function.ReturnType is IRType.Void)
@@ -90,6 +90,14 @@ public sealed class IRFunctionLowerer
                         this.LowerReturn(result);
                         break;
 
+                    case IRWhileStatement loop:
+                        this.LowerWhile(loop);
+                        break;
+
+                    case IRLoopTransferStatement transfer:
+                        this.LowerLoopTransfer(transfer);
+                        break;
+
                     case IRIfStatement conditional when this.returnType is IRType.Void:
                         this.LowerVoidConditional(conditional);
                         break;
@@ -114,6 +122,62 @@ public sealed class IRFunctionLowerer
                         throw new NotSupportedException($"Statement type \"{statement.GetType().Name}\" is not supported by the current lowering subset.");
                 }
             }
+        }
+
+        private void LowerWhile(IRWhileStatement loop)
+        {
+            if (loop.Condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A while condition must have type bool.");
+            }
+
+            BlockBuilder conditionBlock = this.CreateBlock("while.condition");
+            BlockBuilder bodyBlock = this.CreateBlock("while.body");
+            BlockBuilder exitBlock = this.CreateBlock("while.exit");
+
+            this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
+
+            this.current = conditionBlock;
+            LoweredValue condition = this.LowerExpression(loop.Condition);
+
+            if (condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A lowered while condition must have type bool.");
+            }
+
+            this.current.Terminate(new LoweredConditionalBranchTerminator(condition, bodyBlock.Name, exitBlock.Name));
+
+            this.current = bodyBlock;
+            this.loopTargets.Push(new LoopTargets(conditionBlock.Name, exitBlock.Name));
+
+            try
+            {
+                this.LowerStatements(loop.Body);
+            }
+            finally
+            {
+                this.loopTargets.Pop();
+            }
+
+            if (!this.current.IsTerminated)
+            {
+                this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
+            }
+
+            this.current = exitBlock;
+        }
+
+        private void LowerLoopTransfer(IRLoopTransferStatement transfer)
+        {
+            if (transfer.Depth < 1 || transfer.Depth > this.loopTargets.Count)
+            {
+                throw new InvalidOperationException($"Loop transfer depth {transfer.Depth} exceeds the available enclosing loops.");
+            }
+
+            LoopTargets target = this.loopTargets.ElementAt(transfer.Depth - 1);
+            string destination = transfer.IsBreak ? target.Exit : target.Condition;
+
+            this.current.Terminate(new LoweredBranchTerminator(destination));
         }
 
         private void LowerReturn(IRReturnStatement statement)
@@ -536,6 +600,8 @@ public sealed class IRFunctionLowerer
             this.blocks.Add(block);
             return block;
         }
+
+        private sealed record LoopTargets(string Condition, string Exit);
     }
 
     private sealed class BlockBuilder(string name)

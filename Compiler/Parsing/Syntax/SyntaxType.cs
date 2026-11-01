@@ -57,5 +57,10 @@ public enum SyntaxType
     InvocationExpression,
     ExpressionStatement,
     LocalDeclarationStatement,
-    LocalAssignmentStatement
+    LocalAssignmentStatement,
+    WhileStatement,
+    WhileKeyword,
+    LoopTransferStatement,
+    BreakKeyword,
+    ContinueKeyword
 }

@@ -169,7 +169,7 @@ public sealed class FunctionDeclarationBinder
 
     /// <summary>
     /// Binds every statement, including unreachable statements, within a lexical
-    /// scope. Local declarations and assignments share the enclosing function's bindings.
+    /// scope. Loop-control statements are validated against active loop nesting.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
@@ -224,6 +224,8 @@ public sealed class FunctionDeclarationBinder
                 {
                     ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
                     IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    WhileStatementSyntax loop => BindWhileStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    LoopTransferStatementSyntax transfer => BindLoopTransferStatement(transfer, diagnosticReporter, context),
                     ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken, context),
                     LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, cancellationToken, context),
                     LocalAssignmentStatementSyntax assignment => BindLocalAssignment(assignment, parameters, callables, diagnosticReporter, cancellationToken, context),
@@ -245,6 +247,66 @@ public sealed class FunctionDeclarationBinder
         {
             context.ExitScope();
         }
+    }
+
+    private static BoundWhileStatement? BindWhileStatement(
+        WhileStatementSyntax statement,
+        BoundType returnType,
+        IReadOnlyList<BoundParameter> parameters,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        IReadOnlyList<PackageCallable>? callables,
+        LocalBindingContext locals)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!statement.WhileKeyword.IsSourceBacked
+            || !statement.OpenParenthesisToken.IsSourceBacked
+            || !statement.CloseParenthesisToken.IsSourceBacked
+            || !statement.Body.OpenBraceToken.IsSourceBacked
+            || !statement.Body.CloseBraceToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken, callables, locals);
+
+        locals.EnterLoop();
+
+        try
+        {
+            BoundBlock? body = BindBody(statement.Body, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
+            return condition is null || body is null ? null : new BoundWhileStatement(condition, body);
+        }
+        finally
+        {
+            locals.ExitLoop();
+        }
+    }
+
+    private static BoundLoopTransferStatement? BindLoopTransferStatement(
+        LoopTransferStatementSyntax statement,
+        IDiagnosticReporter diagnosticReporter,
+        LocalBindingContext locals)
+    {
+        if (!statement.SemicolonToken.IsSourceBacked || statement.Keywords.Any(keyword => !keyword.IsSourceBacked))
+        {
+            return null;
+        }
+
+        if (statement.Depth > locals.LoopDepth)
+        {
+            string keyword = statement.IsBreak ? "break" : "continue";
+
+            diagnosticReporter.GenerateErrorWithCustomMessage(
+                ErrorType.UnsupportedMVPExpression,
+                $"The {keyword} statement targets {statement.Depth} enclosing loop(s), but only {locals.LoopDepth} are available.",
+                statement.Span);
+
+            return null;
+        }
+
+        return new BoundLoopTransferStatement(statement.IsBreak, statement.Depth);
     }
 
     private static BoundLocalDeclarationStatement? BindLocalDeclaration(
@@ -629,6 +691,7 @@ public sealed class FunctionDeclarationBinder
         {
             BoundReturnStatement => false,
             BoundIfStatement conditional => CanConditionalCompleteNormally(conditional),
+            BoundWhileStatement => true,
             _ => true
         };
 
