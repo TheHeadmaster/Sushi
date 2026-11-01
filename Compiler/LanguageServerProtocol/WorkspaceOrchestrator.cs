@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using OmniSharp.Extensions.LanguageServer.Protocol.Server;
 using Serilog;
@@ -7,12 +6,14 @@ using Sushi.Analysis;
 using Sushi.Source;
 using Sushi.Workspaces;
 using DiagnosticSeverity = Sushi.Diagnostics.DiagnosticSeverity;
-
 using OmniSharpDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol.Models.DiagnosticSeverity;
 using LSPRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol;
 using Sushi.Diagnostics;
+using Sushi.Lexing;
+using Sushi.Parsing;
+using Sushi.Parsing.Syntax;
 
 namespace Sushi.LanguageServerProtocol;
 
@@ -259,6 +260,66 @@ public sealed class WorkspaceOrchestrator : IDisposable
         return extension.Equals(".sus", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Gets current Sushi syntax for semantic highlighting. Reuses an analyzed
+    /// syntax tree when it belongs to the active snapshot, otherwise parses the
+    /// current editor snapshot without waiting for debounced semantic analysis.
+    /// </summary>
+    /// <param name="documentUri">
+    /// The Sushi source document requested by the language client.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels snapshot retrieval or parsing.
+    /// </param>
+    /// <returns>
+    /// Parsed syntax for the current source snapshot, or null when the document
+    /// is absent or was superseded while parsing.
+    /// </returns>
+    public async Task<SourceFileSyntax?> GetSemanticSyntax(Uri documentUri, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUri);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        SourceDocument document;
+        SourceSnapshot snapshot;
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+
+        try
+        {
+            if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+            {
+                return null;
+            }
+
+            document = existing;
+            snapshot = document.CurrentSnapshot;
+
+            if (document.TryGetCurrentAnalysis(out AnalysisResult? analysis, out _)
+                && analysis is SourceAnalysisResult sourceAnalysis)
+            {
+                return sourceAnalysis.SyntaxTree.Root as SourceFileSyntax;
+            }
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        IDiagnosticReporter diagnostics = new DiagnosticReporter();
+        LexerResult lexicalResult = new SourceLexer().Lex(snapshot, diagnostics, cancellationToken);
+        ParserResult parsed = SourceParser.ParseSourceFile(lexicalResult, diagnostics, cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!document.IsCurrent(snapshot))
+        {
+            return null;
+        }
+
+        return parsed.Tree.Root as SourceFileSyntax;
     }
 
     /// <summary>

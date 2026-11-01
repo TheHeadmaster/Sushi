@@ -84,6 +84,7 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
             .WithHandler<WorkspaceFoldersHandler>()
             .WithHandler<WatchedFilesHandler>()
             .WithHandler<TextDocumentSyncHandler>()
+            .WithHandler<SushiSemanticTokensHandler>()
         );
 
         await server.WaitForExit;
