@@ -5,10 +5,13 @@ fileTypes:
 
 patterns:
   - include: '#comments'
-  - include: '#namespace-declaration'
   - include: '#package-declaration'
+  - include: '#namespace-declaration'
+  - include: '#activity-declaration'
   - include: '#integer-literals'
   - include: '#words'
+  - include: '#operators'
+  - include: '#punctuation'
 
 repository:
   comments:
@@ -16,126 +19,183 @@ repository:
       - include: '#documentation-line-comment'
       - include: '#line-comment'
       - include: '#block-comment'
-  
+
   documentation-line-comment:
     begin: '///'
     beginCaptures:
-      "0":
+      '0':
         name: punctuation.definition.comment.sus
     end: '$'
     name: comment.line.documentation.sus
+
   line-comment:
     begin: '//'
     beginCaptures:
-      "0":
+      '0':
         name: punctuation.definition.comment.sus
     end: '$'
     name: comment.line.double-slash.sus
+
   block-comment:
     begin: '/\*'
     beginCaptures:
-      "0":
+      '0':
         name: punctuation.definition.comment.begin.sus
     end: '\*/'
     endCaptures:
-      "0":
+      '0':
         name: punctuation.definition.comment.end.sus
     name: comment.block.sus
     patterns:
       - include: '#block-comment'
+
+  package-declaration:
+    begin: '(?<![A-Za-z0-9_@])(package)(?=[ \t]+@?[A-Za-z_])'
+    beginCaptures:
+      '1':
+        name: keyword.other.package.sus
+    end: '(?=;)|$'
+    patterns:
+      - include: '#comments'
+      - match: '@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+        name: entity.name.type.package.sus
+      - include: '#punctuation-accessor'
+
+  namespace-declaration:
+    begin: '(?<![A-Za-z0-9_@])(namespace)(?=[ \t]+@?[A-Za-z_])'
+    beginCaptures:
+      '1':
+        name: keyword.other.namespace.sus
+    end: '(?=;)|$'
+    patterns:
+      - include: '#comments'
+      - match: '@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+        name: entity.name.type.namespace.sus
+      - include: '#punctuation-accessor'
+
+  activity-declaration:
+    match: '(?<![A-Za-z0-9_@])(activity)([ \t]+)(@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*))(?=[ \t]*:)'
+    captures:
+      '1':
+        name: keyword.other.activity.sus
+      '3':
+        name: entity.name.type.activity.sus
+
   words:
     patterns:
       - include: '#escaped-function-identifier'
       - include: '#escaped-identifier'
       - include: '#boolean-literal'
       - include: '#control-keyword'
+      - include: '#activity-keyword'
       - include: '#modifier-keyword'
       - include: '#type-builtin'
-      - include: '#keyword'
+      - include: '#logical-keyword'
+      - include: '#other-keyword'
+      - include: '#named-argument'
       - include: '#function-identifier'
       - include: '#identifier'
+
+  escaped-function-identifier:
+    match: |-
+      (?x)
+      @(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|activity|root|entry|stop|task|persistent|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)
+      (?![A-Za-z0-9_])(?=[ \t]*\()
+    name: entity.name.function.sus
+
   escaped-identifier:
-    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+    match: |-
+      (?x)
+      @(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|activity|root|entry|stop|task|persistent|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)
+      (?![A-Za-z0-9_])
     name: variable.other.readwrite.sus
+
   boolean-literal:
+    match: '(?<![A-Za-z0-9_@])(?:true|false)(?![A-Za-z0-9_])'
+    name: constant.language.boolean.sus
+
+  control-keyword:
     patterns:
-      - match: '(?<![A-Za-z0-9_])true(?![A-Za-z0-9_])'
-        name: constant.language.boolean.true.sus
-      - match: '(?<![A-Za-z0-9_])false(?![A-Za-z0-9_])'
-        name: constant.language.boolean.false.sus
+      - match: '(?<![A-Za-z0-9_@])(?:if|else|switch|case|default)(?![A-Za-z0-9_])'
+        name: keyword.control.conditional.sus
+      - match: '(?<![A-Za-z0-9_@])(?:while|do|for|foreach|in)(?![A-Za-z0-9_])'
+        name: keyword.control.loop.sus
+      - match: '(?<![A-Za-z0-9_@])(?:break|continue|return|exit|propagate|panic)(?![A-Za-z0-9_])'
+        name: keyword.control.flow.sus
+
+  activity-keyword:
+    patterns:
+      - match: '(?<![A-Za-z0-9_@])(?:root|entry|stop)(?![A-Za-z0-9_])'
+        name: storage.modifier.activity.sus
+      - match: '(?<![A-Za-z0-9_@])(?:activity|task|persistent)(?![A-Za-z0-9_])'
+        name: keyword.other.activity.sus
+
+  modifier-keyword:
+    match: '(?<![A-Za-z0-9_@])(?:public|internal|package|protected|private|static)(?![A-Za-z0-9_])'
+    name: storage.modifier.sus
+
+  type-builtin:
+    match: '(?<![A-Za-z0-9_@])(?:void|bool|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
+    name: keyword.type.builtin.sus
+
+  logical-keyword:
+    match: '(?<![A-Za-z0-9_@])(?:not|and|or)(?![A-Za-z0-9_])'
+    name: keyword.operator.logical.sus
+
+  other-keyword:
+    match: '(?<![A-Za-z0-9_@])(?:noop|namespace|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of)(?![A-Za-z0-9_])'
+    name: keyword.other.sus
+
+  named-argument:
+    match: '(?<![A-Za-z0-9_@])(@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*))(?=[ \t]*:)'
+    captures:
+      '1':
+        name: variable.parameter.sus
+
+  function-identifier:
+    match: '(?<![A-Za-z0-9_@])(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)(?=[ \t]*\()'
+    name: entity.name.function.sus
+
+  identifier:
+    match: '(?<![A-Za-z0-9_@])(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
+    name: variable.other.readwrite.sus
+
+  integer-literals:
+    patterns:
+      - match: '(?<![A-Za-z0-9_@])b#[0-9_]*'
+        name: constant.numeric.integer.binary.sus
+      - match: '(?<![A-Za-z0-9_@])o#[0-9_]*'
+        name: constant.numeric.integer.octal.sus
+      - match: '(?<![A-Za-z0-9_@])x#[0-9A-Fa-f_]*'
+        name: constant.numeric.integer.hexadecimal.sus
+      - match: '(?<![A-Za-z0-9_@])[0-9](?:[0-9]|_(?=[0-9]))*'
+        name: constant.numeric.integer.decimal.sus
+
+  operators:
+    patterns:
+      - match: '(?:<<=|>>=|\+=|-=|\*=|/=|%=|&=|\^=|\|=|=)'
+        name: keyword.operator.assignment.sus
+      - match: '(?:\+\+|--)'
+        name: keyword.operator.increment.sus
+      - match: '(?:==|!=|<=|>=|<|>)'
+        name: keyword.operator.comparison.sus
+      - match: '(?:<<|>>)'
+        name: keyword.operator.bitwise.shift.sus
+      - match: '(?:&|\||\^|~)'
+        name: keyword.operator.bitwise.sus
+      - match: '(?:\+|-|\*|/|%)'
+        name: keyword.operator.arithmetic.sus
+
+  punctuation:
+    patterns:
+      - include: '#punctuation-accessor'
+      - match: '[,;:]'
+        name: punctuation.separator.sus
+      - match: '[()]'
+        name: punctuation.section.group.sus
+      - match: '[{}]'
+        name: punctuation.section.block.sus
+
   punctuation-accessor:
     match: '\.'
     name: punctuation.accessor.sus
-  keyword:
-    patterns:
-      - match: |-
-          (?x)
-          (?<![A-Za-z0-9_])
-          (?:
-            not|and|or|
-            propagate|panic|
-            namespace|package|using|alias|except|global|
-            typeof|is|exactly|inherits|implements|extends|leaf|of|
-            noop|void
-          )
-          (?![A-Za-z0-9_])
-        name: keyword.other.sus
-  escaped-function-identifier:
-    match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])(?=\s*\()'
-    name: entity.name.function.sus
-  function-identifier:
-    match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)(?=\s*\()'
-    name: entity.name.function.sus
-  identifier:
-    match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
-    name: variable.other.readwrite.sus
-  namespace-declaration:
-    begin: '(?<![A-Za-z0-9_])(namespace)(?![A-Za-z0-9_])'
-    beginCaptures:
-      "1":
-        name: keyword.other.sus
-    end: '(?=;)'
-    patterns:
-      - include: '#comments'
-      - match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
-        name: entity.name.type.namespace.sus
-      - match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
-        name: entity.name.type.namespace.sus
-      - include: '#punctuation-accessor'
-  package-declaration:
-    begin: '(?<![A-Za-z0-9_])(package)(?![A-Za-z0-9_])(?=\s+@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)(?:\.@?(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*))*\s*;)'
-    beginCaptures:
-      "1":
-        name: keyword.other.sus
-    end: '(?=;)'
-    patterns:
-      - include: '#comments'
-      - match: '@(?:not|and|or|if|else|switch|case|default|noop|while|do|for|foreach|in|break|continue|return|propagate|panic|exit|namespace|package|using|alias|except|global|typeof|is|exactly|inherits|implements|extends|leaf|of|public|internal|protected|private|static|void|true|false|int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
-        name: entity.name.type.package.sus
-      - match: '(?:[A-Za-z][A-Za-z0-9_]*|_+[A-Za-z0-9][A-Za-z0-9_]*)'
-        name: entity.name.type.package.sus
-      - include: '#punctuation-accessor'
-  control-keyword:
-    patterns:
-      - match: '(?<![A-Za-z0-9_])(?:if|else|switch|case|default)(?![A-Za-z0-9_])'
-        name: keyword.control.conditional.sus
-      - match: '(?<![A-Za-z0-9_])(?:while|do|for|foreach|in)(?![A-Za-z0-9_])'
-        name: keyword.control.loop.sus
-      - match: '(?<![A-Za-z0-9_])(?:break|continue|return|exit)(?![A-Za-z0-9_])'
-        name: keyword.control.flow.sus
-  modifier-keyword:
-    match: '(?<![A-Za-z0-9_])(?:public|internal|package|protected|private|static)(?![A-Za-z0-9_])'
-    name: storage.modifier.sus
-  type-builtin:
-    match: '(?<![A-Za-z0-9_])(?:int8|uint8|int16|uint16|int32|uint32|int64|uint64|int128|uint128)(?![A-Za-z0-9_])'
-    name: keyword.type.builtin.sus
-  integer-literals:
-    patterns:
-      - match: '(?<![A-Za-z0-9_])b#[0-9_]*'
-        name: constant.numeric.integer.binary.sus
-      - match: '(?<![A-Za-z0-9_])o#[0-9_]*'
-        name: constant.numeric.integer.octal.sus
-      - match: '(?<![A-Za-z0-9_])x#[0-9A-Fa-f_]*'
-        name: constant.numeric.integer.hexadecimal.sus
-      - match: '(?<![A-Za-z0-9_])[0-9](?:[0-9]|_(?=[0-9]))*'
-        name: constant.numeric.integer.decimal.sus

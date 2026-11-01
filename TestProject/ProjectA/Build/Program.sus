@@ -1,6 +1,22 @@
-﻿package TestProject;
-namespace TestProject;
+﻿package Example;
+namespace Example;
 
-public int32 launch() {
-    return 42;
+public root activity Application : task
+{
+    public entry void Start()
+    {
+        int32 total = 0;
+
+        for (int32 index = 0; index < 10; index++)
+        {
+            if (index % 2 == 0)
+            {
+                continue;
+            }
+
+            total += index++;
+        }
+
+        bool complete = total >= 10 and total != 0;
+    }
 }
