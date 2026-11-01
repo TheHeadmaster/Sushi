@@ -63,6 +63,10 @@ public sealed class BoundFunctionIRConverter
                 ConvertExpression(loop.Condition, cancellationToken),
                 ConvertBlock(loop.Body, cancellationToken)),
 
+            BoundDoWhileStatement loop => new IRDoWhileStatement(
+                ConvertBlock(loop.Body, cancellationToken),
+                ConvertExpression(loop.Condition, cancellationToken)),
+
             BoundLoopTransferStatement transfer => new IRLoopTransferStatement(transfer.IsBreak, transfer.Depth),
 
             BoundLocalDeclarationStatement local => new IRLocalDeclarationStatement(

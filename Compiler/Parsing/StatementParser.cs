@@ -6,8 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks, conditionals, while loops, loop transfers,
-/// returns, initialized locals, assignments, and invocation statements.
+/// Parses braced statement blocks, pre-test and post-test loops, conditionals,
+/// loop transfers, returns, initialized locals, assignments, and invocations.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -59,6 +59,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return this.ParseWhileStatement(diagnosticReporter);
         }
 
+        if (this.IsKeywordAhead("do"u8))
+        {
+            return this.ParseDoWhileStatement(diagnosticReporter);
+        }
+
         if (this.IsKeywordAhead("break"u8))
         {
             return this.ParseLoopTransfer("break"u8, SyntaxType.BreakKeyword, diagnosticReporter);
@@ -96,6 +101,18 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         BlockSyntax body = this.ParseBlock(diagnosticReporter);
 
         return new WhileStatementSyntax(whileKeyword, openParenthesis, condition, closeParenthesis, body);
+    }
+
+    private DoWhileStatementSyntax ParseDoWhileStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken doKeyword = this.ParseKeyword("do"u8, SyntaxType.DoKeyword, "Expected \"do\" keyword.", diagnosticReporter);
+        BlockSyntax body = this.ParseBlock(diagnosticReporter);
+        SyntaxToken whileKeyword = this.ParseKeyword("while"u8, SyntaxType.WhileKeyword, "Expected \"while\" after do block.", diagnosticReporter);
+        SyntaxToken openParenthesis = this.ParsePunctuation((byte)'(', SyntaxType.OpenParenthesisToken, "Expected \"(\" after trailing while.", diagnosticReporter);
+        ExpressionSyntax condition = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken closeParenthesis = this.ParsePunctuation((byte)')', SyntaxType.CloseParenthesisToken, "Expected \")\" after do while condition.", diagnosticReporter);
+
+        return new DoWhileStatementSyntax(doKeyword, body, whileKeyword, openParenthesis, condition, closeParenthesis);
     }
 
     private LoopTransferStatementSyntax ParseLoopTransfer(ReadOnlySpan<byte> spelling, SyntaxType type, IDiagnosticReporter diagnosticReporter)
@@ -225,6 +242,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         => this.IsKeywordAhead("return"u8)
             || this.IsKeywordAhead("if"u8)
             || this.IsKeywordAhead("while"u8)
+            || this.IsKeywordAhead("do"u8)
             || this.IsKeywordAhead("break"u8)
             || this.IsKeywordAhead("continue"u8)
             || this.IsLocalDeclarationAhead()

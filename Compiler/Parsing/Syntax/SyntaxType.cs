@@ -62,5 +62,7 @@ public enum SyntaxType
     WhileKeyword,
     LoopTransferStatement,
     BreakKeyword,
-    ContinueKeyword
+    ContinueKeyword,
+    DoWhileStatement,
+    DoKeyword
 }

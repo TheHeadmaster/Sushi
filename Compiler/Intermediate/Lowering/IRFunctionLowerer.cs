@@ -2,7 +2,7 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// condition evaluation, nested loops, loop transfers, checked arithmetic,
+/// pre-test and post-test loops, nested loop transfers, checked arithmetic,
 /// local storage, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
@@ -94,6 +94,10 @@ public sealed class IRFunctionLowerer
                         this.LowerWhile(loop);
                         break;
 
+                    case IRDoWhileStatement loop:
+                        this.LowerDoWhile(loop);
+                        break;
+
                     case IRLoopTransferStatement transfer:
                         this.LowerLoopTransfer(transfer);
                         break;
@@ -164,6 +168,48 @@ public sealed class IRFunctionLowerer
                 this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
             }
 
+            this.current = exitBlock;
+        }
+
+        private void LowerDoWhile(IRDoWhileStatement loop)
+        {
+            if (loop.Condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A do while condition must have type bool.");
+            }
+
+            BlockBuilder bodyBlock = this.CreateBlock("do.body");
+            BlockBuilder conditionBlock = this.CreateBlock("do.condition");
+            BlockBuilder exitBlock = this.CreateBlock("do.exit");
+
+            this.current.Terminate(new LoweredBranchTerminator(bodyBlock.Name));
+
+            this.current = bodyBlock;
+            this.loopTargets.Push(new LoopTargets(conditionBlock.Name, exitBlock.Name));
+
+            try
+            {
+                this.LowerStatements(loop.Body);
+            }
+            finally
+            {
+                this.loopTargets.Pop();
+            }
+
+            if (!this.current.IsTerminated)
+            {
+                this.current.Terminate(new LoweredBranchTerminator(conditionBlock.Name));
+            }
+
+            this.current = conditionBlock;
+            LoweredValue condition = this.LowerExpression(loop.Condition);
+
+            if (condition.Type is not IRType.Bool)
+            {
+                throw new InvalidOperationException("A lowered do while condition must have type bool.");
+            }
+
+            this.current.Terminate(new LoweredConditionalBranchTerminator(condition, bodyBlock.Name, exitBlock.Name));
             this.current = exitBlock;
         }
 
