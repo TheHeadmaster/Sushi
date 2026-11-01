@@ -73,7 +73,6 @@ public sealed class FunctionDeclarationBinder
         }
 
         return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType, signature.Parameters, body));
-
     }
 
     /// <summary>
@@ -167,7 +166,8 @@ public sealed class FunctionDeclarationBinder
     }
 
     /// <summary>
-    /// Binds every statement in a callable body, including unreachable statements.
+    /// Binds every statement, including unreachable statements, in a lexical
+    /// scope shared with the containing function's declaration context.
     /// </summary>
     /// <param name="block">
     /// The parsed statement block.
@@ -187,6 +187,9 @@ public sealed class FunctionDeclarationBinder
     /// <param name="callables">
     /// Optional package functions visible to the current body.
     /// </param>
+    /// <param name="locals">
+    /// The enclosing lexical context, or null for a new function body.
+    /// </param>
     /// <returns>
     /// The bound block, or null if any statement fails validation.
     /// </returns>
@@ -196,49 +199,123 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
         CancellationToken cancellationToken,
-        IReadOnlyList<PackageCallable>? callables = null)
+        IReadOnlyList<PackageCallable>? callables = null,
+        LocalBindingContext? locals = null)
     {
         ArgumentNullException.ThrowIfNull(block);
         ArgumentNullException.ThrowIfNull(parameters);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
-        List<BoundStatement> statements = [];
-        bool valid = true;
+        LocalBindingContext context = locals ?? new LocalBindingContext(parameters);
+        context.EnterScope();
 
-        foreach (StatementSyntax statement in block.Statements)
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            List<BoundStatement> statements = [];
+            bool valid = true;
 
-            BoundStatement? boundStatement = statement switch
+            foreach (StatementSyntax statement in block.Statements)
             {
-                ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, cancellationToken, callables),
-                IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables),
-                ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken),
-                _ => null
-            };
+                cancellationToken.ThrowIfCancellationRequested();
 
-            if (boundStatement is null)
-            {
-                valid = false;
-                continue;
+                BoundStatement? boundStatement = statement switch
+                {
+                    ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken, context),
+                    LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, cancellationToken, context),
+                    _ => null
+                };
+
+                if (boundStatement is null)
+                {
+                    valid = false;
+                    continue;
+                }
+
+                statements.Add(boundStatement);
             }
 
-            statements.Add(boundStatement);
+            return valid ? new BoundBlock(statements) : null;
+        }
+        finally
+        {
+            context.ExitScope();
+        }
+    }
+
+    private static BoundLocalDeclarationStatement? BindLocalDeclaration(
+        LocalDeclarationStatementSyntax declaration,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        if (!declaration.TypeToken.IsSourceBacked
+            || !declaration.NameToken.IsSourceBacked
+            || !declaration.EqualsToken.IsSourceBacked
+            || !declaration.SemicolonToken.IsSourceBacked)
+        {
+            return null;
         }
 
-        return valid ? new BoundBlock(statements) : null;
+        string? typeName = IdentifierBinder.Bind(declaration.TypeToken);
+        string? name = IdentifierBinder.Bind(declaration.NameToken);
+
+        BoundType? type = typeName switch
+        {
+            "int32" => BoundType.Int32,
+            "bool" => BoundType.Bool,
+            _ => null
+        };
+
+        if (type is null || name is null || IsReservedLocalName(name))
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.Span);
+            return null;
+        }
+
+        BoundExpression? initializer = type.Value switch
+        {
+            BoundType.Int32 => IntegerExpressionBinder.Bind(declaration.Initializer, parameters, diagnosticReporter, cancellationToken, callables, locals),
+            BoundType.Bool => BooleanExpressionBinder.Bind(declaration.Initializer, parameters, diagnosticReporter, cancellationToken, callables, locals),
+            _ => null
+        };
+
+        if (initializer is null)
+        {
+            return null;
+        }
+
+        if (!locals.TryDeclare(name, type.Value, out BoundLocal? local))
+        {
+            diagnosticReporter.GenerateError(ErrorType.DuplicateLocal, declaration.NameToken.Span);
+            return null;
+        }
+
+        return new BoundLocalDeclarationStatement(local!, initializer);
     }
+
+    private static bool IsReservedLocalName(string name)
+        => name.All(character => character == '_')
+            || name is "bool" or "char" or "string"
+                or "int8" or "uint8" or "int16" or "uint16"
+                or "int32" or "uint32" or "int64" or "uint64"
+                or "int128" or "uint128"
+                or "float16" or "float32" or "float64" or "decimal128";
 
     private static BoundStatement? BindExpressionStatement(
         ExpressionStatementSyntax statement,
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
     {
         if (callables is not null)
         {
-            return PackageInvocationBinder.Bind(statement, callables, parameters, diagnosticReporter, cancellationToken);
+            return PackageInvocationBinder.Bind(statement, callables, parameters, diagnosticReporter, cancellationToken, locals);
         }
 
         diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
@@ -251,7 +328,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
         CancellationToken cancellationToken,
-        IReadOnlyList<PackageCallable>? callables)
+        IReadOnlyList<PackageCallable>? callables,
+        LocalBindingContext locals)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -264,8 +342,8 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken, callables);
-        BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables);
+        BoundExpression? condition = BooleanExpressionBinder.Bind(statement.Condition, parameters, diagnosticReporter, cancellationToken, callables, locals);
+        BoundBlock? thenBody = BindBody(statement.ThenBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
 
         BoundBlock? elseBody = null;
         bool validElse = true;
@@ -282,13 +360,13 @@ public sealed class FunctionDeclarationBinder
             }
             else
             {
-                elseBody = BindBody(elseBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables);
+                elseBody = BindBody(elseBlock, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
                 validElse = elseBody is not null;
             }
         }
         else if (statement.ElseIf is IfStatementSyntax elseIf)
         {
-            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken, callables);
+            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
 
             if (alternative is null)
             {
@@ -311,7 +389,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
         CancellationToken cancellationToken,
-        IReadOnlyList<PackageCallable>? callables)
+        IReadOnlyList<PackageCallable>? callables,
+        LocalBindingContext locals)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
@@ -339,14 +418,14 @@ public sealed class FunctionDeclarationBinder
 
         BoundExpression? expression = returnType switch
         {
-            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables),
-            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables),
+            BoundType.Int32 => IntegerExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
+            BoundType.Bool => BooleanExpressionBinder.Bind(statement.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
             _ => throw new NotSupportedException($"Return type \"{returnType}\" is not supported by the executable MVP.")
         };
 
         return expression is null ? null : new BoundReturnStatement(expression);
     }
-    
+
     private static bool CanCompleteNormally(BoundBlock block)
     {
         foreach (BoundStatement statement in block.Statements)

@@ -1,5 +1,4 @@
-﻿
-namespace Sushi.Diagnostics;
+﻿namespace Sushi.Diagnostics;
 
 /// <summary>
 /// Represents a type of error in Sushi.
@@ -11,6 +10,7 @@ public enum ErrorType
     #region Core Errors
     InvalidUtf8 = 1,
     #endregion Core Errors
+
     #region Toml Errors
     TomlSyntaxError = 100,
     TomlMissingRequiredKey = 101,
@@ -19,6 +19,7 @@ public enum ErrorType
     TomlMissingBuildTargets = 104,
     TomlUnknownDefaultBuildTarget = 105,
     #endregion Toml Errors
+
     #region Syntax Errors
     UnterminatedBlockComment = 201,
     MissingRadixDigit = 202,
@@ -29,6 +30,7 @@ public enum ErrorType
     ExpectedSyntax = 207,
     NonAssociativeComparison = 208,
     #endregion
+
     #region Semantic Errors
     IntegerConstantOutOfRange = 300,
     MissingPackageDeclaration = 301,
@@ -53,6 +55,7 @@ public enum ErrorType
     UnsupportedRootActivityLifetime = 320,
     UnsupportedRootLifecycleParameters = 321,
     UnsupportedRootLifecycleBody = 322,
-    MissingReturnPath = 323
+    MissingReturnPath = 323,
+    DuplicateLocal = 324
     #endregion
 }

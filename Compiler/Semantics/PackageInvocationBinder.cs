@@ -28,6 +28,9 @@ internal static class PackageInvocationBinder
     /// <param name="cancellationToken">
     /// Cancels recursive binding.
     /// </param>
+    /// <param name="locals">
+    /// Optional lexical bindings visible at the invocation site.
+    /// </param>
     /// <returns>
     /// A void call statement, or null following a binding failure.
     /// </returns>
@@ -36,7 +39,8 @@ internal static class PackageInvocationBinder
         IReadOnlyList<PackageCallable> callables,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        LocalBindingContext? locals = null)
     {
         ArgumentNullException.ThrowIfNull(statement);
 
@@ -46,7 +50,7 @@ internal static class PackageInvocationBinder
             return null;
         }
 
-        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken);
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken, locals);
 
         if (resolved is null)
         {
@@ -88,6 +92,9 @@ internal static class PackageInvocationBinder
     /// <param name="cancellationToken">
     /// Cancels recursive binding.
     /// </param>
+    /// <param name="locals">
+    /// Optional lexical bindings visible at the invocation site.
+    /// </param>
     /// <returns>
     /// The typed call expression, or null when resolution fails.
     /// </returns>
@@ -97,11 +104,12 @@ internal static class PackageInvocationBinder
         IReadOnlyList<PackageCallable> callables,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        LocalBindingContext? locals = null)
     {
         ArgumentNullException.ThrowIfNull(invocation);
 
-        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken);
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken, locals);
 
         if (resolved is null)
         {
@@ -128,7 +136,8 @@ internal static class PackageInvocationBinder
         IReadOnlyList<PackageCallable> callables,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        LocalBindingContext? locals)
     {
         ArgumentNullException.ThrowIfNull(callables);
         ArgumentNullException.ThrowIfNull(parameters);
@@ -218,8 +227,8 @@ internal static class PackageInvocationBinder
             BoundType parameterType = targetParameters[parameterIndex].Type;
             BoundExpression? boundValue = parameterType switch
             {
-                BoundType.Int32 => IntegerExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables),
-                BoundType.Bool => BooleanExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables),
+                BoundType.Int32 => IntegerExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
+                BoundType.Bool => BooleanExpressionBinder.Bind(argument.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
                 _ => null
             };
 

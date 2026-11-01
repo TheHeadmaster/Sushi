@@ -7,8 +7,8 @@ using Sushi.Diagnostics;
 namespace Sushi.Testing.Compilation;
 
 /// <summary>
-/// Verifies value-producing package-function calls through project binding,
-/// structured IR, LLVM emission, and native execution.
+/// Verifies value-producing package-function calls, return control flow,
+/// and initialized locals through binding, IR, LLVM, and native execution.
 /// </summary>
 [TestFixture]
 public class ValuePackageCallCompilationTests
@@ -81,7 +81,6 @@ public class ValuePackageCallCompilationTests
             }
         }
         """;
-
 
     [TestCase("Ensure(Calculate(), 21);", TestName = "Nested Return Values Should Reach Native Caller")]
     [TestCase("Ensure(PlusOne(20), 41);", TestName = "Call Results Should Participate In Arithmetic")]
@@ -583,6 +582,133 @@ public class ValuePackageCallCompilationTests
         result.Diagnostics
             .Should()
             .NotContain(diagnostic => diagnostic.IsType(ErrorType.MissingReturnPath));
+    }
+
+    [TestCase("int32 value = 21; Ensure(value, 21);", TestName = "Initialized Int32 Local Should Be Readable")]
+    [TestCase("int32 first = 10; int32 second = first * 2; Ensure(second, 20);", TestName = "Local Initializer Should Read Earlier Local")]
+    [TestCase("bool flag = IsPositive(5); Require(flag);", TestName = "Boolean Local Should Receive Call Result")]
+    [TestCase("int32 value = Calculate(); Ensure(value, 21);", TestName = "Local Should Receive Nested Call Result")]
+    [TestCase("int32 value = 7; Ensure(Double(value), 14);", TestName = "Local Should Be Passed To Function")]
+    [TestCase("int32 value = 7; Ensure(Subtract(right: value, left: 10), 3);", TestName = "Named Arguments Should Read Local Values")]
+    [TestCase("int32 baseValue = 10; if (true) { int32 inner = baseValue + 5; Ensure(inner, 15); } Ensure(baseValue, 10);", TestName = "Nested Local Should Read Enclosing Local")]
+    [TestCase("if (true) { int32 first = 1; Ensure(first, 1); } else { int32 second = 2; Ensure(second, 2); }", TestName = "Separate Branch Scopes Should Support Separate Locals")]
+    [TestCase("bool flag = false; if (flag) { Fail(0); }", TestName = "Boolean Local Should Control Conditional Execution")]
+    [TestCase("bool flag = false and IsPositive(Divide(0)); Require(not flag);", TestName = "Boolean Local Should Preserve Short Circuit Evaluation")]
+    public async Task InitializedLocalsShouldCompileAndExecute(string body)
+    {
+        using TestProject project = await TestProject.Create(CreateRoot(body), Helpers);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+
+        int exitCode = await RunExecutable(result.Executable!.FilePath);
+
+        exitCode
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase(TestName = "Value Returning Functions Should Preserve Local Values Across Conditional Flow")]
+    public async Task ValueReturningLocalsShouldCompileAndExecute()
+    {
+        string helper = Helpers + """
+
+            public int32 Evaluate(bool flag, int32 input)
+            {
+                int32 doubled = input * 2;
+
+                if (flag)
+                {
+                    int32 adjusted = doubled + 10;
+                    return adjusted;
+                }
+
+                return doubled;
+            }
+
+            public bool IsLarge(int32 input)
+            {
+                int32 threshold = 20;
+                bool result = input > threshold;
+                return result;
+            }
+            """;
+
+        string root = CreateRoot("""
+            Ensure(Evaluate(true, 5), 20);
+            Ensure(Evaluate(false, 5), 10);
+
+            Require(IsLarge(21));
+            Require(not IsLarge(20));
+            """);
+
+        using TestProject project = await TestProject.Create(root, helper);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Diagnostics
+            .Should()
+            .BeEmpty();
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+
+        int exitCode = await RunExecutable(result.Executable!.FilePath);
+
+        exitCode
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase("int32 value = value + 1;", ErrorType.UnknownIdentifier, TestName = "Local Should Not Be Visible In Own Initializer")]
+    [TestCase("int32 value = 1; int32 value = 2;", ErrorType.DuplicateLocal, TestName = "Duplicate Local Name Should Be Rejected")]
+    [TestCase("if (true) { int32 inner = 1; } Ensure(inner, 1);", ErrorType.UnknownIdentifier, TestName = "Branch Local Should Not Escape Scope")]
+    [TestCase("Ensure(value, 1); int32 value = 1;", ErrorType.UnknownIdentifier, TestName = "Local Should Not Be Usable Before Declaration")]
+    [TestCase("int32 value = IsPositive(1);", ErrorType.UnsupportedMVPExpression, TestName = "Initializer Should Match Explicit Int32 Type")]
+    [TestCase("bool value = Calculate();", ErrorType.UnsupportedMVPExpression, TestName = "Boolean Initializer Should Reject Integer Call")]
+    [TestCase("int32 value = 1; if (true) { int32 value = 2; }", ErrorType.DuplicateLocal, TestName = "Shadowing Should Remain Deferred")]
+    [TestCase("int32 int32 = 1;", ErrorType.UnsupportedMVPExpression, TestName = "Built In Type Name Cannot Be Redeclared")]
+    public async Task InvalidLocalsShouldProduceDiagnostics(string body, ErrorType expectedError)
+    {
+        using TestProject project = await TestProject.Create(CreateRoot(body), Helpers);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+
+        result.Executable
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(expectedError));
+    }
+
+    [TestCase(TestName = "Missing Local Initializer Should Produce Parser Diagnostic")]
+    public async Task MissingLocalInitializerShouldProduceDiagnostic()
+    {
+        using TestProject project = await TestProject.Create(CreateRoot("int32 value;"), Helpers);
+        MVPCompilationResult result = await project.Compile();
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+
+        result.Executable
+            .Should()
+            .BeNull();
+
+        result.Diagnostics
+            .Should()
+            .Contain(diagnostic => diagnostic.IsType(ErrorType.ExpectedSyntax));
     }
 
     private static string CreateRoot(string body)

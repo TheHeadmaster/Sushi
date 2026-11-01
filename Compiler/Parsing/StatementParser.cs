@@ -6,8 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statement blocks, returns, conditionals, and candidate invocation statements
-/// using the source file's shared lexical cursor.
+/// Parses braced statement blocks, returns, conditionals, initialized local
+/// declarations, and candidate invocation statements using a shared lexical cursor.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -59,7 +59,41 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return this.ParseReturnStatement(diagnosticReporter);
         }
 
+        if (this.IsLocalDeclarationAhead())
+        {
+            return this.ParseLocalDeclaration(diagnosticReporter);
+        }
+
         return this.ParseExpressionStatement(diagnosticReporter);
+    }
+
+    private LocalDeclarationStatementSyntax ParseLocalDeclaration(IDiagnosticReporter diagnosticReporter)
+    {
+        this.cursor.TryConsumeIdentifier(out LexToken type);
+        this.cursor.TryConsumeIdentifier(out LexToken name);
+
+        SyntaxToken typeToken = new(GetIdentifierSyntaxType(type), type);
+        SyntaxToken nameToken = new(GetIdentifierSyntaxType(name), name);
+        SyntaxToken equalsToken;
+
+        if (this.cursor.TryPeek(out LexToken candidate)
+            && candidate.Type is LexTokenType.Operator
+            && this.cursor.TokenTextEquals(candidate, "="u8))
+        {
+            this.cursor.TryAdvance(out _);
+            equalsToken = new SyntaxToken(SyntaxType.OperatorToken, candidate);
+        }
+        else
+        {
+            int position = this.cursor.Position;
+            this.AccumulateExpectedDiagnostic("Expected \"=\" in initialized local declaration.", position, diagnosticReporter);
+            equalsToken = SyntaxToken.Missing(SyntaxType.OperatorToken, this.cursor.Snapshot, position);
+        }
+
+        ExpressionSyntax initializer = this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after local declaration.", diagnosticReporter);
+
+        return new LocalDeclarationStatementSyntax(typeToken, nameToken, equalsToken, initializer, semicolon);
     }
 
     private ExpressionStatementSyntax ParseExpressionStatement(IDiagnosticReporter diagnosticReporter)
@@ -129,7 +163,21 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     private bool IsStatementAhead()
         => this.IsKeywordAhead("return"u8)
             || this.IsKeywordAhead("if"u8)
+            || this.IsLocalDeclarationAhead()
             || this.IsInvocationAhead();
+
+    private bool IsLocalDeclarationAhead()
+    {
+        if (!this.cursor.TryPeek(out LexToken type)
+            || type.Type is not (LexTokenType.Identifier or LexTokenType.EscapedIdentifier)
+            || !(this.cursor.TokenTextEquals(type, "int32"u8) || this.cursor.TokenTextEquals(type, "bool"u8)))
+        {
+            return false;
+        }
+
+        return this.cursor.TryPeek(out LexToken name, lookahead: 1)
+            && name.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier;
+    }
 
     private bool IsInvocationAhead()
     {
@@ -151,6 +199,9 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         => token.Type is LexTokenType.Punctuation
             && token.Span.Length == 1
             && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
+
+    private static SyntaxType GetIdentifierSyntaxType(LexToken token)
+        => token.Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken;
 
     private SyntaxToken ParsePunctuation(byte punctuation, SyntaxType type, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
     {

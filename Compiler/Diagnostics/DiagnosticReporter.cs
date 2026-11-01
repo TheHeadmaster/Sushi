@@ -1,5 +1,4 @@
-﻿
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using Sushi.Source;
 
 namespace Sushi.Diagnostics;
@@ -48,8 +47,9 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.MissingReturnValue] = "A value-returning function requires an expression after return.",
         [ErrorType.UnsupportedRootActivityLifetime] = "The current native bootstrap supports task root activities only.",
         [ErrorType.UnsupportedRootLifecycleParameters] = "The current native bootstrap requires parameterless root lifecycle methods.",
-        [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement.",     
-        [ErrorType.MissingReturnPath] = "A reachable path through a value-returning function can complete without returning a value."
+        [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement.",
+        [ErrorType.MissingReturnPath] = "A reachable path through a value-returning function can complete without returning a value.",
+        [ErrorType.DuplicateLocal] = "A local declaration conflicts with a binding already visible in its scope."
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()
@@ -67,7 +67,7 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
     public bool HasDiagnostics() => this.diagnostics.Count != 0;
 
     /// <inheritdoc />
-    public IReadOnlyList<SushiDiagnostic> ReportDiagnostics() => new ReadOnlyCollection<SushiDiagnostic>([..this.diagnostics]);
+    public IReadOnlyList<SushiDiagnostic> ReportDiagnostics() => new ReadOnlyCollection<SushiDiagnostic>([.. this.diagnostics]);
 
     /// <inheritdoc />
     public void GenerateError(ErrorType type, SourceSpan sourceSpan)

@@ -1,4 +1,3 @@
-
 using Sushi.Semantics;
 
 namespace Sushi.Intermediate;
@@ -60,6 +59,11 @@ public sealed class BoundFunctionIRConverter
                 ConvertBlock(conditional.Then, cancellationToken),
                 conditional.Else is null ? null : ConvertBlock(conditional.Else, cancellationToken)),
 
+            BoundLocalDeclarationStatement local => new IRLocalDeclarationStatement(
+                local.Local.Index,
+                ConvertType(local.Local.Type),
+                ConvertExpression(local.Initializer, cancellationToken)),
+
             BoundVoidCallStatement call => new IRVoidCallStatement(
                 call.Symbol,
                 [.. call.ParameterTypes.Select(ConvertType)],
@@ -84,6 +88,7 @@ public sealed class BoundFunctionIRConverter
             BoundIntegerLiteralExpression integer => new IRIntegerConstant(integer.Value),
             BoundBooleanConstantExpression boolean => new IRBooleanConstant(boolean.Value),
             BoundParameterReferenceExpression reference => new IRParameterReferenceExpression(reference.Parameter.Index, ConvertType(reference.Type)),
+            BoundLocalReferenceExpression local => new IRLocalReferenceExpression(local.Local.Index, ConvertType(local.Type)),
 
             BoundBooleanNotExpression negation => new IRBooleanNotExpression(ConvertExpression(negation.Operand, cancellationToken)),
 

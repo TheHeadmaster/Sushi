@@ -55,5 +55,6 @@ public enum SyntaxType
     ElseKeyword,
     CallArgument,
     InvocationExpression,
-    ExpressionStatement
+    ExpressionStatement,
+    LocalDeclarationStatement
 }

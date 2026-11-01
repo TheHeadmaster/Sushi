@@ -3,7 +3,7 @@
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
 /// conditional evaluation, checked arithmetic, integer comparisons,
-/// fixed-width operations, and function-call argument order.
+/// fixed-width operations, local initialization, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -32,6 +32,7 @@ public sealed class IRFunctionLowerer
     {
         private readonly CancellationToken cancellationToken;
         private readonly List<BlockBuilder> blocks = [];
+        private readonly Dictionary<int, LoweredValue> localValues = [];
         private BlockBuilder current;
         private int nextBlockIndex;
         private int nextTemporaryIndex;
@@ -71,7 +72,7 @@ public sealed class IRFunctionLowerer
                 this.current.Terminate(new LoweredReturnTerminator());
             }
         }
- 
+
         private void LowerStatements(IRBlock body)
         {
             foreach (IRStatement statement in body.Statements)
@@ -99,6 +100,10 @@ public sealed class IRFunctionLowerer
 
                     case IRVoidCallStatement call:
                         this.LowerVoidCall(call);
+                        break;
+
+                    case IRLocalDeclarationStatement local:
+                        this.LowerLocalDeclaration(local);
                         break;
 
                     default:
@@ -133,7 +138,37 @@ public sealed class IRFunctionLowerer
             }
 
             this.current.Terminate(new LoweredReturnTerminator(value));
-        }    
+        }
+
+        private void LowerLocalDeclaration(IRLocalDeclarationStatement declaration)
+        {
+            LoweredValue value = this.LowerExpression(declaration.Initializer);
+
+            if (value.Type != declaration.Type)
+            {
+                throw new InvalidOperationException("The lowered initializer does not match its declared local type.");
+            }
+
+            if (!this.localValues.TryAdd(declaration.Index, value))
+            {
+                throw new InvalidOperationException($"Local declaration index {declaration.Index} has already been initialized.");
+            }
+        }
+
+        private LoweredValue ReadLocal(IRLocalReferenceExpression reference)
+        {
+            if (!this.localValues.TryGetValue(reference.Index, out LoweredValue? value))
+            {
+                throw new InvalidOperationException($"Local declaration index {reference.Index} has not been initialized.");
+            }
+
+            if (value.Type != reference.Type)
+            {
+                throw new InvalidOperationException("The local reference type does not match its initialized value.");
+            }
+
+            return value;
+        }
 
         private void LowerVoidCall(IRVoidCallStatement call)
         {
@@ -164,63 +199,63 @@ public sealed class IRFunctionLowerer
             return lowered;
         }
 
-    private void LowerValueConditional(IRIfStatement conditional)
-    {
-        if (conditional.Condition is IRBooleanConstant constant)
+        private void LowerValueConditional(IRIfStatement conditional)
         {
-            if (constant.Value)
+            if (conditional.Condition is IRBooleanConstant constant)
             {
-                this.LowerStatements(conditional.Then);
+                if (constant.Value)
+                {
+                    this.LowerStatements(conditional.Then);
+                }
+                else if (conditional.Else is not null)
+                {
+                    this.LowerStatements(conditional.Else);
+                }
+
+                return;
             }
-            else if (conditional.Else is not null)
+
+            LoweredValue condition = this.LowerExpression(conditional.Condition);
+
+            BlockBuilder thenBlock = this.CreateBlock("if.then");
+            BlockBuilder? elseBlock = conditional.Else is null ? null : this.CreateBlock("if.else");
+            BlockBuilder? mergeBlock = elseBlock is null ? this.CreateBlock("if.merge") : null;
+
+            this.current.Terminate(new LoweredConditionalBranchTerminator(
+                condition, thenBlock.Name, elseBlock?.Name ?? mergeBlock!.Name));
+
+            this.current = thenBlock;
+            this.LowerStatements(conditional.Then);
+            BlockBuilder thenExit = this.current;
+
+            this.current = elseBlock ?? mergeBlock!;
+
+            if (elseBlock is not null)
             {
-                this.LowerStatements(conditional.Else);
+                this.LowerStatements(conditional.Else!);
             }
 
-            return;
+            BlockBuilder elseExit = this.current;
+
+            if (thenExit.IsTerminated && elseExit.IsTerminated)
+            {
+                return;
+            }
+
+            mergeBlock ??= this.CreateBlock("if.merge");
+
+            if (!thenExit.IsTerminated)
+            {
+                thenExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
+            }
+
+            if (!elseExit.IsTerminated && !ReferenceEquals(elseExit, mergeBlock))
+            {
+                elseExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
+            }
+
+            this.current = mergeBlock;
         }
-
-        LoweredValue condition = this.LowerExpression(conditional.Condition);
-
-        BlockBuilder thenBlock = this.CreateBlock("if.then");
-        BlockBuilder? elseBlock = conditional.Else is null ? null : this.CreateBlock("if.else");
-        BlockBuilder? mergeBlock = elseBlock is null ? this.CreateBlock("if.merge") : null;
-
-        this.current.Terminate(new LoweredConditionalBranchTerminator(
-            condition, thenBlock.Name, elseBlock?.Name ?? mergeBlock!.Name));
-
-        this.current = thenBlock;
-        this.LowerStatements(conditional.Then);
-        BlockBuilder thenExit = this.current;
-
-        this.current = elseBlock ?? mergeBlock!;
-
-        if (elseBlock is not null)
-        {
-            this.LowerStatements(conditional.Else!);
-        }
-
-        BlockBuilder elseExit = this.current;
-
-        if (thenExit.IsTerminated && elseExit.IsTerminated)
-        {
-            return;
-        }
-
-        mergeBlock ??= this.CreateBlock("if.merge");
-
-        if (!thenExit.IsTerminated)
-        {
-            thenExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
-        }
-
-        if (!elseExit.IsTerminated && !ReferenceEquals(elseExit, mergeBlock))
-        {
-            elseExit.Terminate(new LoweredBranchTerminator(mergeBlock.Name));
-        }
-
-        this.current = mergeBlock;
-    }
 
         private void LowerVoidConditional(IRIfStatement conditional)
         {
@@ -274,6 +309,7 @@ public sealed class IRFunctionLowerer
                 IRIntegerConstant integer => new LoweredIntegerConstant(integer.Value),
                 IRBooleanConstant boolean => new LoweredBooleanConstant(boolean.Value),
                 IRParameterReferenceExpression parameter => new LoweredParameterValue(parameter.Index, parameter.Type),
+                IRLocalReferenceExpression local => this.ReadLocal(local),
                 IRCallExpression call => this.LowerValueCall(call),
                 IRBooleanNotExpression negation => this.LowerBooleanNegation(negation),
                 IRBooleanBinaryExpression binary => this.LowerBooleanBinary(binary),
