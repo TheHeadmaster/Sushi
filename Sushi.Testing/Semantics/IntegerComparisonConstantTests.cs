@@ -65,7 +65,7 @@ public class IntegerComparisonConstantTests
             .BeOfType<BoundReturnStatement>()
             .Subject;
 
-        statement.Expression.Type
+        statement.Expression!.Type
             .Should()
             .Be(BoundType.Bool);
         

@@ -82,9 +82,9 @@ public sealed class ForHeaderOperationSyntax
     {
         if (nameToken.Type is not (SyntaxType.IdentifierToken or SyntaxType.EscapedIdentifierToken)
             || operatorToken.Type is not SyntaxType.OperatorToken
-            || typeToken is SyntaxToken declaredType && declaredType.Type is not (SyntaxType.IdentifierToken or SyntaxType.EscapedIdentifierToken)
-            || typeToken is not null && (isPrefix || value is null)
-            || isPrefix && value is not null)
+            || (typeToken is SyntaxToken declaredType && declaredType.Type is not (SyntaxType.IdentifierToken or SyntaxType.EscapedIdentifierToken))
+            || (typeToken is not null && (isPrefix || value is null))
+            || (isPrefix && value is not null))
         {
             throw new ArgumentException("Invalid for-header operation shape.");
         }

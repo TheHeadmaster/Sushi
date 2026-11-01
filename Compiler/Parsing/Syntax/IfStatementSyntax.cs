@@ -134,7 +134,7 @@ public sealed class IfStatementSyntax : StatementSyntax
                 throw new ArgumentException("The else keyword must follow the true branch.", nameof(elseKeyword));
             }
 
-            SourceSpan alternativeSpan = elseBlock?.Span ?? elseIf!.Span;
+            SourceSpan alternativeSpan = elseBlock?.Span ?? elseIf?.Span ?? throw new InvalidOperationException("An if statement may have exactly one alternative when else is present.");
 
             if (!ReferenceEquals(alternativeSpan.Snapshot, snapshot) || alternativeSpan.Start < alternativeKeyword.Span.End)
             {

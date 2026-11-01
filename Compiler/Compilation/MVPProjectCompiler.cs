@@ -124,7 +124,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             cancellationToken.ThrowIfCancellationRequested();
 
             IReadOnlyList<PackageCallable> visible = SelectVisibleCallables(item.Source, catalog);
-            FunctionBindResult result = FunctionDeclarationBinder.Bind(item.Declaration, diagnosticReporter, cancellationToken, visible);
+            FunctionBindResult result = FunctionDeclarationBinder.Bind(item.Declaration, diagnosticReporter, visible, cancellationToken);
 
             if (result.Function is null)
             {

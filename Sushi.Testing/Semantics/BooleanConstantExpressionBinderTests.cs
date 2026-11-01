@@ -48,7 +48,7 @@ public class BooleanConstantExpressionBinderTests
             .BeOfType<BoundReturnStatement>()
             .Subject;
 
-        statement.Expression.Type
+        statement.Expression!.Type
             .Should()
             .Be(BoundType.Bool);
 

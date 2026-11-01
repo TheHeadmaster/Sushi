@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Text;
 using Sushi.Diagnostics;
@@ -27,8 +28,8 @@ public sealed class FunctionDeclarationBinder
     /// <returns>
     /// The bound function, or null when binding fails.
     /// </returns>
-    public static FunctionBindResult Bind(FunctionDeclarationSyntax declaration, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
-        => Bind(declaration, diagnosticReporter, cancellationToken, null);
+    public static FunctionBindResult Bind([NotNull] FunctionDeclarationSyntax declaration, [NotNull] IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
+        => Bind(declaration, diagnosticReporter, null, cancellationToken);
 
     /// <summary>
     /// Binds a complete function with a project-resolved package-call context.
@@ -51,8 +52,8 @@ public sealed class FunctionDeclarationBinder
     internal static FunctionBindResult Bind(
         FunctionDeclarationSyntax declaration,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        IReadOnlyList<PackageCallable>? callables)
+        IReadOnlyList<PackageCallable>? callables,
+        CancellationToken cancellationToken)
     {
         FunctionBindResult signatureResult = BindSignature(declaration, diagnosticReporter, cancellationToken);
         BoundFunction? signature = signatureResult.Function;
@@ -223,15 +224,15 @@ public sealed class FunctionDeclarationBinder
 
                 BoundStatement? boundStatement = statement switch
                 {
-                    ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
-                    IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
-                    WhileStatementSyntax loop => BindWhileStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
-                    DoWhileStatementSyntax loop => BindDoWhileStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
-                    ForStatementSyntax loop => BindForStatement(loop, returnType, parameters, diagnosticReporter, cancellationToken, callables, context),
+                    ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
+                    IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
+                    WhileStatementSyntax loop => BindWhileStatement(loop, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
+                    DoWhileStatementSyntax loop => BindDoWhileStatement(loop, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
+                    ForStatementSyntax loop => BindForStatement(loop, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
                     LoopTransferStatementSyntax transfer => BindLoopTransferStatement(transfer, diagnosticReporter, context),
-                    ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, cancellationToken, context),
-                    LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, cancellationToken, context),
-                    LocalAssignmentStatementSyntax assignment => BindLocalAssignment(assignment, parameters, callables, diagnosticReporter, cancellationToken, context),
+                    ExpressionStatementSyntax expression => BindExpressionStatement(expression, parameters, callables, diagnosticReporter, context, cancellationToken),
+                    LocalDeclarationStatementSyntax declaration => BindLocalDeclaration(declaration, parameters, callables, diagnosticReporter, context, cancellationToken),
+                    LocalAssignmentStatementSyntax assignment => BindLocalAssignment(assignment, parameters, callables, diagnosticReporter, context, cancellationToken),
                     _ => null
                 };
 
@@ -257,9 +258,9 @@ public sealed class FunctionDeclarationBinder
         BoundType returnType,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -292,9 +293,9 @@ public sealed class FunctionDeclarationBinder
         BoundType returnType,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -328,9 +329,9 @@ public sealed class FunctionDeclarationBinder
         BoundType returnType,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -356,7 +357,7 @@ public sealed class FunctionDeclarationBinder
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: true, parameters, callables, diagnosticReporter, cancellationToken, locals);
+                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: true, parameters, callables, diagnosticReporter, locals, cancellationToken);
 
                 if (bound is null)
                 {
@@ -378,7 +379,7 @@ public sealed class FunctionDeclarationBinder
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: false, parameters, callables, diagnosticReporter, cancellationToken, locals);
+                BoundStatement? bound = BindForHeaderOperation(operation, allowDeclarations: false, parameters, callables, diagnosticReporter, locals, cancellationToken);
 
                 if (bound is null)
                 {
@@ -419,12 +420,12 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         if (!operation.NameToken.IsSourceBacked
             || !operation.OperatorToken.IsSourceBacked
-            || operation.TypeToken is SyntaxToken typeToken && !typeToken.IsSourceBacked)
+            || (operation.TypeToken is SyntaxToken typeToken && !typeToken.IsSourceBacked))
         {
             return null;
         }
@@ -438,7 +439,7 @@ public sealed class FunctionDeclarationBinder
             }
 
             return BindInitializedLocal(operation.TypeToken!.Value, operation.NameToken, operation.Value, operation.Span,
-                parameters, callables, diagnosticReporter, cancellationToken, locals);
+                parameters, callables, diagnosticReporter, locals, cancellationToken);
         }
 
         if (operation.IsIncrementOrDecrement)
@@ -453,7 +454,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         return BindAssignmentOperation(operation.NameToken, operation.OperatorToken, operation.Value!,
-            parameters, callables, diagnosticReporter, cancellationToken, locals);
+            parameters, callables, diagnosticReporter, locals, cancellationToken);
     }
 
     private static BoundLoopTransferStatement? BindLoopTransferStatement(
@@ -486,8 +487,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         if (!declaration.TypeToken.IsSourceBacked
             || !declaration.NameToken.IsSourceBacked
@@ -498,7 +499,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         return BindInitializedLocal(declaration.TypeToken, declaration.NameToken, declaration.Initializer, declaration.Span,
-            parameters, callables, diagnosticReporter, cancellationToken, locals);
+            parameters, callables, diagnosticReporter, locals, cancellationToken);
     }
 
     private static BoundLocalDeclarationStatement? BindInitializedLocal(
@@ -509,8 +510,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         string? typeName = IdentifierBinder.Bind(typeToken);
         string? name = IdentifierBinder.Bind(nameToken);
@@ -528,7 +529,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? value = BindValue(initializer, type.Value, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        BoundExpression? value = BindValue(initializer, type.Value, parameters, callables, diagnosticReporter, locals, cancellationToken);
 
         if (value is null)
         {
@@ -549,8 +550,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         if (!assignment.NameToken.IsSourceBacked
             || !assignment.OperatorToken.IsSourceBacked
@@ -560,7 +561,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         return BindAssignmentOperation(assignment.NameToken, assignment.OperatorToken, assignment.Value,
-            parameters, callables, diagnosticReporter, cancellationToken, locals);
+            parameters, callables, diagnosticReporter, locals, cancellationToken);
     }
 
     private static BoundLocalAssignmentStatement? BindAssignmentOperation(
@@ -570,8 +571,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         string? name = IdentifierBinder.Bind(nameToken);
         BoundExpression? target = name is null ? null : locals.Resolve(name);
@@ -594,8 +595,8 @@ public sealed class FunctionDeclarationBinder
         string operation = GetAssignmentOperator(operatorToken);
 
         BoundExpression? value = operation == "="
-            ? BindValue(valueSyntax, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals)
-            : BindCompoundAssignmentValue(operatorToken, valueSyntax, operation, local, parameters, callables, diagnosticReporter, cancellationToken, locals);
+            ? BindValue(valueSyntax, local.Type, parameters, callables, diagnosticReporter, locals, cancellationToken)
+            : BindCompoundAssignmentValue(operatorToken, valueSyntax, operation, local, parameters, callables, diagnosticReporter, locals, cancellationToken);
 
         return value is null ? null : new BoundLocalAssignmentStatement(local.Local, value);
     }
@@ -614,12 +615,12 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
         => target.Type switch
         {
-            BoundType.Int32 => BindCompoundIntegerAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
-            BoundType.Bool => BindCompoundBooleanAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
+            BoundType.Int32 => BindCompoundIntegerAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, locals, cancellationToken),
+            BoundType.Bool => BindCompoundBooleanAssignment(operatorToken, valueSyntax, spelling, target, parameters, callables, diagnosticReporter, locals, cancellationToken),
             _ => throw new NotSupportedException($"Local type \"{target.Type}\" is not supported by compound assignment.")
         };
 
@@ -631,8 +632,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         IntegerBinaryOperator? operation = spelling switch
         {
@@ -656,8 +657,8 @@ public sealed class FunctionDeclarationBinder
         }
 
         BoundExpression? right = operation is IntegerBinaryOperator.ShiftLeft or IntegerBinaryOperator.ShiftRight
-            ? BindCompoundShiftCount(valueSyntax, parameters, callables, diagnosticReporter, cancellationToken, locals)
-            : BindValue(valueSyntax, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
+            ? BindCompoundShiftCount(valueSyntax, parameters, callables, diagnosticReporter, locals, cancellationToken)
+            : BindValue(valueSyntax, BoundType.Int32, parameters, callables, diagnosticReporter, locals, cancellationToken);
 
         if (right is null)
         {
@@ -681,8 +682,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         BooleanBinaryOperator? operation = spelling switch
         {
@@ -698,7 +699,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? right = BindValue(valueSyntax, BoundType.Bool, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        BoundExpression? right = BindValue(valueSyntax, BoundType.Bool, parameters, callables, diagnosticReporter, locals, cancellationToken);
         return right is null ? null : new BoundBooleanBinaryExpression(operation.Value, target, right);
     }
 
@@ -707,12 +708,12 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         if (ContainsRuntimeIntegerValue(expression))
         {
-            return BindValue(expression, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
+            return BindValue(expression, BoundType.Int32, parameters, callables, diagnosticReporter, locals, cancellationToken);
         }
 
         if (!IntegerConstantExpressionBinder.TryEvaluateUntyped(expression, diagnosticReporter, cancellationToken, out BigInteger count))
@@ -745,8 +746,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
         => expectedType switch
         {
             BoundType.Int32 => IntegerExpressionBinder.Bind(expression, parameters, diagnosticReporter, cancellationToken, callables, locals),
@@ -767,8 +768,8 @@ public sealed class FunctionDeclarationBinder
         IReadOnlyList<BoundParameter> parameters,
         IReadOnlyList<PackageCallable>? callables,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         if (!statement.SemicolonToken.IsSourceBacked)
         {
@@ -806,9 +807,9 @@ public sealed class FunctionDeclarationBinder
         BoundType returnType,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -845,7 +846,7 @@ public sealed class FunctionDeclarationBinder
         }
         else if (statement.ElseIf is IfStatementSyntax elseIf)
         {
-            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, cancellationToken, callables, locals);
+            BoundIfStatement? alternative = BindConditionalStatement(elseIf, returnType, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
             if (alternative is null)
             {
@@ -867,9 +868,9 @@ public sealed class FunctionDeclarationBinder
         BoundType returnType,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext locals)
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
@@ -895,7 +896,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? expression = BindValue(statement.Expression, returnType, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        BoundExpression? expression = BindValue(statement.Expression, returnType, parameters, callables, diagnosticReporter, locals, cancellationToken);
         return expression is null ? null : new BoundReturnStatement(expression);
     }
 

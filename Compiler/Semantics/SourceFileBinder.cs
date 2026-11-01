@@ -27,7 +27,7 @@ public sealed class SourceFileBinder
     /// Bound package, namespace, functions, and activity declarations.
     /// </returns>
     public static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
-        => Bind(sourceFile, diagnosticReporter, cancellationToken, signatureOnly: false);
+        => Bind(sourceFile, diagnosticReporter, signatureOnly: false, cancellationToken);
 
     /// <summary>
     /// Binds source-file declarations, optionally deferring function-body binding
@@ -48,7 +48,7 @@ public sealed class SourceFileBinder
     /// <returns>
     /// File-level semantic declarations for the selected binding phase.
     /// </returns>
-    internal static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, bool signatureOnly)
+    internal static SourceFileBindResult Bind(SourceFileSyntax sourceFile, IDiagnosticReporter diagnosticReporter, bool signatureOnly, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(sourceFile);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);

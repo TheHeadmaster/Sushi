@@ -31,7 +31,7 @@ public sealed class SourceAnalyzer : Analyzer
     /// The analyzed syntax and complete supported semantic declarations.
     /// </returns>
     public Task<AnalysisResult> Analyze(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
-        => this.AnalyzeCore(snapshot, diagnosticReporter, cancellationToken, signatureOnly: false);
+        => this.AnalyzeCore(snapshot, diagnosticReporter, signatureOnly: false, cancellationToken);
 
     /// <summary>
     /// Analyzes syntax, package identity, activity declarations, and function
@@ -50,9 +50,9 @@ public sealed class SourceAnalyzer : Analyzer
     /// Declarations ready for the project-wide function-body binding pass.
     /// </returns>
     internal Task<AnalysisResult> AnalyzeDeclarations(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken)
-        => this.AnalyzeCore(snapshot, diagnosticReporter, cancellationToken, signatureOnly: true);
+        => this.AnalyzeCore(snapshot, diagnosticReporter, signatureOnly: true, cancellationToken);
 
-    private Task<AnalysisResult> AnalyzeCore(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, CancellationToken cancellationToken, bool signatureOnly)
+    private Task<AnalysisResult> AnalyzeCore(SourceSnapshot snapshot, IDiagnosticReporter diagnosticReporter, bool signatureOnly, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
@@ -70,7 +70,7 @@ public sealed class SourceAnalyzer : Analyzer
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
-        SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, cancellationToken, signatureOnly);
+        SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, signatureOnly, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         diagnosticReporter.CommitReporter(localDiagnostics);

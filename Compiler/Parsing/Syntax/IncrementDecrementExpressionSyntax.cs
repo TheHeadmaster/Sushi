@@ -72,8 +72,8 @@ public sealed class IncrementDecrementExpressionSyntax : ExpressionSyntax
         SourceSpan operandSpan = operand.Span;
 
         if (!ReferenceEquals(operatorSpan.Snapshot, operandSpan.Snapshot)
-            || isPrefix && operatorSpan.End > operandSpan.Start
-            || !isPrefix && operandSpan.End > operatorSpan.Start)
+            || (isPrefix && operatorSpan.End > operandSpan.Start)
+            || (!isPrefix && operandSpan.End > operatorSpan.Start))
         {
             throw new ArgumentException("Update expression components must share a snapshot and occur in source order.");
         }

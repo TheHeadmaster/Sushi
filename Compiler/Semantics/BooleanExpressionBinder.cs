@@ -75,16 +75,16 @@ internal static class BooleanExpressionBinder
 
         return ContainsInvalidComparisonChain(expression)
             ? null
-            : BindExpression(expression, parameters, diagnosticReporter, cancellationToken, callables, locals);
+            : BindExpression(expression, parameters, diagnosticReporter, callables, locals, cancellationToken);
     }
 
     private static BoundExpression? BindExpression(
         ExpressionSyntax expression,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -100,20 +100,20 @@ internal static class BooleanExpressionBinder
                 return PackageInvocationBinder.BindValue(invocation, BoundType.Bool, callables, parameters, diagnosticReporter, cancellationToken, locals);
 
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
-                return BindExpression(grouped.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals);
+                return BindExpression(grouped.Expression, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
             case ParenthesizedExpressionSyntax:
             case IntegerLiteralExpressionSyntax { LiteralToken.IsMissing: true }:
                 return null;
 
             case UnaryExpressionSyntax unary when unary.OperatorToken.Type is SyntaxType.NotKeyword:
-                return BindNegation(unary, parameters, diagnosticReporter, cancellationToken, callables, locals);
+                return BindNegation(unary, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
             case BinaryExpressionSyntax binary when TryGetBooleanBinaryOperator(binary.OperatorToken, out BooleanBinaryOperator operation):
-                return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, cancellationToken, callables, locals);
+                return BindBooleanBinary(binary, operation, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
             case BinaryExpressionSyntax comparison when TryGetIntegerComparisonOperator(comparison.OperatorToken, out IntegerComparisonOperator comparisonOperator):
-                return BindIntegerComparison(comparison, comparisonOperator, parameters, diagnosticReporter, cancellationToken, callables, locals);
+                return BindIntegerComparison(comparison, comparisonOperator, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
             default:
                 diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, expression.Span);
@@ -155,11 +155,11 @@ internal static class BooleanExpressionBinder
         UnaryExpressionSyntax expression,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
-        BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, cancellationToken, callables, locals);
+        BoundExpression? operand = BindExpression(expression.Operand, parameters, diagnosticReporter, callables, locals, cancellationToken);
         return operand is null ? null : new BoundBooleanNotExpression(operand);
     }
 
@@ -168,12 +168,12 @@ internal static class BooleanExpressionBinder
         BooleanBinaryOperator operation,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
-        BoundExpression? left = BindExpression(expression.Left, parameters, diagnosticReporter, cancellationToken, callables, locals);
-        BoundExpression? right = BindExpression(expression.Right, parameters, diagnosticReporter, cancellationToken, callables, locals);
+        BoundExpression? left = BindExpression(expression.Left, parameters, diagnosticReporter, callables, locals, cancellationToken);
+        BoundExpression? right = BindExpression(expression.Right, parameters, diagnosticReporter, callables, locals, cancellationToken);
 
         return left is null || right is null ? null : new BoundBooleanBinaryExpression(operation, left, right);
     }
@@ -183,9 +183,9 @@ internal static class BooleanExpressionBinder
         IntegerComparisonOperator operation,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
         bool runtimeLeft = ContainsRuntimeValue(expression.Left);
         bool runtimeRight = ContainsRuntimeValue(expression.Right);
@@ -205,7 +205,7 @@ internal static class BooleanExpressionBinder
             return left is null || right is null ? null : new BoundIntegerComparisonExpression(operation, left, right);
         }
 
-        return BindComparisonWithExactConstant(expression, operation, runtimeLeft, parameters, diagnosticReporter, cancellationToken, callables, locals);
+        return BindComparisonWithExactConstant(expression, operation, runtimeLeft, parameters, diagnosticReporter, callables, locals, cancellationToken);
     }
 
     private static BoundExpression? BindComparisonWithExactConstant(
@@ -214,9 +214,9 @@ internal static class BooleanExpressionBinder
         bool runtimeLeft,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
         IReadOnlyList<PackageCallable>? callables,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
         ExpressionSyntax runtimeSyntax = runtimeLeft ? expression.Left : expression.Right;
         ExpressionSyntax exactSyntax = runtimeLeft ? expression.Right : expression.Left;

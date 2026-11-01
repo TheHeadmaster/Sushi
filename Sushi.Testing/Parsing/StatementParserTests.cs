@@ -61,7 +61,7 @@ public class StatementParserTests
             .Should()
             .BeOfType<IntegerLiteralExpressionSyntax>();
 
-        second.Expression.Span.Start
+        second.Expression!.Span.Start
             .Should()
             .Be(source.IndexOf("42", StringComparison.Ordinal));
 

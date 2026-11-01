@@ -220,7 +220,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     }
 
     private bool IsForHeaderOperationAhead(bool allowDeclarations)
-        => allowDeclarations && this.IsForHeaderDeclarationAhead()
+        => (allowDeclarations && this.IsForHeaderDeclarationAhead())
             || this.IsPrefixUpdateAhead()
             || this.IsPostfixUpdateAhead()
             || this.IsLocalAssignmentAhead();

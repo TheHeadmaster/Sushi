@@ -50,7 +50,7 @@ internal static class PackageInvocationBinder
             return null;
         }
 
-        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken, locals);
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, locals, cancellationToken);
 
         if (resolved is null)
         {
@@ -109,7 +109,7 @@ internal static class PackageInvocationBinder
     {
         ArgumentNullException.ThrowIfNull(invocation);
 
-        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, cancellationToken, locals);
+        ResolvedCall? resolved = Resolve(invocation, callables, parameters, diagnosticReporter, locals, cancellationToken);
 
         if (resolved is null)
         {
@@ -136,8 +136,8 @@ internal static class PackageInvocationBinder
         IReadOnlyList<PackageCallable> callables,
         IReadOnlyList<BoundParameter> parameters,
         IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken,
-        LocalBindingContext? locals)
+        LocalBindingContext? locals,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(callables);
         ArgumentNullException.ThrowIfNull(parameters);
