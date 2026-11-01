@@ -85,6 +85,9 @@ public sealed class BoundFunctionIRConverter
                 ConvertType(assignment.Local.Type),
                 ConvertExpression(assignment.Value, cancellationToken)),
 
+            BoundIntegerUpdateStatement update => new IRIntegerUpdateStatement(
+                ConvertIntegerUpdate(update.Expression)),
+
             BoundVoidCallStatement call => new IRVoidCallStatement(
                 call.Symbol,
                 [.. call.ParameterTypes.Select(ConvertType)],
@@ -110,6 +113,7 @@ public sealed class BoundFunctionIRConverter
             BoundBooleanConstantExpression boolean => new IRBooleanConstant(boolean.Value),
             BoundParameterReferenceExpression reference => new IRParameterReferenceExpression(reference.Parameter.Index, ConvertType(reference.Type)),
             BoundLocalReferenceExpression local => new IRLocalReferenceExpression(local.Local.Index, ConvertType(local.Type)),
+            BoundIntegerUpdateExpression update => ConvertIntegerUpdate(update),
 
             BoundBooleanNotExpression negation => new IRBooleanNotExpression(ConvertExpression(negation.Operand, cancellationToken)),
 
@@ -138,6 +142,9 @@ public sealed class BoundFunctionIRConverter
             _ => throw new NotSupportedException($"Bound expression type \"{expression.GetType().Name}\" is not supported by structured Sushi IR.")
         };
     }
+
+    private static IRIntegerUpdateExpression ConvertIntegerUpdate(BoundIntegerUpdateExpression update)
+        => new(update.Local.Index, update.IsIncrement, update.IsPrefix);
 
     private static IRBooleanBinaryOperator ConvertBooleanOperator(BooleanBinaryOperator operation)
         => operation switch

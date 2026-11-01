@@ -240,8 +240,8 @@ internal static class BooleanExpressionBinder
         }
 #pragma warning restore IDE0078 // Use pattern matching
 
-        // An int32 value has a statically known relation to an exact integer
-        // outside the int32 domain, but its operand must still be evaluated.
+        // Out-of-range exact constants have a predetermined comparison result,
+        // but the runtime operand must still execute before producing that result.
         BigInteger boundary = exact > int.MaxValue ? int.MaxValue : int.MinValue;
         bool result = runtimeLeft
             ? EvaluateIntegerComparison(operation, boundary, exact)
@@ -374,7 +374,7 @@ internal static class BooleanExpressionBinder
     private static bool ContainsRuntimeValue(ExpressionSyntax expression)
         => expression switch
         {
-            IdentifierExpressionSyntax or InvocationExpressionSyntax => true,
+            IdentifierExpressionSyntax or InvocationExpressionSyntax or IncrementDecrementExpressionSyntax => true,
             ParenthesizedExpressionSyntax grouped => ContainsRuntimeValue(grouped.Expression),
             UnaryExpressionSyntax unary => ContainsRuntimeValue(unary.Operand),
             BinaryExpressionSyntax binary => ContainsRuntimeValue(binary.Left) || ContainsRuntimeValue(binary.Right),
@@ -387,6 +387,7 @@ internal static class BooleanExpressionBinder
             InvalidComparisonChainSyntax => true,
             ParenthesizedExpressionSyntax grouped => ContainsInvalidComparisonChain(grouped.Expression),
             UnaryExpressionSyntax unary => ContainsInvalidComparisonChain(unary.Operand),
+            IncrementDecrementExpressionSyntax update => ContainsInvalidComparisonChain(update.Operand),
             BinaryExpressionSyntax binary => ContainsInvalidComparisonChain(binary.Left) || ContainsInvalidComparisonChain(binary.Right),
             InvocationExpressionSyntax invocation => invocation.Arguments.Any(argument => ContainsInvalidComparisonChain(argument.Expression)),
             _ => false

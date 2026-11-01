@@ -6,8 +6,8 @@ using Sushi.Source;
 namespace Sushi.Parsing;
 
 /// <summary>
-/// Parses braced statements, conditionals, all supported ordinary loop forms,
-/// loop transfers, returns, initialized locals, assignments, and invocations.
+/// Parses braced statements, conditionals, ordinary loops, loop transfers,
+/// returns, initialized locals, assignments, invocations, and integer updates.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -348,7 +348,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
     private ExpressionStatementSyntax ParseExpressionStatement(IDiagnosticReporter diagnosticReporter)
     {
         ExpressionSyntax expression = this.expressions.ParseExpression(diagnosticReporter);
-        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after invocation statement.", diagnosticReporter);
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after expression statement.", diagnosticReporter);
 
         return new ExpressionStatementSyntax(expression, semicolon);
     }
@@ -419,6 +419,9 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             || this.IsKeywordAhead("continue"u8)
             || this.IsLocalDeclarationAhead()
             || this.IsLocalAssignmentAhead()
+            || this.IsPrefixUpdateAhead()
+            || this.IsPostfixUpdateAhead()
+            || this.IsPunctuationAhead((byte)'(')
             || this.IsInvocationAhead();
 
     private bool IsLocalDeclarationAhead()

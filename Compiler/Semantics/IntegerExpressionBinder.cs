@@ -6,7 +6,8 @@ namespace Sushi.Semantics;
 
 /// <summary>
 /// Binds concrete int32 expressions containing runtime parameters, locals,
-/// and calls while preserving exact constant evaluation for independent subexpressions.
+/// calls, and update expressions while preserving exact constant evaluation
+/// for independent subexpressions.
 /// </summary>
 internal static class IntegerExpressionBinder
 {
@@ -73,6 +74,9 @@ internal static class IntegerExpressionBinder
 
             case InvocationExpressionSyntax invocation when callables is not null:
                 return PackageInvocationBinder.BindValue(invocation, BoundType.Int32, callables, parameters, diagnosticReporter, cancellationToken, locals);
+
+            case IncrementDecrementExpressionSyntax update:
+                return IntegerUpdateBinder.Bind(update, diagnosticReporter, locals);
 
             case ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked:
                 return BindExpression(grouped.Expression, parameters, diagnosticReporter, cancellationToken, callables, locals);
@@ -196,7 +200,7 @@ internal static class IntegerExpressionBinder
     private static bool ContainsRuntimeValue(ExpressionSyntax expression)
         => expression switch
         {
-            IdentifierExpressionSyntax or InvocationExpressionSyntax => true,
+            IdentifierExpressionSyntax or InvocationExpressionSyntax or IncrementDecrementExpressionSyntax => true,
             ParenthesizedExpressionSyntax grouped => ContainsRuntimeValue(grouped.Expression),
             UnaryExpressionSyntax unary => ContainsRuntimeValue(unary.Operand),
             BinaryExpressionSyntax binary => ContainsRuntimeValue(binary.Left) || ContainsRuntimeValue(binary.Right),

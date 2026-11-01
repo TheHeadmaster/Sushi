@@ -66,5 +66,6 @@ public enum SyntaxType
     DoWhileStatement,
     DoKeyword,
     ForStatement,
-    ForKeyword
+    ForKeyword,
+    IncrementDecrementExpression
 }

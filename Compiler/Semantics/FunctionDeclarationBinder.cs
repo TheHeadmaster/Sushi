@@ -441,44 +441,19 @@ public sealed class FunctionDeclarationBinder
                 parameters, callables, diagnosticReporter, cancellationToken, locals);
         }
 
-        return operation.IsIncrementOrDecrement
-            ? BindIntegerUpdate(operation, diagnosticReporter, locals)
-            : BindAssignmentOperation(operation.NameToken, operation.OperatorToken, operation.Value!,
-                parameters, callables, diagnosticReporter, cancellationToken, locals);
-    }
-
-    private static BoundLocalAssignmentStatement? BindIntegerUpdate(
-        ForHeaderOperationSyntax operation,
-        IDiagnosticReporter diagnosticReporter,
-        LocalBindingContext locals)
-    {
-        string? name = IdentifierBinder.Bind(operation.NameToken);
-        BoundExpression? target = name is null ? null : locals.Resolve(name);
-
-        if (target is null)
+        if (operation.IsIncrementOrDecrement)
         {
-            diagnosticReporter.GenerateError(ErrorType.UnknownIdentifier, operation.NameToken.Span);
-            return null;
+            IncrementDecrementExpressionSyntax syntax = new(
+                operation.OperatorToken,
+                new IdentifierExpressionSyntax(operation.NameToken),
+                operation.IsPrefix);
+
+            BoundIntegerUpdateExpression? update = IntegerUpdateBinder.Bind(syntax, diagnosticReporter, locals);
+            return update is null ? null : new BoundIntegerUpdateStatement(update);
         }
 
-        if (target is not BoundLocalReferenceExpression { Type: BoundType.Int32 } local)
-        {
-            diagnosticReporter.GenerateErrorWithCustomMessage(
-                ErrorType.UnsupportedMVPExpression,
-                "Increment and decrement require a writable int32 local in the current executable subset.",
-                operation.Span);
-            return null;
-        }
-
-        IntegerBinaryOperator operationKind = GetAssignmentOperator(operation.OperatorToken) switch
-        {
-            "++" => IntegerBinaryOperator.Add,
-            "--" => IntegerBinaryOperator.Subtract,
-            _ => throw new InvalidOperationException("The for-header update operator must be ++ or --.")
-        };
-
-        BoundExpression updated = new BoundIntegerBinaryExpression(operationKind, local, new BoundIntegerLiteralExpression(1));
-        return new BoundLocalAssignmentStatement(local.Local, updated);
+        return BindAssignmentOperation(operation.NameToken, operation.OperatorToken, operation.Value!,
+            parameters, callables, diagnosticReporter, cancellationToken, locals);
     }
 
     private static BoundLoopTransferStatement? BindLoopTransferStatement(
@@ -757,7 +732,7 @@ public sealed class FunctionDeclarationBinder
     private static bool ContainsRuntimeIntegerValue(ExpressionSyntax expression)
         => expression switch
         {
-            IdentifierExpressionSyntax or InvocationExpressionSyntax => true,
+            IdentifierExpressionSyntax or InvocationExpressionSyntax or IncrementDecrementExpressionSyntax => true,
             ParenthesizedExpressionSyntax grouped => ContainsRuntimeIntegerValue(grouped.Expression),
             UnaryExpressionSyntax unary => ContainsRuntimeIntegerValue(unary.Operand),
             BinaryExpressionSyntax binary => ContainsRuntimeIntegerValue(binary.Left) || ContainsRuntimeIntegerValue(binary.Right),
@@ -795,6 +770,19 @@ public sealed class FunctionDeclarationBinder
         CancellationToken cancellationToken,
         LocalBindingContext locals)
     {
+        if (!statement.SemicolonToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        IncrementDecrementExpressionSyntax? syntax = GetStandaloneUpdate(statement.Expression);
+
+        if (syntax is not null)
+        {
+            BoundIntegerUpdateExpression? update = IntegerUpdateBinder.Bind(syntax, diagnosticReporter, locals);
+            return update is null ? null : new BoundIntegerUpdateStatement(update);
+        }
+
         if (callables is not null)
         {
             return PackageInvocationBinder.Bind(statement, callables, parameters, diagnosticReporter, cancellationToken, locals);
@@ -803,6 +791,15 @@ public sealed class FunctionDeclarationBinder
         diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, statement.Span);
         return null;
     }
+
+    private static IncrementDecrementExpressionSyntax? GetStandaloneUpdate(ExpressionSyntax expression)
+        => expression switch
+        {
+            IncrementDecrementExpressionSyntax update => update,
+            ParenthesizedExpressionSyntax grouped when grouped.OpenParenthesisToken.IsSourceBacked && grouped.CloseParenthesisToken.IsSourceBacked
+                => GetStandaloneUpdate(grouped.Expression),
+            _ => null
+        };
 
     private static BoundIfStatement? BindConditionalStatement(
         IfStatementSyntax statement,
@@ -971,7 +968,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         ReadOnlySpan<byte> spelling = token.Span.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
-        
+
         if (spelling.SequenceEqual("public"u8))
         {
             accessibility = Accessibility.Public;

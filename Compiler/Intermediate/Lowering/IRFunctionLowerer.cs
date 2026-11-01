@@ -2,8 +2,8 @@
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
-/// pre-test, post-test, and three-part loops, nested loop transfers,
-/// checked arithmetic, local storage, and function-call argument order.
+/// loops, nested loop transfers, checked arithmetic, local storage, integer
+/// updates, and function-call argument order.
 /// </summary>
 public sealed class IRFunctionLowerer
 {
@@ -124,6 +124,10 @@ public sealed class IRFunctionLowerer
 
                     case IRLocalAssignmentStatement assignment:
                         this.LowerLocalAssignment(assignment);
+                        break;
+
+                    case IRIntegerUpdateStatement update:
+                        _ = this.LowerIntegerUpdate(update.Expression);
                         break;
 
                     default:
@@ -341,6 +345,23 @@ public sealed class IRFunctionLowerer
             return destination;
         }
 
+        private LoweredValue LowerIntegerUpdate(IRIntegerUpdateExpression update)
+        {
+            LoweredValue previous = this.ReadLocal(new IRLocalReferenceExpression(update.Index, IRType.Int32));
+            LoweredTemporaryValue replacement = this.CreateTemporary(IRType.Int32);
+
+            IRIntegerBinaryOperator operation = update.IsIncrement
+                ? IRIntegerBinaryOperator.Add
+                : IRIntegerBinaryOperator.Subtract;
+
+            this.current.Instructions.Add(new LoweredIntegerArithmeticInstruction(
+                replacement, operation, previous, new LoweredIntegerConstant(1)));
+
+            this.current.Instructions.Add(new LoweredLocalStoreInstruction(update.Index, IRType.Int32, replacement));
+
+            return update.IsPrefix ? replacement : previous;
+        }
+
         private void ValidateLocalType(int index, IRType type)
         {
             if (!this.localTypes.TryGetValue(index, out IRType existingType))
@@ -494,6 +515,7 @@ public sealed class IRFunctionLowerer
                 IRBooleanConstant boolean => new LoweredBooleanConstant(boolean.Value),
                 IRParameterReferenceExpression parameter => new LoweredParameterValue(parameter.Index, parameter.Type),
                 IRLocalReferenceExpression local => this.ReadLocal(local),
+                IRIntegerUpdateExpression update => this.LowerIntegerUpdate(update),
                 IRCallExpression call => this.LowerValueCall(call),
                 IRBooleanNotExpression negation => this.LowerBooleanNegation(negation),
                 IRBooleanBinaryExpression binary => this.LowerBooleanBinary(binary),

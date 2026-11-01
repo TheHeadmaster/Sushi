@@ -7,9 +7,9 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses Sushi expressions using precedence climbing over a shared lexical cursor.
-/// Supports literals, names, invocation syntax, grouping, unary operators,
-/// arithmetic, shifts, bitwise operators, comparisons, and logical operators.
-/// Diagnoses non-associative comparison chains while preserving recovered syntax.
+/// Supports literals, names, invocation syntax, grouping, prefix/postfix integer
+/// updates, unary operators, arithmetic, shifts, bitwise operators, comparisons,
+/// and logical operators. Diagnoses non-associative comparison chains.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -100,17 +100,45 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
     {
         this.cancellationToken.ThrowIfCancellationRequested();
 
-        if (!this.cursor.TryPeek(out LexToken token) || !this.TryGetPrefixUnarySyntaxType(token, out SyntaxType syntaxType))
+        if (!this.cursor.TryPeek(out LexToken token))
         {
-            return this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
+            return this.ParsePostfixExpression(diagnosticReporter, out incomplete);
+        }
+
+        if (this.IsIncrementOrDecrement(token))
+        {
+            this.cursor.TryAdvance(out _);
+
+            ExpressionSyntax operand = this.ParseExpression(BindingPower.UnaryPrefix, diagnosticReporter, out incomplete);
+            return new IncrementDecrementExpressionSyntax(new SyntaxToken(SyntaxType.OperatorToken, token), operand, isPrefix: true);
+        }
+
+        if (!this.TryGetPrefixUnarySyntaxType(token, out SyntaxType syntaxType))
+        {
+            return this.ParsePostfixExpression(diagnosticReporter, out incomplete);
         }
 
         this.cursor.TryAdvance(out _);
 
         SyntaxToken operatorToken = new(syntaxType, token);
-        ExpressionSyntax operand = this.ParseExpression(BindingPower.UnaryPrefix, diagnosticReporter, out incomplete);
+        ExpressionSyntax unaryOperand = this.ParseExpression(BindingPower.UnaryPrefix, diagnosticReporter, out incomplete);
 
-        return new UnaryExpressionSyntax(operatorToken, operand);
+        return new UnaryExpressionSyntax(operatorToken, unaryOperand);
+    }
+
+    private ExpressionSyntax ParsePostfixExpression(IDiagnosticReporter diagnosticReporter, out bool incomplete)
+    {
+        ExpressionSyntax expression = this.ParsePrimaryExpression(diagnosticReporter, out incomplete);
+
+        while (!incomplete && this.cursor.TryPeek(out LexToken token) && this.IsIncrementOrDecrement(token))
+        {
+            this.cancellationToken.ThrowIfCancellationRequested();
+            this.cursor.TryAdvance(out _);
+
+            expression = new IncrementDecrementExpressionSyntax(new SyntaxToken(SyntaxType.OperatorToken, token), expression, isPrefix: false);
+        }
+
+        return expression;
     }
 
     private ExpressionSyntax ParsePrimaryExpression(IDiagnosticReporter diagnosticReporter, out bool incomplete)
@@ -255,7 +283,6 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         }
 
         ExpressionSyntax expression = this.ParseExpression(BindingPower.Lowest, diagnosticReporter, out incomplete);
-
         return new CallArgumentSyntax(name, colon, expression);
     }
 
@@ -266,6 +293,10 @@ internal sealed class ExpressionParser(ParserCursor cursor, CancellationToken ca
         => token.Type is LexTokenType.Punctuation
             && token.Span.Length == 1
             && this.cursor.Snapshot.Bytes.Span[token.Span.Start] == punctuation;
+
+    private bool IsIncrementOrDecrement(LexToken token)
+        => token.Type is LexTokenType.Operator
+            && (this.cursor.TokenTextEquals(token, "++"u8) || this.cursor.TokenTextEquals(token, "--"u8));
 
     private bool TryGetPrefixUnarySyntaxType(LexToken token, out SyntaxType syntaxType)
     {
