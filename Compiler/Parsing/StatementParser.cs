@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses braced statement blocks, returns, conditionals, initialized local
-/// declarations, local assignments, and candidate invocation statements.
+/// declarations, ordinary and compound assignments, and invocation statements.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -107,11 +107,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         this.cursor.TryAdvance(out LexToken assignment);
 
         SyntaxToken nameToken = new(GetIdentifierSyntaxType(name), name);
-        SyntaxToken equalsToken = new(SyntaxType.OperatorToken, assignment);
+        SyntaxToken operatorToken = new(SyntaxType.OperatorToken, assignment);
         ExpressionSyntax value = this.expressions.ParseExpression(diagnosticReporter);
         SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after assignment.", diagnosticReporter);
 
-        return new LocalAssignmentStatementSyntax(nameToken, equalsToken, value, semicolon);
+        return new LocalAssignmentStatementSyntax(nameToken, operatorToken, value, semicolon);
     }
 
     private ExpressionStatementSyntax ParseExpressionStatement(IDiagnosticReporter diagnosticReporter)
@@ -207,7 +207,28 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
             return false;
         }
 
-        return assignment.Type is LexTokenType.Operator && this.cursor.TokenTextEquals(assignment, "="u8);
+        return this.IsAssignmentOperator(assignment);
+    }
+
+    private bool IsAssignmentOperator(LexToken token)
+    {
+        if (token.Type is not LexTokenType.Operator)
+        {
+            return false;
+        }
+
+        ReadOnlySpan<byte> spelling = this.cursor.Snapshot.Bytes.Span[token.Span.Start..token.Span.End];
+
+        return spelling.Length switch
+        {
+            1 => spelling[0] == (byte)'=',
+            2 => spelling[1] == (byte)'='
+                && spelling[0] is (byte)'+' or (byte)'-' or (byte)'*' or (byte)'/' or (byte)'%' or (byte)'&' or (byte)'^' or (byte)'|',
+            3 => spelling[2] == (byte)'='
+                && spelling[0] is (byte)'<' or (byte)'>'
+                && spelling[1] == spelling[0],
+            _ => false
+        };
     }
 
     private bool IsInvocationAhead()

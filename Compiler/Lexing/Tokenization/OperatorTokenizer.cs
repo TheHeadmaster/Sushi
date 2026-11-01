@@ -1,11 +1,11 @@
-﻿using Sushi.Source;
+﻿
+using Sushi.Source;
 
 namespace Sushi.Lexing.Tokenization;
 
 /// <summary>
-/// Recognizes supported symbolic operators using longest-match tokenization.
-/// Also preserves increment and decrement as indivisible lexical elements
-/// before their expression grammar is implemented.
+/// Recognizes symbolic operators using longest-match tokenization, including
+/// compound assignments and the reserved increment and decrement operators.
 /// </summary>
 public sealed class OperatorTokenizer : ILexTokenizer
 {
@@ -45,18 +45,28 @@ public sealed class OperatorTokenizer : ILexTokenizer
 
         byte current = bytes[position];
 
-        // A standalone ! is not a Sushi logical-negation operator.
-        // Logical negation uses the reserved keyword not.
         if (current == (byte)'!' && (position + 1 >= bytes.Length || bytes[position + 1] != (byte)'='))
         {
             match = default;
             return false;
         }
 
-        int length = IsTwoCharacterOperator(bytes, position) ? 2 : 1;
-
+        int length = GetOperatorLength(bytes, position);
         match = new LexTokenMatch(LexTokenType.Operator, length);
         return true;
+    }
+
+    private static int GetOperatorLength(ReadOnlySpan<byte> bytes, int position)
+    {
+        if (position + 2 < bytes.Length
+            && bytes[position] is (byte)'<' or (byte)'>'
+            && bytes[position + 1] == bytes[position]
+            && bytes[position + 2] == (byte)'=')
+        {
+            return 3;
+        }
+
+        return IsTwoCharacterOperator(bytes, position) ? 2 : 1;
     }
 
     private static bool IsTwoCharacterOperator(ReadOnlySpan<byte> bytes, int position)
@@ -71,8 +81,9 @@ public sealed class OperatorTokenizer : ILexTokenizer
 
         return current switch
         {
-            (byte)'+' or (byte)'-' => next == current,
-            (byte)'<' or (byte)'>' => next is (byte)'=' || next == current,
+            (byte)'+' or (byte)'-' => next == current || next == (byte)'=',
+            (byte)'*' or (byte)'/' or (byte)'%' or (byte)'&' or (byte)'^' or (byte)'|' => next == (byte)'=',
+            (byte)'<' or (byte)'>' => next == (byte)'=' || next == current,
             (byte)'=' or (byte)'!' => next == (byte)'=',
             _ => false
         };

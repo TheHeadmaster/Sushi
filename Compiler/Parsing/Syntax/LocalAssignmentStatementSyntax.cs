@@ -3,8 +3,9 @@
 namespace Sushi.Parsing.Syntax;
 
 /// <summary>
-/// Represents assignment to a named local as a semicolon-terminated statement.
-/// The target is preserved independently from the expression being assigned.
+/// Represents ordinary or compound assignment to a named local as a
+/// semicolon-terminated statement. The operator remains source-backed
+/// so semantic binding can select its exact built-in operation.
 /// </summary>
 public sealed class LocalAssignmentStatementSyntax : StatementSyntax
 {
@@ -20,12 +21,12 @@ public sealed class LocalAssignmentStatementSyntax : StatementSyntax
     public SyntaxToken NameToken { get; }
 
     /// <summary>
-    /// Gets the assignment operator, possibly synthesized during recovery.
+    /// Gets the ordinary or compound assignment operator.
     /// </summary>
-    public SyntaxToken EqualsToken { get; }
+    public SyntaxToken OperatorToken { get; }
 
     /// <summary>
-    /// Gets the expression evaluated to produce the replacement value.
+    /// Gets the expression evaluated to produce the value to write.
     /// </summary>
     public ExpressionSyntax Value { get; }
 
@@ -35,32 +36,33 @@ public sealed class LocalAssignmentStatementSyntax : StatementSyntax
     public SyntaxToken SemicolonToken { get; }
 
     /// <summary>
-    /// Creates an assignment statement while preserving source order and recovery information.
+    /// Creates an assignment statement while preserving source order
+    /// and recovered syntax.
     /// </summary>
     /// <param name="nameToken">
-    /// The source identifier identifying writable storage.
+    /// The identifier denoting the writable local.
     /// </param>
-    /// <param name="equalsToken">
-    /// The ordinary assignment operator.
+    /// <param name="operatorToken">
+    /// The source-backed assignment operator.
     /// </param>
     /// <param name="value">
-    /// The expression to evaluate before writing to the target.
+    /// The right-hand expression.
     /// </param>
     /// <param name="semicolonToken">
     /// The statement terminator.
     /// </param>
-    public LocalAssignmentStatementSyntax(SyntaxToken nameToken, SyntaxToken equalsToken, ExpressionSyntax value, SyntaxToken semicolonToken)
+    public LocalAssignmentStatementSyntax(SyntaxToken nameToken, SyntaxToken operatorToken, ExpressionSyntax value, SyntaxToken semicolonToken)
     {
         ArgumentNullException.ThrowIfNull(value);
 
         if (nameToken.Type is not (SyntaxType.IdentifierToken or SyntaxType.EscapedIdentifierToken)
-            || equalsToken.Type is not SyntaxType.OperatorToken
+            || operatorToken.Type is not SyntaxType.OperatorToken
             || semicolonToken.Type is not SyntaxType.SemicolonToken)
         {
             throw new ArgumentException("Assignment statements require an identifier, assignment operator, and semicolon.");
         }
 
-        SourceSpan[] spans = [nameToken.Span, equalsToken.Span, value.Span, semicolonToken.Span];
+        SourceSpan[] spans = [nameToken.Span, operatorToken.Span, value.Span, semicolonToken.Span];
 
         for (int i = 1; i < spans.Length; i++)
         {
@@ -71,7 +73,7 @@ public sealed class LocalAssignmentStatementSyntax : StatementSyntax
         }
 
         this.NameToken = nameToken;
-        this.EqualsToken = equalsToken;
+        this.OperatorToken = operatorToken;
         this.Value = value;
         this.SemicolonToken = semicolonToken;
     }

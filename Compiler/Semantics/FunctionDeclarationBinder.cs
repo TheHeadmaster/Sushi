@@ -1,3 +1,5 @@
+using System.Numerics;
+using System.Text;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
 
@@ -302,7 +304,7 @@ public sealed class FunctionDeclarationBinder
         LocalBindingContext locals)
     {
         if (!assignment.NameToken.IsSourceBacked
-            || !assignment.EqualsToken.IsSourceBacked
+            || !assignment.OperatorToken.IsSourceBacked
             || !assignment.SemicolonToken.IsSourceBacked)
         {
             return null;
@@ -326,9 +328,150 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        BoundExpression? value = BindValue(assignment.Value, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        string operation = GetAssignmentOperator(assignment.OperatorToken);
+
+        BoundExpression? value = operation == "="
+            ? BindValue(assignment.Value, local.Type, parameters, callables, diagnosticReporter, cancellationToken, locals)
+            : BindCompoundAssignmentValue(assignment, operation, local, parameters, callables, diagnosticReporter, cancellationToken, locals);
+
         return value is null ? null : new BoundLocalAssignmentStatement(local.Local, value);
     }
+
+    private static string GetAssignmentOperator(SyntaxToken token)
+    {
+        Source.SourceSpan span = token.Span;
+        return Encoding.UTF8.GetString(span.Snapshot.Bytes.Span[span.Start..span.End]);
+    }
+
+    private static BoundExpression? BindCompoundAssignmentValue(
+        LocalAssignmentStatementSyntax assignment,
+        string spelling,
+        BoundLocalReferenceExpression target,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+        => target.Type switch
+        {
+            BoundType.Int32 => BindCompoundIntegerAssignment(assignment, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
+            BoundType.Bool => BindCompoundBooleanAssignment(assignment, spelling, target, parameters, callables, diagnosticReporter, cancellationToken, locals),
+            _ => throw new NotSupportedException($"Local type \"{target.Type}\" is not supported by compound assignment.")
+        };
+
+    private static BoundExpression? BindCompoundIntegerAssignment(
+        LocalAssignmentStatementSyntax assignment,
+        string spelling,
+        BoundLocalReferenceExpression target,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        IntegerBinaryOperator? operation = spelling switch
+        {
+            "+=" => IntegerBinaryOperator.Add,
+            "-=" => IntegerBinaryOperator.Subtract,
+            "*=" => IntegerBinaryOperator.Multiply,
+            "/=" => IntegerBinaryOperator.Divide,
+            "%=" => IntegerBinaryOperator.Remainder,
+            "<<=" => IntegerBinaryOperator.ShiftLeft,
+            ">>=" => IntegerBinaryOperator.ShiftRight,
+            "&=" => IntegerBinaryOperator.BitwiseAnd,
+            "^=" => IntegerBinaryOperator.BitwiseXor,
+            "|=" => IntegerBinaryOperator.BitwiseOr,
+            _ => null
+        };
+
+        if (operation is null)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, assignment.OperatorToken.Span);
+            return null;
+        }
+
+        BoundExpression? right = operation is IntegerBinaryOperator.ShiftLeft or IntegerBinaryOperator.ShiftRight
+            ? BindCompoundShiftCount(assignment.Value, parameters, callables, diagnosticReporter, cancellationToken, locals)
+            : BindValue(assignment.Value, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
+
+        if (right is null)
+        {
+            return null;
+        }
+
+        if (operation is IntegerBinaryOperator.Divide or IntegerBinaryOperator.Remainder && right is BoundIntegerLiteralExpression { Value: 0 })
+        {
+            diagnosticReporter.GenerateError(ErrorType.IntegerDivisionByZero, assignment.OperatorToken.Span);
+            return null;
+        }
+
+        return new BoundIntegerBinaryExpression(operation.Value, target, right);
+    }
+
+    private static BoundExpression? BindCompoundBooleanAssignment(
+        LocalAssignmentStatementSyntax assignment,
+        string spelling,
+        BoundLocalReferenceExpression target,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        BooleanBinaryOperator? operation = spelling switch
+        {
+            "&=" => BooleanBinaryOperator.EagerAnd,
+            "^=" => BooleanBinaryOperator.EagerXor,
+            "|=" => BooleanBinaryOperator.EagerOr,
+            _ => null
+        };
+
+        if (operation is null)
+        {
+            diagnosticReporter.GenerateError(ErrorType.UnsupportedMVPExpression, assignment.OperatorToken.Span);
+            return null;
+        }
+
+        BoundExpression? right = BindValue(assignment.Value, BoundType.Bool, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        return right is null ? null : new BoundBooleanBinaryExpression(operation.Value, target, right);
+    }
+
+    private static BoundExpression? BindCompoundShiftCount(
+        ExpressionSyntax expression,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        CancellationToken cancellationToken,
+        LocalBindingContext locals)
+    {
+        if (ContainsRuntimeIntegerValue(expression))
+        {
+            return BindValue(expression, BoundType.Int32, parameters, callables, diagnosticReporter, cancellationToken, locals);
+        }
+
+        if (!IntegerConstantExpressionBinder.TryEvaluateUntyped(expression, diagnosticReporter, cancellationToken, out BigInteger count))
+        {
+            return null;
+        }
+
+        if (count < BigInteger.Zero || count >= 32)
+        {
+            diagnosticReporter.GenerateError(ErrorType.InvalidIntegerShiftCount, expression.Span);
+            return null;
+        }
+
+        return new BoundIntegerLiteralExpression((int)count);
+    }
+
+    private static bool ContainsRuntimeIntegerValue(ExpressionSyntax expression)
+        => expression switch
+        {
+            IdentifierExpressionSyntax or InvocationExpressionSyntax => true,
+            ParenthesizedExpressionSyntax grouped => ContainsRuntimeIntegerValue(grouped.Expression),
+            UnaryExpressionSyntax unary => ContainsRuntimeIntegerValue(unary.Operand),
+            BinaryExpressionSyntax binary => ContainsRuntimeIntegerValue(binary.Left) || ContainsRuntimeIntegerValue(binary.Right),
+            _ => false
+        };
 
     private static BoundExpression? BindValue(
         ExpressionSyntax expression,
