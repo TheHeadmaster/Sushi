@@ -142,7 +142,7 @@ public class LoweredIRFormatterTests
     }
 
     [TestCase(IRIntegerBinaryOperator.ShiftLeft, "checked_shift <<", TestName = "Lowered ShiftLeft IntegerShift Retains Its Operation")]
-    [TestCase(IRIntegerBinaryOperator.ShiftRight, "checked_shift >>", TestName = "Lowered ShiftRight IntegerShift Retains Its Operation")]
+    [TestCase(IRIntegerBinaryOperator.ShiftRight, "count_checked_shift >>", TestName = "Lowered ShiftRight IntegerShift Retains Its Operation")]
     public void IntegerShiftShouldRemainExplicit(IRIntegerBinaryOperator operation, string expected)
     {
         LoweredFunction function = Function([new LoweredIntegerShiftInstruction(
@@ -150,7 +150,7 @@ public class LoweredIRFormatterTests
         InspectionDocument document = LoweredIRFormatter.Format(function, CancellationToken.None);
         document.Text
             .Should()
-            .Contain("%temp0 = " + expected);
+            .Contain("%temp0 = " + expected + " -9, 2;");
         AssertSymbol(document, InspectionSymbolKind.Temporary, "Test", 0, true, 1);
     }
 

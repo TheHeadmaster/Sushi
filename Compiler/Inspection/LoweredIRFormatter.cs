@@ -162,7 +162,13 @@ public static class LoweredIRFormatter
                     this.WriteBinary("compare " + GetComparisonOperator(binary.Operator), binary.Left, binary.Right);
                     break;
                 case LoweredIntegerShiftInstruction binary:
-                    this.WriteBinary("checked_shift " + GetIntegerOperator(binary.Operator), binary.Left, binary.Right);
+                    string operation = binary.Operator switch
+                    {
+                        IRIntegerBinaryOperator.ShiftLeft => "checked_shift <<",
+                        IRIntegerBinaryOperator.ShiftRight => "count_checked_shift >>",
+                        _ => throw new NotSupportedException($"Integer shift IR operator \"{binary.Operator}\" cannot be formatted.")
+                    };
+                    this.WriteBinary(operation, binary.Left, binary.Right);
                     break;
                 case LoweredBooleanNotInstruction unary:
                     this.text.Append("not ");
