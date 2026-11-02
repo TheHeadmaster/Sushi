@@ -36,3 +36,18 @@ Use a real Sushi project containing package functions with parameters, local var
 14. Confirm navigation does not generate a native executable or object file.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. This procedure requires a graphical VS Code session; automated protocol and provider tests do not replace this manual check.
+
+# Snapshot-aware cache reuse
+
+Use a real Sushi project with an `InspectMe()` function and, for the snapshot check, a called function in another source file. This is a manual procedure; automated cache tests do not replace graphical validation.
+
+1. Open Structured IR for `InspectMe()` and verify its text and highlighting.
+2. Open Lowered IR for the same function. Verify it is a separate, correct, read-only document with Lowered IR highlighting.
+3. Request Structured IR and Lowered IR again. Verify both remain correct and each request opens an independent document.
+4. Change `InspectMe()` without saving and request an inspection. Verify the new representation reflects the edit and all earlier documents remain unchanged.
+5. Change the called function's signature without saving and request a new inspection. Verify the new inspection uses the current signature.
+6. Navigate from an older caller representation to the called function. Verify the generated target still reflects the caller artifact's original captured source snapshot.
+7. Close generated documents and inspect the function again. Verify inspection still works.
+8. Confirm inspection and navigation did not generate a native executable or object file.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.

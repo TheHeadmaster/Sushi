@@ -104,6 +104,304 @@ public class CompilerInspectionServiceTests
             .BeEquivalentTo(files);
     }
 
+    [TestCase(TestName = "Inspection Reuses Structured IR Across Stages And Retains Fresh Snapshot Ownership")]
+    public async Task InspectionShouldReuseRepresentationsAcrossCompatibleRequests()
+    {
+        using TestProject project = await TestProject.Create(Simple);
+        CompilerInspectionService service = new();
+        SourceSnapshot firstSnapshot = project.Snapshot(Simple, 7);
+        CompilerInspectionResult structured = await service.InspectAsync(project.Request(firstSnapshot, marker: "Calculate"), CancellationToken.None);
+        CompilerInspectionCacheKey cacheKey = CacheKey(structured);
+        service.Cache.TryGet(cacheKey, out CompilerInspectionCacheEntry structuredEntry)
+            .Should()
+            .BeTrue();
+        structuredEntry.StructuredIR
+            .Should()
+            .NotBeNull();
+        structuredEntry.StructuredDocument
+            .Should()
+            .BeSameAs(structured.Document);
+
+        CompilerInspectionResult lowered = await service.InspectAsync(
+            project.Request(firstSnapshot, InspectionStage.LoweredIR, "Calculate"), CancellationToken.None);
+        service.Cache.TryGet(cacheKey, out CompilerInspectionCacheEntry loweredEntry)
+            .Should()
+            .BeTrue();
+        loweredEntry.StructuredIR
+            .Should()
+            .BeSameAs(structuredEntry.StructuredIR);
+        loweredEntry.LoweredIR
+            .Should()
+            .NotBeNull();
+        loweredEntry.LoweredDocument
+            .Should()
+            .BeSameAs(lowered.Document);
+        lowered.Stage
+            .Should()
+            .Be(InspectionStage.LoweredIR);
+
+        SourceSnapshot equivalentSnapshot = project.Snapshot(Simple, 8);
+        CompilerInspectionResult repeatedStructured = await service.InspectAsync(
+            project.Request(equivalentSnapshot, marker: "Calculate"), CancellationToken.None);
+        CompilerInspectionResult repeatedLowered = await service.InspectAsync(
+            project.Request(equivalentSnapshot, InspectionStage.LoweredIR, "Calculate"), CancellationToken.None);
+        repeatedStructured.Document
+            .Should()
+            .BeSameAs(structured.Document);
+        repeatedLowered.Document
+            .Should()
+            .BeSameAs(lowered.Document);
+        repeatedStructured.Context.Sources[0]
+            .Should()
+            .BeSameAs(equivalentSnapshot);
+        repeatedStructured.Declaration!.Value.Snapshot
+            .Should()
+            .BeSameAs(equivalentSnapshot);
+        repeatedStructured.Context.Functions[repeatedStructured.FunctionSymbol!].Snapshot
+            .Should()
+            .BeSameAs(equivalentSnapshot);
+    }
+
+    [TestCase(TestName = "Lowered First Request Retains Structured IR For A Later Structured Request")]
+    public async Task LoweredFirstShouldRetainStructuredIntermediateRepresentation()
+    {
+        using TestProject project = await TestProject.Create(Simple);
+        CompilerInspectionService service = new();
+        SourceSnapshot snapshot = project.Snapshot(Simple);
+        CompilerInspectionResult lowered = await service.InspectAsync(
+            project.Request(snapshot, InspectionStage.LoweredIR, "Calculate"), CancellationToken.None);
+        service.Cache.TryGet(CacheKey(lowered), out CompilerInspectionCacheEntry loweredEntry)
+            .Should()
+            .BeTrue();
+        loweredEntry.StructuredIR
+            .Should()
+            .NotBeNull();
+        loweredEntry.LoweredIR
+            .Should()
+            .NotBeNull();
+
+        CompilerInspectionResult structured = await service.InspectAsync(project.Request(snapshot, marker: "Calculate"), CancellationToken.None);
+        service.Cache.TryGet(CacheKey(structured), out CompilerInspectionCacheEntry structuredEntry)
+            .Should()
+            .BeTrue();
+        structuredEntry.StructuredIR
+            .Should()
+            .BeSameAs(loweredEntry.StructuredIR);
+        structuredEntry.StructuredDocument
+            .Should()
+            .BeSameAs(structured.Document);
+        lowered.Document!.Text
+            .Should()
+            .Contain("load %local0");
+        structured.Document!.Text
+            .Should()
+            .Contain("local int32 %local0");
+    }
+
+    [TestCase(TestName = "Inspection Cache Separates Changed Content Project Configuration And Source Membership")]
+    public async Task InspectionCacheShouldUseCompleteProjectSnapshotIdentity()
+    {
+        const string main = Header + "public int32 First() { return 1; }";
+        const string dependency = Header + "public int32 Helper() { return 2; }";
+        using TestProject project = await TestProject.Create(main, dependency);
+        CompilerInspectionService service = new();
+        SourceSnapshot firstSnapshot = project.Snapshot(main, 4);
+        CompilerInspectionResult first = await service.InspectAsync(project.Request(firstSnapshot, marker: "First"), CancellationToken.None);
+        CompilerInspectionResult equivalent = await service.InspectAsync(
+            project.Request(project.Snapshot(main, 9), marker: "First"), CancellationToken.None);
+        equivalent.Document
+            .Should()
+            .BeSameAs(first.Document);
+
+        const string changedMain = Header + "public int32 First() { return 3; }";
+        CompilerInspectionResult changedBody = await service.InspectAsync(
+            project.Request(project.Snapshot(changedMain, 4), marker: "First"), CancellationToken.None);
+        changedBody.Document!.Text
+            .Should()
+            .Contain("return 3;");
+        changedBody.Document
+            .Should()
+            .NotBeSameAs(first.Document);
+
+        await File.AppendAllTextAsync(project.ProjectPath, "\n# retained configuration revision\n");
+        CompilerInspectionResult changedConfiguration = await service.InspectAsync(
+            project.Request(project.Snapshot(main, 4), marker: "First"), CancellationToken.None);
+        changedConfiguration.Document
+            .Should()
+            .NotBeSameAs(first.Document);
+
+        string updatedConfiguration = TestProject.Configuration.Replace(
+            "sources = [\"Sources/**/*.sus\"]", "sources = [\"Sources/A.sus\"]", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(project.ProjectPath, updatedConfiguration);
+        CompilerInspectionResult changedMembership = await service.InspectAsync(
+            project.Request(project.Snapshot(main, 4), marker: "First"), CancellationToken.None);
+        changedMembership.Context.Sources
+            .Should()
+            .ContainSingle();
+        changedMembership.Document
+            .Should()
+            .NotBeSameAs(changedConfiguration.Document);
+        service.Cache.Count
+            .Should()
+            .Be(4);
+    }
+
+    [TestCase(TestName = "Inspection Cache Invalidates Callers When A Dependency Signature Changes")]
+    public async Task InspectionCacheShouldInvalidateWhenDependencySignatureChanges()
+    {
+        const string caller = Header + "public int32 Caller() { return Helper(1); }";
+        const string callee = Header + "public int32 Helper(int32 value) { return value; }";
+        const string changedCallee = Header + "public int32 Helper(bool value) { return 1; }";
+        using TestProject project = await TestProject.Create(caller, callee);
+        CompilerInspectionService service = new();
+        SourceSnapshot callerSnapshot = project.Snapshot(caller);
+        SourceSnapshot calleeSnapshot = project.Snapshot(callee, 4, "B.sus");
+        CompilerInspectionResult original = await service.InspectAsync(
+            project.Request(callerSnapshot, marker: "Caller", additional: [calleeSnapshot]), CancellationToken.None);
+        CompilerInspectionResult invalid = await service.InspectAsync(
+            project.Request(callerSnapshot, marker: "Caller", additional: [project.Snapshot(changedCallee, 4, "B.sus")]), CancellationToken.None);
+
+        original.Succeeded
+            .Should()
+            .BeTrue();
+        invalid.Succeeded
+            .Should()
+            .BeFalse();
+        invalid.Diagnostics
+            .Should()
+            .NotBeEmpty();
+        service.Cache.Count
+            .Should()
+            .Be(1);
+
+        CompilerInspectionResult restored = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 9), marker: "Caller", additional: [project.Snapshot(callee, 9, "B.sus")]), CancellationToken.None);
+        restored.Succeeded
+            .Should()
+            .BeTrue();
+        restored.Document
+            .Should()
+            .BeSameAs(original.Document);
+    }
+
+    [TestCase(TestName = "Inspection Cache Does Not Share Equal Generated Symbols Between Projects")]
+    public async Task InspectionCacheShouldIsolateDistinctProjectIdentities()
+    {
+        using TestProject firstProject = await TestProject.Create(Simple);
+        using TestProject secondProject = await TestProject.Create(Simple);
+        CompilerInspectionService service = new();
+        CompilerInspectionResult first = await service.InspectAsync(
+            firstProject.Request(firstProject.Snapshot(Simple), marker: "Calculate"), CancellationToken.None);
+        CompilerInspectionResult second = await service.InspectAsync(
+            secondProject.Request(secondProject.Snapshot(Simple), marker: "Calculate"), CancellationToken.None);
+
+        first.FunctionSymbol
+            .Should()
+            .Be(second.FunctionSymbol);
+        second.Document
+            .Should()
+            .NotBeSameAs(first.Document);
+        service.Cache.Count
+            .Should()
+            .Be(2);
+    }
+
+    [TestCase(TestName = "Inspection Cache LRU Eviction Preserves Returned Documents And Disposal Clears Entries")]
+    public async Task InspectionCacheShouldEvictWithoutInvalidatingReturnedDocuments()
+    {
+        const string text = Header + "public int32 First() { return 1; } public int32 Second() { return 2; }";
+        using TestProject project = await TestProject.Create(text);
+        CompilerInspectionService service = new(1);
+        SourceSnapshot snapshot = project.Snapshot(text);
+        CompilerInspectionResult first = await service.InspectAsync(project.Request(snapshot, marker: "First"), CancellationToken.None);
+        string firstText = first.Document!.Text;
+        CompilerInspectionResult second = await service.InspectAsync(project.Request(snapshot, marker: "Second"), CancellationToken.None);
+        service.Cache.Count
+            .Should()
+            .Be(1);
+        first.Document.Text
+            .Should()
+            .Be(firstText);
+
+        CompilerInspectionResult firstAgain = await service.InspectAsync(project.Request(snapshot, marker: "First"), CancellationToken.None);
+        firstAgain.Document
+            .Should()
+            .NotBeSameAs(first.Document);
+        firstAgain.Document!.Text
+            .Should()
+            .Be(firstText);
+        second.Document!.Text
+            .Should()
+            .Contain("return 2;");
+        service.Dispose();
+        service.Cache.Count
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase(TestName = "Inspection Cache Leaves Failed And Cancelled Requests Uncached")]
+    public async Task FailedAndCancelledInspectionShouldNotPopulateTheCache()
+    {
+        const string invalid = Header + "public int32 Broken() { return absent; }";
+        using TestProject project = await TestProject.Create(invalid);
+        CompilerInspectionService service = new();
+        CompilerInspectionResult failed = await service.InspectAsync(project.Request(project.Snapshot(invalid)), CancellationToken.None);
+        failed.Succeeded
+            .Should()
+            .BeFalse();
+        service.Cache.Count
+            .Should()
+            .Be(0);
+
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+        Func<Task> inspect = () => service.InspectAsync(project.Request(project.Snapshot(Simple)), cancellation.Token);
+        await inspect
+            .Should()
+            .ThrowAsync<OperationCanceledException>();
+        service.Cache.Count
+            .Should()
+            .Be(0);
+    }
+
+    [TestCase(TestName = "Concurrent Compatible And Different Snapshot Requests Remain Correct")]
+    public async Task ConcurrentInspectionRequestsShouldRemainIsolated()
+    {
+        using TestProject project = await TestProject.Create(Simple);
+        CompilerInspectionService service = new();
+        SourceSnapshot firstSnapshot = project.Snapshot(Simple, 4);
+        SourceSnapshot equivalentSnapshot = project.Snapshot(Simple, 5);
+        string changed = Simple.Replace("value + 1", "value + 2", StringComparison.Ordinal);
+        SourceSnapshot changedSnapshot = project.Snapshot(changed, 4);
+
+        Task<CompilerInspectionResult> firstTask = service.InspectAsync(project.Request(firstSnapshot, marker: "Calculate"), CancellationToken.None);
+        Task<CompilerInspectionResult> equivalentTask = service.InspectAsync(project.Request(equivalentSnapshot, marker: "Calculate"), CancellationToken.None);
+        Task<CompilerInspectionResult> changedTask = service.InspectAsync(project.Request(changedSnapshot, marker: "Calculate"), CancellationToken.None);
+        CompilerInspectionResult[] results = await Task.WhenAll(firstTask, equivalentTask, changedTask);
+
+        results[0].Succeeded
+            .Should()
+            .BeTrue();
+        results[1].Succeeded
+            .Should()
+            .BeTrue();
+        results[2].Succeeded
+            .Should()
+            .BeTrue();
+        results[0].Document!.Text
+            .Should()
+            .Be(results[1].Document!.Text);
+        results[2].Document!.Text
+            .Should()
+            .Contain("value + 2");
+        results[2].Context.Sources[0]
+            .Should()
+            .BeSameAs(changedSnapshot);
+        service.Cache.Count
+            .Should()
+            .Be(2);
+    }
+
     [TestCase(InspectionStage.StructuredIR, TestName = "Structured Inspection Does Not Bind Invalid Unrelated Or Referenced Bodies")]
     [TestCase(InspectionStage.LoweredIR, TestName = "Lowered Inspection Does Not Bind Invalid Unrelated Or Referenced Bodies")]
     public async Task InspectionShouldBindOnlySelectedBody(InspectionStage stage)
@@ -566,6 +864,10 @@ public class CompilerInspectionServiceTests
             .Should()
             .ThrowAsync<ArgumentNullException>();
     }
+
+    private static CompilerInspectionCacheKey CacheKey(CompilerInspectionResult result)
+        => CompilerInspectionCache.CreateKey(result.Context.ProjectPath, result.Context.ProjectSnapshot, result.Context.Sources,
+            result.FunctionSymbol!, result.Declaration!.Value);
 
     private sealed class TestProject(string directory) : IDisposable
     {

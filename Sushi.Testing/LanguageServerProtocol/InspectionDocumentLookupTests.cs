@@ -298,14 +298,55 @@ public class InspectionDocumentLookupTests
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 7, text = caller } });
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 4, text = unsavedCallee } });
 
+            int selectionCharacter = caller.Split('\n')[1].IndexOf("Caller", StringComparison.Ordinal) + 10;
+            JsonElement structured = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 7,
+                position = new { line = 1, character = selectionCharacter }, stage = "structuredIR"
+            });
+            structured.GetProperty("succeeded").GetBoolean()
+                .Should()
+                .BeTrue(structured.ToString());
+            structured.GetProperty("text").GetString()
+                .Should()
+                .Contain("function int32 Caller");
+
             JsonElement inspected = await session.Request("sourceInspection/inspectFunction", new
             {
                 sourceUri = callerUri, sourceVersion = 7,
-                position = new { line = 1, character = caller.Split('\n')[1].IndexOf("Caller", StringComparison.Ordinal) + 10 }, stage = "loweredIR"
+                position = new { line = 1, character = selectionCharacter }, stage = "loweredIR"
             });
             inspected.GetProperty("succeeded").GetBoolean()
                 .Should()
                 .BeTrue(inspected.ToString());
+            inspected.GetProperty("text").GetString()
+                .Should()
+                .Contain("entry:");
+            JsonElement structuredAgain = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 7,
+                position = new { line = 1, character = selectionCharacter }, stage = "structuredIR"
+            });
+            structuredAgain.GetProperty("text").GetString()
+                .Should()
+                .Be(structured.GetProperty("text").GetString());
+
+            string changedCaller = caller.Replace("Helper(value)", "Helper(value + 1)", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 8 }, contentChanges = new[] { new { text = changedCaller } }
+            });
+            JsonElement changedInspection = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 8,
+                position = new { line = 1, character = changedCaller.Split('\n')[1].IndexOf("Caller", StringComparison.Ordinal) + 10 }, stage = "loweredIR"
+            });
+            changedInspection.GetProperty("text").GetString()
+                .Should()
+                .Contain("checked +");
+            inspected.GetProperty("text").GetString()
+                .Should()
+                .NotContain("checked +");
             string text = inspected.GetProperty("text").GetString()!;
             int offset = text.IndexOf("arg0", StringComparison.Ordinal);
             offset
@@ -360,6 +401,9 @@ public class InspectionDocumentLookupTests
                 .Be(definition.GetProperty("targetArtifactId").GetString());
             await session.Notify("sourceInspection/release", new { artifactId = definition.GetProperty("targetArtifactId").GetString() });
             await session.Notify("sourceInspection/release", new { artifactId = inspected.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = structured.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = structuredAgain.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = changedInspection.GetProperty("artifactId").GetString() });
         }
         finally
         {

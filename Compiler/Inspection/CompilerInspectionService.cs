@@ -3,6 +3,7 @@ using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
+using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
 
@@ -11,9 +12,32 @@ namespace Sushi.Inspection;
 /// <summary>
 /// Coordinates declaration analysis and selected-function binding without executable compilation or editor dependencies.
 /// </summary>
-public sealed class CompilerInspectionService
+public sealed class CompilerInspectionService : IDisposable
 {
     private readonly SourceAnalyzer sourceAnalyzer = new();
+    private readonly CompilerInspectionCache cache;
+
+    /// <summary>
+    /// Creates an inspection service with a bounded cache for this service lifetime.
+    /// </summary>
+    public CompilerInspectionService()
+        : this(CompilerInspectionCache.DefaultCapacity)
+    {
+    }
+
+    /// <summary>
+    /// Creates an inspection service with a bounded cache for deterministic capacity tests.
+    /// </summary>
+    /// <param name="cacheCapacity">The maximum number of exact function input identities to retain.</param>
+    internal CompilerInspectionService(int cacheCapacity)
+    {
+        this.cache = new CompilerInspectionCache(cacheCapacity);
+    }
+
+    /// <summary>
+    /// Provides cache state to focused compiler inspection tests without exposing performance counters publicly.
+    /// </summary>
+    internal CompilerInspectionCache Cache => this.cache;
 
     /// <summary>
     /// Inspects one package function using the supplied source snapshots and existing compiler transitions.
@@ -110,26 +134,14 @@ public sealed class CompilerInspectionService
 
         functionName = selected.Callable.Name;
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
-        FunctionBindResult bound = FunctionDeclarationBinder.Bind(selected.Declaration, diagnostics, visible, cancellationToken);
-        if (bound.Function is null && !diagnostics.HasErrors())
-        {
-            diagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, selected.Declaration.Span);
-        }
-
-        if (diagnostics.HasErrors() || bound.Function is null)
+        CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(projectPath, projectSnapshot, snapshots, selected.Callable.Symbol, selected.Declaration.Span);
+        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, selected.Callable.Symbol, selected.Declaration, visible,
+            snapshots, request.Stage, diagnostics, cancellationToken);
+        if (diagnostics.HasErrors() || document is null)
         {
             return Complete(selected.Declaration.Span, null);
         }
 
-        BoundFunction function = bound.Function;
-        BoundFunction identified = new(function.Accessibility, selected.Callable.Symbol, function.ReturnType, function.Parameters, function.Body);
-        IRFunction structured = BoundFunctionIRConverter.Convert(identified, cancellationToken);
-        InspectionDocument document = request.Stage switch
-        {
-            InspectionStage.StructuredIR => StructuredIRFormatter.Format(structured, cancellationToken),
-            InspectionStage.LoweredIR => LoweredIRFormatter.Format(IRFunctionLowerer.Lower(structured, cancellationToken), cancellationToken),
-            _ => throw new ArgumentOutOfRangeException(nameof(request))
-        };
         return Complete(selected.Declaration.Span, document);
 
         CompilerInspectionResult Complete(SourceSpan? declaration, InspectionDocument? document)
@@ -207,32 +219,140 @@ public sealed class CompilerInspectionService
         }
 
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
-        FunctionBindResult bound = FunctionDeclarationBinder.Bind(selected.Declaration, diagnostics, visible, cancellationToken);
-        if (bound.Function is null && !diagnostics.HasErrors())
-        {
-            diagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, selected.Declaration.Span);
-        }
-
-        if (diagnostics.HasErrors() || bound.Function is null)
+        CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(context.ProjectPath, context.ProjectSnapshot, context.Sources,
+            selected.Callable.Symbol, selected.Declaration.Span);
+        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, selected.Callable.Symbol, selected.Declaration, visible,
+            context.Sources, stage, diagnostics, cancellationToken);
+        if (diagnostics.HasErrors() || document is null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span, null, selected.Callable.Name);
         }
 
-        BoundFunction function = bound.Function;
-        BoundFunction identified = new(function.Accessibility, selected.Callable.Symbol, function.ReturnType, function.Parameters, function.Body);
-        IRFunction structured = BoundFunctionIRConverter.Convert(identified, cancellationToken);
-        InspectionDocument document = Format(structured, stage, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span, document, selected.Callable.Name);
     }
 
-    private static InspectionDocument Format(IRFunction function, InspectionStage stage, CancellationToken cancellationToken) => stage switch
+    /// <summary>
+    /// Reuses a complete stage product or performs only the missing conversion and formatting work.
+    /// </summary>
+    private InspectionDocument? GetOrGenerateDocument(CompilerInspectionCacheKey cacheKey, string functionSymbol, FunctionDeclarationSyntax declaration,
+        IReadOnlyList<PackageCallable> visibleCallables, IReadOnlyList<SourceSnapshot> sources, InspectionStage stage,
+        IDiagnosticReporter diagnostics, CancellationToken cancellationToken)
     {
-        InspectionStage.StructuredIR => StructuredIRFormatter.Format(function, cancellationToken),
-        InspectionStage.LoweredIR => LoweredIRFormatter.Format(IRFunctionLowerer.Lower(function, cancellationToken), cancellationToken),
-        _ => throw new ArgumentOutOfRangeException(nameof(stage))
-    };
+        cancellationToken.ThrowIfCancellationRequested();
+        if (this.cache.TryGet(cacheKey, out CompilerInspectionCacheEntry cached))
+        {
+            ReplayBindingDiagnostics(cached.BindingDiagnostics, sources, diagnostics);
+            InspectionDocument? cachedDocument = stage == InspectionStage.StructuredIR ? cached.StructuredDocument : cached.LoweredDocument;
+            if (cachedDocument is not null)
+            {
+                return cachedDocument;
+            }
+
+            if (stage is InspectionStage.StructuredIR && cached.StructuredIR is not null)
+            {
+                InspectionDocument document = StructuredIRFormatter.Format(cached.StructuredIR, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                this.cache.StoreStructuredDocument(cacheKey, document);
+                return document;
+            }
+
+            if (stage is InspectionStage.LoweredIR && cached.LoweredIR is not null)
+            {
+                InspectionDocument document = LoweredIRFormatter.Format(cached.LoweredIR, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                this.cache.StoreLoweredDocument(cacheKey, document);
+                return document;
+            }
+
+            if (stage is InspectionStage.LoweredIR && cached.StructuredIR is not null)
+            {
+                LoweredFunction lowered = IRFunctionLowerer.Lower(cached.StructuredIR, cancellationToken);
+                InspectionDocument document = LoweredIRFormatter.Format(lowered, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                this.cache.StoreLowered(cacheKey, cached.StructuredIR, lowered, document, cached.BindingDiagnostics);
+                return document;
+            }
+        }
+
+        DiagnosticReporter bindingDiagnostics = new();
+        FunctionBindResult bound = FunctionDeclarationBinder.Bind(declaration, bindingDiagnostics, visibleCallables, cancellationToken);
+        if (bound.Function is null && !bindingDiagnostics.HasErrors())
+        {
+            bindingDiagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.Span);
+        }
+
+        if (bindingDiagnostics.HasErrors() || bound.Function is null)
+        {
+            diagnostics.CommitReporter(bindingDiagnostics);
+            return null;
+        }
+
+        BoundFunction function = bound.Function;
+        BoundFunction identified = new(function.Accessibility, functionSymbol, function.ReturnType, function.Parameters, function.Body);
+        IRFunction structured = BoundFunctionIRConverter.Convert(identified, cancellationToken);
+        IReadOnlyList<CachedInspectionDiagnostic> retainedDiagnostics = CacheDiagnostics(bindingDiagnostics.ReportDiagnostics());
+        if (stage is InspectionStage.StructuredIR)
+        {
+            InspectionDocument document = StructuredIRFormatter.Format(structured, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            this.cache.StoreStructured(cacheKey, structured, document, retainedDiagnostics);
+            diagnostics.CommitReporter(bindingDiagnostics);
+            return document;
+        }
+
+        LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structured, cancellationToken);
+        InspectionDocument loweredDocument = LoweredIRFormatter.Format(loweredFunction, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        this.cache.StoreLowered(cacheKey, structured, loweredFunction, loweredDocument, retainedDiagnostics);
+        diagnostics.CommitReporter(bindingDiagnostics);
+        return loweredDocument;
+    }
+
+    private static IReadOnlyList<CachedInspectionDiagnostic> CacheDiagnostics(IReadOnlyList<SushiDiagnostic> diagnostics)
+    {
+        CachedInspectionDiagnostic[] cached = [.. diagnostics.Select(diagnostic => new CachedInspectionDiagnostic(
+            diagnostic.Code,
+            diagnostic.Message,
+            diagnostic.Severity,
+            Path.GetFullPath(diagnostic.Span.Snapshot.Uri.LocalPath),
+            diagnostic.Span.Start,
+            diagnostic.Span.End))];
+        return Array.AsReadOnly(cached);
+    }
+
+    private static void ReplayBindingDiagnostics(IReadOnlyList<CachedInspectionDiagnostic> cachedDiagnostics,
+        IReadOnlyList<SourceSnapshot> sources, IDiagnosticReporter diagnostics)
+    {
+        StringComparer pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        DiagnosticReporter replayed = new();
+        foreach (CachedInspectionDiagnostic diagnostic in cachedDiagnostics)
+        {
+            SourceSnapshot? snapshot = sources.FirstOrDefault(source => pathComparer.Equals(
+                Path.GetFullPath(source.Uri.LocalPath), diagnostic.SourcePath));
+            if (snapshot is null)
+            {
+                throw new InvalidOperationException("A cached binding diagnostic does not belong to the current inspection context.");
+            }
+
+            SourceSpan span = new(snapshot, diagnostic.Start, diagnostic.End);
+            if (diagnostic.Severity is DiagnosticSeverity.Error)
+            {
+                replayed.GenerateErrorWithCustomMessage((ErrorType)diagnostic.Code, diagnostic.Message, span);
+            }
+            else if (diagnostic.Severity is DiagnosticSeverity.Warning)
+            {
+                replayed.GenerateWarningWithCustomMessage((WarningType)diagnostic.Code, diagnostic.Message, span);
+            }
+            else
+            {
+                throw new InvalidOperationException("The cached binding diagnostic has an unsupported severity.");
+            }
+        }
+
+        diagnostics.CommitReporter(replayed);
+    }
 
     private static Dictionary<string, SourceSnapshot> CollectOverrides(CompilerInspectionRequest request, CancellationToken cancellationToken)
     {
@@ -262,4 +382,9 @@ public sealed class CompilerInspectionService
     }
 
     private static StringComparer GetPathComparer() => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>
+    /// Releases compiler representations retained by this service.
+    /// </summary>
+    public void Dispose() => this.cache.Dispose();
 }
