@@ -423,7 +423,11 @@ public sealed class WorkspaceOrchestrator : IDisposable
             editorSnapshot = SourceSnapshot.FromText(documentUri, version, text);
 
             document.UpdateEditor(editorSnapshot);
-            
+            if (!document.IsCurrent(editorSnapshot))
+            {
+                return;
+            }
+
             this.CancelScheduledAnalysis(document);
         }
         finally
@@ -462,7 +466,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
         try
         {
             document = this.workspace.GetDocument(documentUri);
-            document.UpdateEditor(snapshot);     
+            document.UpdateEditor(snapshot);
+            if (!document.IsCurrent(snapshot))
+            {
+                return;
+            }
+
             this.ScheduleAnalysis(document, snapshot, editorAnalysisDebounce);
         }
         finally

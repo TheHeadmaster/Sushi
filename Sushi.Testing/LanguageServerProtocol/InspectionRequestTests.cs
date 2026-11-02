@@ -435,7 +435,7 @@ public class InspectionRequestTests
             SourceVersion = version,
             Position = new Position(1, 35),
             Stage = stage,
-            ProjectUri = projectUri
+            ProjectUri = projectUri is null ? null : DocumentUri.Parse(projectUri)
         };
 
         public Task<InspectFunctionResponse> Inspect(string stage, int version = 1, string? projectUri = null) => this.Handler.Handle(this.Request(stage, version, projectUri), CancellationToken.None);

@@ -1,6 +1,7 @@
-﻿#pragma warning disable CA1054, CA1056 // Protocol DTO URI fields are wire-format strings, validated at the request boundary.
+﻿#pragma warning disable CA1056 // LSP DocumentUri provides the protocol-specific URI converter shared with synchronization and semantic tokens.
 using MediatR;
 using OmniSharp.Extensions.JsonRpc;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace Sushi.LanguageServerProtocol;
@@ -12,9 +13,9 @@ namespace Sushi.LanguageServerProtocol;
 public sealed record InspectFunctionParams : IRequest<InspectFunctionResponse>
 {
     /// <summary>
-    /// Gets the selected local source URI.
+    /// Gets the selected source URI using the same LSP decoding as document synchronization and semantic tokens.
     /// </summary>
-    public string SourceUri { get; init; } = "";
+    public DocumentUri SourceUri { get; init; } = null!;
 
     /// <summary>
     /// Gets the editor version expected in the server workspace.
@@ -34,7 +35,7 @@ public sealed record InspectFunctionParams : IRequest<InspectFunctionResponse>
     /// <summary>
     /// Gets an optional explicit local project URI to disambiguate membership.
     /// </summary>
-    public string? ProjectUri { get; init; }
+    public DocumentUri? ProjectUri { get; init; }
 }
 
 /// <summary>
