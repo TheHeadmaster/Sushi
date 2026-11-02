@@ -23,7 +23,7 @@ public class CompilerInspectionServiceTests
         using TestProject project = await TestProject.Create(Simple);
         SourceSnapshot snapshot = project.Snapshot(Simple, 7);
         string[] files = Directory.GetFiles(project.DirectoryPath, "*", SearchOption.AllDirectories);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult structured = await service.InspectAsync(project.Request(snapshot), CancellationToken.None);
         CompilerInspectionResult lowered = await service.InspectAsync(project.Request(snapshot, InspectionStage.LoweredIR), CancellationToken.None);
 
@@ -108,7 +108,7 @@ public class CompilerInspectionServiceTests
     public async Task InspectionShouldReuseRepresentationsAcrossCompatibleRequests()
     {
         using TestProject project = await TestProject.Create(Simple);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot firstSnapshot = project.Snapshot(Simple, 7);
         CompilerInspectionResult structured = await service.InspectAsync(project.Request(firstSnapshot, marker: "Calculate"), CancellationToken.None);
         CompilerInspectionCacheKey cacheKey = CacheKey(structured);
@@ -166,7 +166,7 @@ public class CompilerInspectionServiceTests
     public async Task LoweredFirstShouldRetainStructuredIntermediateRepresentation()
     {
         using TestProject project = await TestProject.Create(Simple);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot snapshot = project.Snapshot(Simple);
         CompilerInspectionResult lowered = await service.InspectAsync(
             project.Request(snapshot, InspectionStage.LoweredIR, "Calculate"), CancellationToken.None);
@@ -204,7 +204,7 @@ public class CompilerInspectionServiceTests
         const string main = Header + "public int32 First() { return 1; }";
         const string dependency = Header + "public int32 Helper() { return 2; }";
         using TestProject project = await TestProject.Create(main, dependency);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot firstSnapshot = project.Snapshot(main, 4);
         CompilerInspectionResult first = await service.InspectAsync(project.Request(firstSnapshot, marker: "First"), CancellationToken.None);
         CompilerInspectionResult equivalent = await service.InspectAsync(
@@ -253,7 +253,7 @@ public class CompilerInspectionServiceTests
         const string callee = Header + "public int32 Helper(int32 value) { return value; }";
         const string changedCallee = Header + "public int32 Helper(bool value) { return 1; }";
         using TestProject project = await TestProject.Create(caller, callee);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot callerSnapshot = project.Snapshot(caller);
         SourceSnapshot calleeSnapshot = project.Snapshot(callee, 4, "B.sus");
         CompilerInspectionResult original = await service.InspectAsync(
@@ -289,7 +289,7 @@ public class CompilerInspectionServiceTests
     {
         using TestProject firstProject = await TestProject.Create(Simple);
         using TestProject secondProject = await TestProject.Create(Simple);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult first = await service.InspectAsync(
             firstProject.Request(firstProject.Snapshot(Simple), marker: "Calculate"), CancellationToken.None);
         CompilerInspectionResult second = await service.InspectAsync(
@@ -311,7 +311,7 @@ public class CompilerInspectionServiceTests
     {
         const string text = Header + "public int32 First() { return 1; } public int32 Second() { return 2; }";
         using TestProject project = await TestProject.Create(text);
-        CompilerInspectionService service = CompilerInspectionService.CreateForTesting(1);
+        using CompilerInspectionService service = CompilerInspectionService.CreateForTesting(1);
         SourceSnapshot snapshot = project.Snapshot(text);
         CompilerInspectionResult first = await service.InspectAsync(project.Request(snapshot, marker: "First"), CancellationToken.None);
         string firstText = first.Document!.Text;
@@ -344,7 +344,7 @@ public class CompilerInspectionServiceTests
     {
         const string invalid = Header + "public int32 Broken() { return absent; }";
         using TestProject project = await TestProject.Create(invalid);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult failed = await service.InspectAsync(project.Request(project.Snapshot(invalid)), CancellationToken.None);
         failed.Succeeded
             .Should()
@@ -354,7 +354,7 @@ public class CompilerInspectionServiceTests
             .Be(0);
 
         using CancellationTokenSource cancellation = new();
-        cancellation.Cancel();
+        await cancellation.CancelAsync();
         Func<Task> inspect = () => service.InspectAsync(project.Request(project.Snapshot(Simple)), cancellation.Token);
         await inspect
             .Should()
@@ -368,7 +368,7 @@ public class CompilerInspectionServiceTests
     public async Task ConcurrentInspectionRequestsShouldRemainIsolated()
     {
         using TestProject project = await TestProject.Create(Simple);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot firstSnapshot = project.Snapshot(Simple, 4);
         SourceSnapshot equivalentSnapshot = project.Snapshot(Simple, 5);
         string changed = Simple.Replace("value + 1", "value + 2", StringComparison.Ordinal);
@@ -416,7 +416,7 @@ public class CompilerInspectionServiceTests
         fullDiagnostics.HasErrors()
             .Should()
             .BeTrue();
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult result = await service.InspectAsync(project.Request(selected, stage, additional: [dependency]), CancellationToken.None);
         result.Succeeded
             .Should()
@@ -455,7 +455,7 @@ public class CompilerInspectionServiceTests
         using TestProject project = await TestProject.Create(caller, callee);
         SourceSnapshot callerSnapshot = project.Snapshot(caller, 10);
         SourceSnapshot calleeSnapshot = project.Snapshot(callee, 20, "B.sus");
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult first = await service.InspectAsync(project.Request(callerSnapshot, stage, additional: [calleeSnapshot]), CancellationToken.None);
         CompilerInspectionResult second = await service.InspectAsync(project.Request(calleeSnapshot, stage, additional: [callerSnapshot]), CancellationToken.None);
         second.Succeeded
@@ -478,7 +478,8 @@ public class CompilerInspectionServiceTests
     {
         using TestProject project = await TestProject.Create(Simple);
         SourceSnapshot snapshot = project.Snapshot(Simple);
-        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(snapshot), CancellationToken.None);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot), CancellationToken.None);
         InspectionDocument document = result.Document!;
         InspectionSymbolOccurrence reference = document.Occurrences.First(item =>
             !item.IsDefinition && item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Parameter, result.FunctionSymbol!, 0));
@@ -517,7 +518,7 @@ public class CompilerInspectionServiceTests
         using TestProject project = await TestProject.Create(firstText, secondText);
         SourceSnapshot firstSnapshot = project.Snapshot(firstText);
         SourceSnapshot secondSnapshot = project.Snapshot(secondText, fileName: "B.sus");
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult first = await service.InspectAsync(project.Request(firstSnapshot, additional: [secondSnapshot]), CancellationToken.None);
         CompilerInspectionResult second = await service.InspectAsync(project.Request(secondSnapshot, additional: [firstSnapshot]), CancellationToken.None);
         first.FunctionSymbol
@@ -547,7 +548,7 @@ public class CompilerInspectionServiceTests
         const string firstText = Header + "public int32 Value() { return 11; }";
         const string secondText = Header + "public int32 Value() { return 22; }";
         using TestProject project = await TestProject.Create(disk);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         SourceSnapshot firstSnapshot = project.Snapshot(firstText, 4);
         SourceSnapshot secondSnapshot = project.Snapshot(secondText, 4);
         CompilerInspectionResult first = await service.InspectAsync(project.Request(firstSnapshot), CancellationToken.None);
@@ -587,7 +588,7 @@ public class CompilerInspectionServiceTests
         using TestProject project = await TestProject.Create(caller, diskDependency);
         SourceSnapshot selected = project.Snapshot(caller);
         SourceSnapshot dependency = project.Snapshot(unsavedDependency, 9, "B.sus");
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult disk = await service.InspectAsync(project.Request(selected), CancellationToken.None);
         disk.Succeeded
             .Should()
@@ -616,7 +617,7 @@ public class CompilerInspectionServiceTests
         string text = Header + "/*" + new string('界', 200) + "*/\npublic int32 First() { return 1; }\npublic int32 Second() { return 2; }\n";
         using TestProject project = await TestProject.Create(text);
         SourceSnapshot snapshot = project.Snapshot(text);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult first = await service.InspectAsync(project.Request(snapshot, marker: "First"), CancellationToken.None);
         CompilerInspectionResult second = await service.InspectAsync(project.Request(snapshot, marker: "return 2"), CancellationToken.None);
         first.FunctionSymbol
@@ -649,7 +650,7 @@ public class CompilerInspectionServiceTests
         const string caller = Header + "public int32 Caller() { return Helper(); }";
         string helper = $"package {package}; namespace {ns}; {access} int32 Helper() {{ return 5; }}";
         using TestProject project = await TestProject.Create(caller, helper);
-        CompilerInspectionService service = new();
+        using CompilerInspectionService service = new();
         CompilerInspectionResult result = await service.InspectAsync(project.Request(project.Snapshot(caller)), CancellationToken.None);
         result.Succeeded
             .Should()
@@ -680,7 +681,8 @@ public class CompilerInspectionServiceTests
         string text = Header + $"public int32 Value() {{ {body} }}";
         using TestProject project = await TestProject.Create(text);
         SourceSnapshot snapshot = project.Snapshot(text, 5);
-        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(snapshot), CancellationToken.None);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot), CancellationToken.None);
         result.Succeeded
             .Should()
             .BeFalse();
@@ -706,7 +708,8 @@ public class CompilerInspectionServiceTests
     {
         using TestProject project = await TestProject.Create(text);
         SourceSnapshot snapshot = project.Snapshot(text);
-        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(snapshot, marker: "Value"), CancellationToken.None);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot, marker: "Value"), CancellationToken.None);
         result.Succeeded
             .Should()
             .BeFalse();
@@ -725,7 +728,8 @@ public class CompilerInspectionServiceTests
     {
         using TestProject project = await TestProject.Create(Simple, "namespace Example; public int32 Helper() { return 1; }");
         SourceSnapshot snapshot = project.Snapshot(Simple);
-        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(snapshot), CancellationToken.None);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot), CancellationToken.None);
         result.Succeeded
             .Should()
             .BeFalse();
@@ -739,7 +743,8 @@ public class CompilerInspectionServiceTests
     {
         using TestProject project = await TestProject.Create(Simple);
         await File.WriteAllTextAsync(project.ProjectPath, "name = 42");
-        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(project.Snapshot(Simple)), CancellationToken.None);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(project.Snapshot(Simple)), CancellationToken.None);
         result.Document
             .Should()
             .BeNull();
@@ -770,7 +775,7 @@ public class CompilerInspectionServiceTests
             _ => TestProject.Offset(snapshot, "Run")
         };
         CompilerInspectionRequest request = new(project.ProjectPath, snapshot, offset, InspectionStage.StructuredIR);
-        Func<Task> inspect = () => new CompilerInspectionService().InspectAsync(request, CancellationToken.None);
+        Func<Task> inspect = () => InspectWithDisposableService(request, CancellationToken.None);
         await inspect
             .Should()
             .ThrowAsync<ArgumentException>()
@@ -789,7 +794,7 @@ public class CompilerInspectionServiceTests
         CompilerInspectionRequest request = dependency
             ? project.Request(included, additional: [excluded])
             : project.Request(excluded);
-        Func<Task> inspect = () => new CompilerInspectionService().InspectAsync(request, CancellationToken.None);
+        Func<Task> inspect = () => InspectWithDisposableService(request, CancellationToken.None);
         await inspect
             .Should()
             .ThrowAsync<ArgumentException>()
@@ -803,7 +808,7 @@ public class CompilerInspectionServiceTests
         using TestProject project = await TestProject.Create(Simple);
         SourceSnapshot snapshot = project.Snapshot(Simple);
         SourceSnapshot duplicate = conflict ? project.Snapshot(Header + "public int32 Other() { return 1; }", 2) : snapshot;
-        Func<Task> inspect = () => new CompilerInspectionService().InspectAsync(project.Request(snapshot, additional: [duplicate]), CancellationToken.None);
+        Func<Task> inspect = () => InspectWithDisposableService(project.Request(snapshot, additional: [duplicate]), CancellationToken.None);
         await inspect
             .Should()
             .ThrowAsync<ArgumentException>()
@@ -815,12 +820,12 @@ public class CompilerInspectionServiceTests
     {
         using TestProject project = await TestProject.Create(Simple);
         SourceSnapshot absent = project.Snapshot(Simple, fileName: "Absent.sus");
-        Func<Task> missing = () => new CompilerInspectionService().InspectAsync(project.Request(absent), CancellationToken.None);
+        Func<Task> missing = () => InspectWithDisposableService(project.Request(absent), CancellationToken.None);
         await missing
             .Should()
             .ThrowAsync<ArgumentException>();
         SourceSnapshot remote = SourceSnapshot.FromText(new Uri("https://example.test/Source.sus"), 1, Simple);
-        Func<Task> invalid = () => new CompilerInspectionService().InspectAsync(project.Request(remote), CancellationToken.None);
+        Func<Task> invalid = () => InspectWithDisposableService(project.Request(remote), CancellationToken.None);
         await invalid
             .Should()
             .ThrowAsync<ArgumentException>();
@@ -855,11 +860,11 @@ public class CompilerInspectionServiceTests
         CompilerInspectionRequest request = new("nonexistent.susproj", snapshot, 0, InspectionStage.LoweredIR);
         using CancellationTokenSource cancellation = new();
         await cancellation.CancelAsync();
-        Func<Task> inspect = () => new CompilerInspectionService().InspectAsync(request, cancellation.Token);
+        Func<Task> inspect = () => InspectWithDisposableService(request, cancellation.Token);
         await inspect
             .Should()
             .ThrowAsync<OperationCanceledException>();
-        Func<Task> missing = () => new CompilerInspectionService().InspectAsync(null!, CancellationToken.None);
+        Func<Task> missing = () => InspectWithDisposableService(null!, CancellationToken.None);
         await missing
             .Should()
             .ThrowAsync<ArgumentNullException>();
@@ -868,6 +873,13 @@ public class CompilerInspectionServiceTests
     private static CompilerInspectionCacheKey CacheKey(CompilerInspectionResult result)
         => CompilerInspectionCache.CreateKey(result.Context.ProjectPath, result.Context.ProjectSnapshot, result.Context.Sources,
             result.FunctionSymbol!, result.Declaration!.Value);
+
+    private static async Task<CompilerInspectionResult> InspectWithDisposableService(CompilerInspectionRequest request,
+        CancellationToken cancellationToken)
+    {
+        using CompilerInspectionService service = new();
+        return await service.InspectAsync(request, cancellationToken);
+    }
 
     private sealed class TestProject(string directory) : IDisposable
     {

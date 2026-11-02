@@ -105,7 +105,8 @@ public class InspectionRequestTests
             .Be(1);
         CompilerInspectionRequest request = new(project.ProjectPath, captured.Selected,
             captured.Selected.GetByteOffset(1, 35), InspectionStage.StructuredIR);
-        CompilerInspectionResult old = await new CompilerInspectionService().InspectAsync(request, CancellationToken.None);
+        using CompilerInspectionService inspection = new();
+        CompilerInspectionResult old = await inspection.InspectAsync(request, CancellationToken.None);
         old.Document!.Text
             .Should()
             .Contain("input + 1");
@@ -392,7 +393,8 @@ public class InspectionRequestTests
         string changedCallee = callee.Replace("input + 1", "input + 99", StringComparison.Ordinal);
         await File.WriteAllTextAsync(Path.Combine(project.DirectoryPath, "Sources", "B.sus"), changedCallee);
 
-        InspectionDefinitionHandler handler = new(new CompilerInspectionService(), project.Artifacts);
+        using CompilerInspectionService inspection = new();
+        InspectionDefinitionHandler handler = new(inspection, project.Artifacts);
         InspectionDefinitionParams request = new()
         {
             DocumentUri = DocumentUri.Parse(response.DocumentUri!), ArtifactId = response.ArtifactId!, Position = new Position(line, character)
@@ -474,7 +476,8 @@ public class InspectionRequestTests
         InspectionSymbolOccurrence reference = artifact.Result.Document!.Occurrences.Single(item =>
             item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Function, "__sushi_package_function_1") && !item.IsDefinition);
         (int line, int character) = InspectionTextCoordinates.GetPosition(artifact.Result.Document.Text, reference.Start)!.Value;
-        InspectionDefinitionResponse target = await new InspectionDefinitionHandler(new CompilerInspectionService(), project.Artifacts).Handle(
+        using CompilerInspectionService inspection = new();
+        InspectionDefinitionResponse target = await new InspectionDefinitionHandler(inspection, project.Artifacts).Handle(
             new InspectionDefinitionParams { DocumentUri = DocumentUri.Parse(response.DocumentUri!), ArtifactId = response.ArtifactId!, Position = new Position(line, character) },
             CancellationToken.None);
         target.Found
@@ -500,7 +503,8 @@ public class InspectionRequestTests
         InspectionDocument document = artifact.Result.Document!;
         InspectionSymbolOccurrence occurrence = document.Occurrences.First(item => item.IsDefinition);
         (int line, int character) = InspectionTextCoordinates.GetPosition(document.Text, occurrence.Start)!.Value;
-        InspectionDefinitionHandler handler = new(new CompilerInspectionService(), project.Artifacts);
+        using CompilerInspectionService inspection = new();
+        InspectionDefinitionHandler handler = new(inspection, project.Artifacts);
         InspectionDefinitionResponse forged = await handler.Handle(new InspectionDefinitionParams
         {
             DocumentUri = DocumentUri.Parse("sushi-inspect://other/forged/F.structuredIR"), ArtifactId = response.ArtifactId!, Position = new Position(line, character)
