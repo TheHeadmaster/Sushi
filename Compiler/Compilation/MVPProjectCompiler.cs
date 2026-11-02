@@ -1,11 +1,9 @@
 ﻿
-using Microsoft.Extensions.FileSystemGlobbing;
 using Sushi.Analysis;
 using Sushi.Backends.Native;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
-using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
 
@@ -43,11 +41,11 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         ArgumentException.ThrowIfNullOrEmpty(projectOrFolderPath);
         cancellationToken.ThrowIfCancellationRequested();
 
-        string projectPath = ResolveProjectPath(projectOrFolderPath);
+        string projectPath = ProjectSourceLoader.ResolveProjectPath(projectOrFolderPath, cancellationToken);
         string projectDirectory = Path.GetDirectoryName(projectPath)
             ?? throw new InvalidOperationException($"Project \"{projectPath}\" has no containing directory.");
 
-        SourceSnapshot projectSnapshot = await LoadSnapshot(projectPath, cancellationToken);
+        SourceSnapshot projectSnapshot = await ProjectSourceLoader.LoadSnapshot(projectPath, cancellationToken);
         IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
 
         ProjectAnalysisResult projectResult = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(
@@ -61,7 +59,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         ProjectDefinition project = projectResult.Project
             ?? throw new InvalidOperationException("Project analysis succeeded without producing a project definition.");
 
-        IReadOnlyList<string> sourcePaths = DiscoverSourcePaths(projectDirectory, project);
+        IReadOnlyList<string> sourcePaths = ProjectSourceLoader.DiscoverSourcePaths(projectDirectory, project, cancellationToken);
 
         if (sourcePaths.Count == 0)
         {
@@ -74,7 +72,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            SourceSnapshot snapshot = await LoadSnapshot(sourcePath, cancellationToken);
+            SourceSnapshot snapshot = await ProjectSourceLoader.LoadSnapshot(sourcePath, cancellationToken);
             SourceAnalysisResult source = (SourceAnalysisResult)await this.sourceAnalyzer.AnalyzeDeclarations(
                 snapshot, diagnosticReporter, cancellationToken);
 
@@ -100,7 +98,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             return Failed(diagnosticReporter);
         }
 
-        IReadOnlyList<ProjectCallable> catalog = CollectProjectCallables(sources, diagnosticReporter, cancellationToken);
+        IReadOnlyList<ProjectCallable> catalog = ProjectCallableCatalog.Collect(sources, diagnosticReporter, cancellationToken);
 
         if (diagnosticReporter.HasErrors())
         {
@@ -108,7 +106,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         }
 
         SourceAnalysisResult rootSource = sources.Single(source => ReferenceEquals(source.Snapshot, root.Declaration.Span.Snapshot));
-        IReadOnlyList<PackageCallable> rootCallables = SelectVisibleCallables(rootSource, catalog);
+        IReadOnlyList<PackageCallable> rootCallables = ProjectCallableCatalog.SelectVisible(rootSource, catalog, cancellationToken);
 
         LoweredFunction? entry = BindAndLowerRootLifecycleMethod(
             root.Entry, "__sushi_root_entry", rootCallables, diagnosticReporter, cancellationToken);
@@ -123,7 +121,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            IReadOnlyList<PackageCallable> visible = SelectVisibleCallables(item.Source, catalog);
+            IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(item.Source, catalog, cancellationToken);
             FunctionBindResult result = FunctionDeclarationBinder.Bind(item.Declaration, diagnosticReporter, visible, cancellationToken);
 
             if (result.Function is null)
@@ -131,7 +129,7 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
                 continue;
             }
 
-            if (!BelongsToSameScope(item.Source, rootSource)
+            if (!ProjectCallableCatalog.BelongsToSameScope(item.Source, rootSource)
                 || item.Callable.Function.Accessibility is Accessibility.Private or Accessibility.Protected)
             {
                 continue;
@@ -160,139 +158,12 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
     private static MVPCompilationResult Failed(IDiagnosticReporter diagnosticReporter)
         => new(diagnosticReporter.ReportDiagnostics(), executable: null);
 
-    private static IReadOnlyList<ProjectCallable> CollectProjectCallables(
-        IReadOnlyList<SourceAnalysisResult> sources,
-        IDiagnosticReporter diagnosticReporter,
-        CancellationToken cancellationToken)
-    {
-        List<ProjectCallable> catalog = [];
-
-        foreach (SourceAnalysisResult source in sources)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            SourceFileSyntax syntax = (SourceFileSyntax)source.SyntaxTree.Root;
-
-            if (source.Functions.Count != syntax.FunctionDeclarations.Count)
-            {
-                diagnosticReporter.GenerateErrorWithCustomMessage(
-                    ErrorType.UnsupportedMVPExpression,
-                    "A project function has a signature unsupported by the current executable subset.",
-                    syntax.Span);
-
-                continue;
-            }
-
-            for (int i = 0; i < syntax.FunctionDeclarations.Count; i++)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                BoundFunction signature = source.Functions[i];
-                FunctionDeclarationSyntax declaration = syntax.FunctionDeclarations[i];
-                string symbol = $"__sushi_package_function_{catalog.Count}";
-
-                catalog.Add(new ProjectCallable(source, declaration, new PackageCallable(signature, symbol)));
-            }
-        }
-
-        return catalog;
-    }
-
-    private static IReadOnlyList<PackageCallable> SelectVisibleCallables(SourceAnalysisResult source, IReadOnlyList<ProjectCallable> catalog)
-        => [.. catalog
-            .Where(item => BelongsToSameScope(item.Source, source))
-            .Where(item => item.Callable.Function.Accessibility is not (Accessibility.Private or Accessibility.Protected))
-            .Select(item => item.Callable)];
-
-    private static bool BelongsToSameScope(SourceAnalysisResult left, SourceAnalysisResult right)
-        => left.Package is not null
-            && right.Package is not null
-            && left.Namespace is not null
-            && right.Namespace is not null
-            && StringComparer.Ordinal.Equals(left.Package.QualifiedName, right.Package.QualifiedName)
-            && StringComparer.Ordinal.Equals(left.Namespace.QualifiedName, right.Namespace.QualifiedName);
-
-    private static string ResolveProjectPath(string projectOrFolderPath)
-    {
-        string path = Path.GetFullPath(projectOrFolderPath);
-
-        if (File.Exists(path))
-        {
-            string extension = Path.GetExtension(path);
-
-            if (extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase))
-            {
-                return path;
-            }
-
-            if (extension.Equals(".susln", StringComparison.OrdinalIgnoreCase))
-            {
-                throw new NotSupportedException("Solution compilation is not supported by the executable MVP. Compile a .susproj directly.");
-            }
-
-            throw new ArgumentException($"\"{path}\" is not a Sushi project file.", nameof(projectOrFolderPath));
-        }
-
-        if (!Directory.Exists(path))
-        {
-            throw new DirectoryNotFoundException($"Project directory \"{path}\" does not exist.");
-        }
-
-        string[] projects = [.. Directory
-            .EnumerateFiles(path, "*.susproj", SearchOption.TopDirectoryOnly)
-            .OrderBy(project => project, StringComparer.Ordinal)];
-
-        return projects.Length switch
-        {
-            1 => projects[0],
-            0 => throw new InvalidOperationException($"Directory \"{path}\" does not contain a Sushi project file."),
-            _ => throw new InvalidOperationException($"Directory \"{path}\" contains multiple Sushi project files. Specify the project to compile explicitly.")
-        };
-    }
-
-    private static IReadOnlyList<string> DiscoverSourcePaths(string projectDirectory, ProjectDefinition project)
-    {
-        StringComparison comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        Matcher matcher = new(comparison);
-
-        foreach (string pattern in project.Build.Sources)
-        {
-            matcher.AddInclude(pattern);
-        }
-
-        foreach (string pattern in project.Source.Exclude)
-        {
-            matcher.AddExclude(pattern);
-        }
-
-        return
-        [
-            .. matcher
-                .GetResultsInFullPath(projectDirectory)
-                .Where(path => Path.GetExtension(path).Equals(".sus", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(path => path, StringComparer.Ordinal)
-        ];
-    }
-
     private static string GetMVPOutputPath(string projectDirectory, ProjectDefinition project)
     {
         string target = project.Build.DefaultTarget
             ?? throw new InvalidOperationException("The analyzed project does not have a default build target.");
 
         return Path.Combine(projectDirectory, "bin", target, project.Assembly);
-    }
-
-    private static async Task<SourceSnapshot> LoadSnapshot(string path, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-
-        string fullPath = Path.GetFullPath(path);
-        byte[] bytes = await File.ReadAllBytesAsync(fullPath, cancellationToken);
-
-        return SourceSnapshot.FromUtf8(new Uri(fullPath), version: null, bytes);
     }
 
     /// <summary>
@@ -353,6 +224,4 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
 
         return IRFunctionLowerer.Lower(structured, cancellationToken);
     }
-
-    private sealed record ProjectCallable(SourceAnalysisResult Source, FunctionDeclarationSyntax Declaration, PackageCallable Callable);
 }
