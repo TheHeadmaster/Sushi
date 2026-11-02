@@ -367,6 +367,103 @@ public class InspectionDocumentLookupTests
         }
     }
 
+    [TestCase(TestName = "Initialized LSP Binds Cross File Calls And Invalidates Caller Diagnostics From Unsaved Signatures")]
+    public async Task InitializedServerShouldBindProjectFunctionsAndRefreshAffectedCallers()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Project Diagnostics " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            string configuration = """
+                name = "Diagnostics"
+                assembly = "Diagnostics"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string caller = """
+                package Example;
+                namespace Example;
+
+                public int32 InspectMe(int32 input)
+                {
+                    int32 doubled = InspectMe2(input);
+
+                    if (doubled > 10)
+                    {
+                        return doubled;
+                    }
+
+                    return doubled + 1;
+                }
+                """;
+            string callee = """
+                package Example;
+                namespace Example;
+
+                public int32 InspectMe2(int32 input)
+                {
+                    return input * 2;
+                }
+                """;
+            string projectPath = Path.Combine(directory, "Diagnostics.susproj");
+            string callerPath = Path.Combine(sourcesDirectory, "InspectMe.sus");
+            string calleePath = Path.Combine(sourcesDirectory, "InspectMe2.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+
+            await using ServerSession session = new(directory);
+            await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "Diagnostics" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 7, text = caller } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 4, text = callee } });
+
+            JsonElement valid = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 0);
+            valid.GetArrayLength()
+                .Should()
+                .Be(0);
+
+            string changedSignature = callee.Replace("int32 input", "bool input", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 5 }, contentChanges = new[] { new { text = changedSignature } }
+            });
+            JsonElement invalidated = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() > 0);
+            invalidated.GetArrayLength()
+                .Should()
+                .BeGreaterThan(0);
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 6 }, contentChanges = new[] { new { text = callee } }
+            });
+            JsonElement restored = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 0);
+            restored.GetArrayLength()
+                .Should()
+                .Be(0);
+
+            Directory.Exists(Path.Combine(directory, "bin"))
+                .Should()
+                .BeFalse("diagnostic analysis must not invoke native compilation");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static Task<JsonElement> Inspect(ServerSession session, string uri, int version) => session.Request("sourceInspection/inspectFunction",
         new { sourceUri = uri, sourceVersion = version, position = new { line = 1, character = 25 }, stage = "structuredIR" });
 
@@ -450,6 +547,34 @@ public class InspectionDocumentLookupTests
                 && message.GetProperty("params").TryGetProperty("version", out JsonElement actual) && actual.ValueKind == JsonValueKind.Number
                 && actual.GetInt32() == version && message.GetProperty("params").GetProperty("diagnostics").GetArrayLength() > 0))
             {
+                this.notifications.Add(await this.ReadMessage());
+            }
+        }
+
+        public async Task<JsonElement> WaitForDiagnostics(string uri, int version, Func<JsonElement, bool> predicate)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+            ArgumentNullException.ThrowIfNull(predicate);
+            while (true)
+            {
+                int match = this.notifications.FindIndex(message => message.TryGetProperty("method", out JsonElement method)
+                    && method.GetString() == "textDocument/publishDiagnostics"
+                    && DocumentUri.Parse(message.GetProperty("params").GetProperty("uri").GetString()!).ToUri()
+                        .IsSamePath(DocumentUri.Parse(uri).ToUri())
+                    && message.GetProperty("params").TryGetProperty("version", out JsonElement actual)
+                    && actual.ValueKind == JsonValueKind.Number && actual.GetInt32() == version);
+                if (match >= 0)
+                {
+                    JsonElement diagnostics = this.notifications[match].GetProperty("params").GetProperty("diagnostics").Clone();
+                    this.notifications.RemoveAt(match);
+                    if (predicate(diagnostics))
+                    {
+                        return diagnostics;
+                    }
+
+                    continue;
+                }
+
                 this.notifications.Add(await this.ReadMessage());
             }
         }

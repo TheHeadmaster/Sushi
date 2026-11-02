@@ -10,6 +10,7 @@ using OmniSharpDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol
 using LSPRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
 using Sushi.Parsing;
@@ -34,13 +35,15 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
     private readonly DocumentAnalyzer analyzer = new();
 
+    private readonly ProjectDiagnosticAnalyzer projectDiagnosticAnalyzer = new();
+
     private readonly object foldersSyncRoot = new();
 
     private readonly SemaphoreSlim mutationGate = new(1, 1);
 
-    private sealed record AnalysisRequest(SourceDocument Document, SourceSnapshot Snapshot);
-
     private bool disposed;
+
+    private long workspaceGeneration;
 
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
@@ -58,22 +61,21 @@ public sealed class WorkspaceOrchestrator : IDisposable
     {
         ArgumentNullException.ThrowIfNull(workspaceFolders);
 
-        List<AnalysisRequest> analysisRequests;
-
         await this.mutationGate.WaitAsync(cancellationToken);
 
         try
         {
             this.ReplaceWorkspaceFolders(workspaceFolders);
 
-            analysisRequests = await this.UpdateSourceDocuments(cancellationToken);
+            await this.UpdateSourceDocuments(cancellationToken);
+            this.workspaceGeneration++;
         }
         finally
         {
             this.mutationGate.Release();
         }
 
-        await this.AnalyzeDocuments(analysisRequests, cancellationToken);
+        await this.AnalyzeWorkspace(cancellationToken);
     }
 
     public Task Start(ILanguageServerFacade languageServer, CancellationToken cancellationToken)
@@ -127,8 +129,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
         ArgumentNullException.ThrowIfNull(addedFolders);
         ArgumentNullException.ThrowIfNull(removedFolders);
 
-        List<AnalysisRequest> analysisRequests;
-
         await this.mutationGate.WaitAsync(cancellationToken);
 
         try
@@ -155,17 +155,18 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 }
             }
 
-            analysisRequests = await this.UpdateSourceDocuments(cancellationToken);
+            await this.UpdateSourceDocuments(cancellationToken);
+            this.workspaceGeneration++;
         }
         finally
         {
             this.mutationGate.Release();
         }
 
-        await this.AnalyzeDocuments(analysisRequests, cancellationToken);
+        await this.AnalyzeWorkspace(cancellationToken);
     }
 
-    private async Task<List<AnalysisRequest>> UpdateSourceDocuments(CancellationToken cancellationToken)
+    private async Task UpdateSourceDocuments(CancellationToken cancellationToken)
     {
         WorkspaceFolder[] folders;
 
@@ -175,7 +176,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
 
         List<Uri> discoveredDocuments = [];
-        List<AnalysisRequest> analysisRequests = [];
 
         EnumerationOptions enumerationOptions = new()
         {
@@ -220,7 +220,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 
                 document.UpdateDisk(diskSnapshot);
 
-                analysisRequests.Add(new AnalysisRequest(document, document.CurrentSnapshot));
             }
         }
 
@@ -232,7 +231,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
             if (!stillExists && !document.IsOpen)
             {
-                this.CancelScheduledAnalysis(document);
+                this.CancelScheduledAnalysis();
 
                 this.workspace.RemoveDocument(document.Uri);
 
@@ -240,17 +239,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
             }
         }
 
-        return analysisRequests;
-    }
-
-    private async Task AnalyzeDocuments(IEnumerable<AnalysisRequest> requests, CancellationToken cancellationToken)
-    {
-        foreach (AnalysisRequest request in requests)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            await this.AnalyzeDocument(request.Document, request.Snapshot, cancellationToken);
-        }
     }
 
     private static bool IsWorkspaceDocument(string filePath)
@@ -261,6 +249,9 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 || extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
                 || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool IsExtension(SourceSnapshot snapshot, string extension)
+        => Path.GetExtension(snapshot.Uri.LocalPath).Equals(extension, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Captures authoritative inspection inputs under the mutation gate, without retaining that gate during compilation.
@@ -428,14 +419,15 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            this.CancelScheduledAnalysis(document);
+            this.workspaceGeneration++;
+            this.CancelScheduledAnalysis();
         }
         finally
         {
             this.mutationGate.Release();
         }
 
-        await this.AnalyzeDocument(document, editorSnapshot, cancellationToken);
+        await this.AnalyzeWorkspace(cancellationToken);
     }
 
     /// <summary>
@@ -472,7 +464,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            this.ScheduleAnalysis(document, snapshot, editorAnalysisDebounce);
+            this.workspaceGeneration++;
+            this.ScheduleWorkspaceAnalysis(editorAnalysisDebounce, [documentUri]);
         }
         finally
         {
@@ -495,7 +488,6 @@ public sealed class WorkspaceOrchestrator : IDisposable
     public async Task SaveDocument([NotNull] Uri documentUri, CancellationToken cancellationToken)
     {
         SourceDocument document;
-        SourceSnapshot snapshot;
 
         await this.mutationGate.WaitAsync(cancellationToken);
 
@@ -506,15 +498,15 @@ public sealed class WorkspaceOrchestrator : IDisposable
             
             document.UpdateDisk(diskSnapshot);
 
-            snapshot = document.CurrentSnapshot;
-            this.CancelScheduledAnalysis(document);
+            this.workspaceGeneration++;
+            this.CancelScheduledAnalysis();
         }
         finally
         {
             this.mutationGate.Release();
         }
 
-        await this.AnalyzeDocument(document, snapshot, cancellationToken);
+        await this.AnalyzeWorkspace(cancellationToken);
     }
 
     private static async Task<SourceSnapshot> LoadDiskSnapshot(Uri documentUri, CancellationToken cancellationToken)
@@ -533,40 +525,68 @@ public sealed class WorkspaceOrchestrator : IDisposable
         return SourceSnapshot.FromUtf8(documentUri, version: null, bytes);
     }
 
-    private async Task AnalyzeDocument(SourceDocument document, SourceSnapshot snapshot, CancellationToken cancellationToken)
+    private async Task AnalyzeWorkspace(CancellationToken cancellationToken, IReadOnlyList<Uri>? affectedUris = null)
     {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(snapshot);
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        IDiagnosticReporter diagnosticReporter = new DiagnosticReporter();
-
-        AnalysisResult result = await this.analyzer.Analyze(snapshot, diagnosticReporter, cancellationToken);
-
-        cancellationToken.ThrowIfCancellationRequested();
+        WorkspaceAnalysisInput input;
 
         await this.mutationGate.WaitAsync(cancellationToken);
-
         try
         {
-            if (!this.workspace.TryGetDocument(document.Uri, out SourceDocument? currentDocument) || !ReferenceEquals(currentDocument, document))
+            input = new WorkspaceAnalysisInput(this.workspaceGeneration,
+                [.. this.workspace.Documents.Select(document => new DocumentSnapshot(document, document.CurrentSnapshot))]);
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        IReadOnlyList<SourceSnapshot> snapshots = [.. input.Documents.Select(item => item.Snapshot)];
+        bool analyzeEntireWorkspace = affectedUris is null || affectedUris.Any(uri =>
+            !Path.GetExtension(uri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase) || !File.Exists(uri.LocalPath));
+        IReadOnlyList<Uri>? effectiveAffectedUris = analyzeEntireWorkspace ? null : affectedUris;
+        List<ProjectDiagnosticResult> results = [.. await this.projectDiagnosticAnalyzer.AnalyzeAsync(snapshots, effectiveAffectedUris, cancellationToken)];
+        foreach (DocumentSnapshot item in input.Documents.Where(item => !IsExtension(item.Snapshot, ".sus")
+            && (effectiveAffectedUris is null || effectiveAffectedUris.Any(uri => uri.IsSamePath(item.Snapshot.Uri)))))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IDiagnosticReporter reporter = new DiagnosticReporter();
+            AnalysisResult analysis = await this.analyzer.Analyze(item.Snapshot, reporter, cancellationToken);
+            results.Add(new ProjectDiagnosticResult(analysis, reporter));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (this.workspaceGeneration != input.Generation
+                || input.Documents.Any(item => !item.Document.IsCurrent(item.Snapshot)))
             {
                 return;
             }
 
-            if (!document.TryUpdateAnalysis(result, diagnosticReporter))
+            foreach (ProjectDiagnosticResult result in results)
             {
-                return;
-            }
+                cancellationToken.ThrowIfCancellationRequested();
+                DocumentSnapshot? item = input.Documents.FirstOrDefault(candidate => ReferenceEquals(candidate.Snapshot, result.Analysis.Snapshot));
+                if (item is null || !item.Document.TryUpdateAnalysis(result.Analysis, result.Reporter))
+                {
+                    continue;
+                }
 
-            this.PublishDiagnostics(result, diagnosticReporter.ReportDiagnostics());
+                this.PublishDiagnostics(result.Analysis, result.Reporter.ReportDiagnostics());
+            }
         }
         finally
         {
             this.mutationGate.Release();
         }
     }
+
+    private sealed record WorkspaceAnalysisInput(long Generation, IReadOnlyList<DocumentSnapshot> Documents);
+
+    private sealed record DocumentSnapshot(SourceDocument Document, SourceSnapshot Snapshot);
 
     private static OmniSharpDiagnosticSeverity ToLspSeverity(DiagnosticSeverity severity)
     {
@@ -586,56 +606,60 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
     private readonly object analysisScheduleSyncRoot = new();
 
-    private readonly Dictionary<SourceDocument, CancellationTokenSource> scheduledAnalyses = [];
+    private CancellationTokenSource? scheduledWorkspaceAnalysis;
+
+    private HashSet<Uri>? scheduledAnalysisUris;
 
     private ILanguageServerFacade? languageServer;
 
-    private void ScheduleAnalysis(SourceDocument document, SourceSnapshot snapshot, TimeSpan delay)
+    private void ScheduleWorkspaceAnalysis(TimeSpan delay, IEnumerable<Uri> affectedUris)
     {
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(snapshot);
-
+        ArgumentNullException.ThrowIfNull(affectedUris);
         CancellationTokenSource cancellation = new();
+        Uri[] scope;
 
         lock (this.analysisScheduleSyncRoot)
         {
-            if (this.scheduledAnalyses.TryGetValue(document, out CancellationTokenSource? previous))
+            this.scheduledWorkspaceAnalysis?.Cancel();
+            this.scheduledAnalysisUris ??= [];
+            foreach (Uri uri in affectedUris)
             {
-                previous.Cancel();
+                this.scheduledAnalysisUris.Add(uri);
             }
 
-            this.scheduledAnalyses[document] = cancellation;
+            scope = [.. this.scheduledAnalysisUris];
+            this.scheduledWorkspaceAnalysis = cancellation;
         }
 
-        _ = this.RunScheduledAnalysis(document, snapshot, delay, cancellation);
+        _ = this.RunScheduledWorkspaceAnalysis(delay, cancellation, scope);
     }
 
-    private async Task RunScheduledAnalysis(SourceDocument document, SourceSnapshot snapshot, TimeSpan delay, CancellationTokenSource cancellation)
+    private async Task RunScheduledWorkspaceAnalysis(TimeSpan delay, CancellationTokenSource cancellation, IReadOnlyList<Uri> affectedUris)
     {
         try
         {
             await Task.Delay(delay, cancellation.Token);
-
-            await this.AnalyzeDocument(document, snapshot, cancellation.Token);
+            await this.AnalyzeWorkspace(cancellation.Token, affectedUris);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
-            // Expected when a newer snapshot supersedes this one.
+            // Expected when a newer workspace snapshot supersedes this analysis.
         }
         
 #pragma warning disable CA1031 // Do not catch general exception types
         catch (Exception exception)
         {
-            Log.Error(exception, "Unhandled exception while performing scheduled analysis for {DocumentUri}.", document.Uri);
+            Log.Error(exception, "Unhandled exception while performing scheduled project diagnostics.");
         }
 #pragma warning restore CA1031 // Do not catch general exception types
         finally
         {
             lock (this.analysisScheduleSyncRoot)
             {
-                if (this.scheduledAnalyses.TryGetValue(document, out CancellationTokenSource? current) && ReferenceEquals(current, cancellation))
+                if (ReferenceEquals(this.scheduledWorkspaceAnalysis, cancellation))
                 {
-                    this.scheduledAnalyses.Remove(document);
+                    this.scheduledWorkspaceAnalysis = null;
+                    this.scheduledAnalysisUris = null;
                 }
             }
 
@@ -643,16 +667,15 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
     }
 
-    private void CancelScheduledAnalysis(SourceDocument document)
+    private void CancelScheduledAnalysis()
     {
-        ArgumentNullException.ThrowIfNull(document);
-
         lock (this.analysisScheduleSyncRoot)
         {
-            if (this.scheduledAnalyses.Remove(document, out CancellationTokenSource? cancellation))
+            if (this.scheduledWorkspaceAnalysis is CancellationTokenSource cancellation)
             {
+                this.scheduledWorkspaceAnalysis = null;
+                this.scheduledAnalysisUris = null;
                 cancellation.Cancel();
-                cancellation.Dispose();
             }
         }
     }
@@ -724,6 +747,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
         ArgumentNullException.ThrowIfNull(changes);
 
         FileEvent[] fileEvents = [.. changes];
+        bool changed = false;
+        List<Uri> affectedUris = [];
 
         await this.mutationGate.WaitAsync(cancellationToken);
 
@@ -744,10 +769,18 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 {
                     case FileChangeType.Created:
                     case FileChangeType.Changed:
-                        await this.RefreshDiskDocument(documentUri, cancellationToken);
+                        if (await this.RefreshDiskDocument(documentUri, cancellationToken))
+                        {
+                            changed = true;
+                            affectedUris.Add(documentUri);
+                        }
                         break;
                     case FileChangeType.Deleted:
-                        this.HandleDeletedDiskDocument(documentUri);
+                        if (this.HandleDeletedDiskDocument(documentUri))
+                        {
+                            changed = true;
+                            affectedUris.Add(documentUri);
+                        }
                         break;
                     default:
 #pragma warning disable CA2208 // Instantiate argument exceptions correctly
@@ -755,19 +788,28 @@ public sealed class WorkspaceOrchestrator : IDisposable
 #pragma warning restore CA2208 // Instantiate argument exceptions correctly
                 }
             }
+
+            if (changed)
+            {
+                this.workspaceGeneration++;
+            }
         }
         finally
         {
             this.mutationGate.Release();
         }
+
+        if (changed)
+        {
+            this.ScheduleWorkspaceAnalysis(fileSystemAnalysisDebounce, affectedUris);
+        }
     }
 
-    private async Task RefreshDiskDocument(Uri documentUri, CancellationToken cancellationToken)
+    private async Task<bool> RefreshDiskDocument(Uri documentUri, CancellationToken cancellationToken)
     {
         if (!File.Exists(documentUri.LocalPath))
         {
-            this.HandleDeletedDiskDocument(documentUri);
-            return;
+            return this.HandleDeletedDiskDocument(documentUri);
         }
 
         SourceSnapshot diskSnapshot;
@@ -778,30 +820,27 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
         catch (Exception _) when (_ is FileNotFoundException or DirectoryNotFoundException)
         {
-            this.HandleDeletedDiskDocument(documentUri);
-
-            return;
+            return this.HandleDeletedDiskDocument(documentUri);
         }
 
         SourceDocument document = this.workspace.GetOrAddDocument(documentUri, diskSnapshot);
-
         document.UpdateDisk(diskSnapshot);
 
         if (document.IsOpen)
         {
-            return;
+            return false;
         }
 
-        this.ScheduleAnalysis(document, diskSnapshot, fileSystemAnalysisDebounce);
+        return true;
     }
 
-    private void HandleDeletedDiskDocument(Uri documentUri)
+    private bool HandleDeletedDiskDocument(Uri documentUri)
     {
         if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? document))
         {
             this.ClearDiagnostics(documentUri);
 
-            return;
+            return false;
         }
 
         if (document.IsOpen)
@@ -809,12 +848,13 @@ public sealed class WorkspaceOrchestrator : IDisposable
             // The in-memory editor snapshot remains authoritative.
             // The stale disk snapshot will never become current while
             // the editor snapshot exists.
-            return;
+            return false;
         }
 
-        this.CancelScheduledAnalysis(document);
+        this.CancelScheduledAnalysis();
         this.workspace.RemoveDocument(documentUri);
         this.ClearDiagnostics(documentUri);
+        return true;
     }
 
     private void ClearDiagnostics(Uri documentUri)
@@ -847,7 +887,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
         {
             document = this.workspace.GetDocument(documentUri);
 
-            this.CancelScheduledAnalysis(document);
+            this.CancelScheduledAnalysis();
 
             if (!File.Exists(documentUri.LocalPath))
             {
@@ -865,18 +905,21 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
                 snapshot = document.CurrentSnapshot;
             }
+
+            this.workspaceGeneration++;
         }
         finally
         {
             this.mutationGate.Release();
         }
 
-        if (removed)
+        if (!removed)
         {
-            return;
+            ArgumentNullException.ThrowIfNull(document);
+            ArgumentNullException.ThrowIfNull(snapshot);
         }
 
-        await this.AnalyzeDocument(document, snapshot!, cancellationToken);
+        await this.AnalyzeWorkspace(cancellationToken);
     }
 
     public void Dispose()
@@ -884,6 +927,14 @@ public sealed class WorkspaceOrchestrator : IDisposable
         if (this.disposed)
         {
             return;
+        }
+
+        lock (this.analysisScheduleSyncRoot)
+        {
+            this.scheduledWorkspaceAnalysis?.Cancel();
+            this.scheduledWorkspaceAnalysis?.Dispose();
+            this.scheduledWorkspaceAnalysis = null;
+            this.scheduledAnalysisUris = null;
         }
 
         this.mutationGate.Dispose();
