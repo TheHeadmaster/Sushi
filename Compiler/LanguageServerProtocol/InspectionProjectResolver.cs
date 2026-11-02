@@ -1,4 +1,5 @@
-﻿using Sushi.Analysis;
+﻿using OmniSharp.Extensions.LanguageServer.Protocol;
+using Sushi.Analysis;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Source;
@@ -15,10 +16,10 @@ internal static class InspectionProjectResolver
     /// <summary>
     /// Finds all matching projects deterministically, retaining configuration failures rather than guessing membership.
     /// </summary>
-    internal static async Task<IReadOnlyList<Match>> Resolve(InspectionWorkspaceSnapshot inputs, string? explicitProjectUri, CancellationToken cancellationToken)
+    internal static async Task<IReadOnlyList<Match>> Resolve(InspectionWorkspaceSnapshot inputs, DocumentUri? explicitProjectUri, CancellationToken cancellationToken)
     {
-        Uri? explicitProject = null;
-        if (explicitProjectUri is not null && (!Uri.TryCreate(explicitProjectUri, UriKind.Absolute, out explicitProject) || !explicitProject.IsFile))
+        Uri? explicitProject = explicitProjectUri?.ToUri();
+        if (explicitProject is not null && !explicitProject.IsFile)
         {
             throw new InspectionInputException("The explicit project must identify a local .susproj file.");
         }

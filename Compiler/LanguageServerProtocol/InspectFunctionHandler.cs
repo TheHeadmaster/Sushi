@@ -1,5 +1,6 @@
 ﻿using MediatR;
 using OmniSharp.Extensions.JsonRpc;
+using OmniSharp.Extensions.LanguageServer.Protocol;
 using Serilog;
 using Sushi.Diagnostics;
 using Sushi.Inspection;
@@ -30,11 +31,12 @@ public sealed class InspectFunctionHandler(WorkspaceOrchestrator workspace, Comp
                 "loweredIR" => InspectionStage.LoweredIR,
                 _ => throw new InspectionInputException("Only Structured IR and Lowered IR inspection are supported.")
             };
-            if (!Uri.TryCreate(request.SourceUri, UriKind.Absolute, out Uri? sourceUri) || request.Position is null)
+            if (request.SourceUri is null || request.Position is null)
             {
                 throw new InspectionInputException("Inspection requires a source URI and an editor position.");
             }
 
+            Uri sourceUri = request.SourceUri.ToUri();
             InspectionWorkspaceSnapshot inputs = await workspace.CaptureInspectionInputs(sourceUri, request.SourceVersion, cancellationToken);
             int offset;
             try

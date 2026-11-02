@@ -99,7 +99,7 @@ public sealed class SourceDocument
     }
 
     /// <summary>
-    /// Updates the editor snapshot.
+    /// Updates the editor snapshot. Versioned open documents accept only newer editor versions; closing resets that lifecycle.
     /// </summary>
     /// <param name="snapshot">
     /// The new snapshot.
@@ -116,6 +116,12 @@ public sealed class SourceDocument
         
         lock (this.syncRoot)
         {
+            if (this.editorSnapshot?.Version is int currentVersion
+                && (snapshot.Version is not int incomingVersion || incomingVersion <= currentVersion))
+            {
+                return;
+            }
+
             this.editorSnapshot = snapshot;
         }
     }
