@@ -311,7 +311,7 @@ public class CompilerInspectionServiceTests
     {
         const string text = Header + "public int32 First() { return 1; } public int32 Second() { return 2; }";
         using TestProject project = await TestProject.Create(text);
-        CompilerInspectionService service = new(1);
+        CompilerInspectionService service = CompilerInspectionService.CreateForTesting(1);
         SourceSnapshot snapshot = project.Snapshot(text);
         CompilerInspectionResult first = await service.InspectAsync(project.Request(snapshot, marker: "First"), CancellationToken.None);
         string firstText = first.Document!.Text;

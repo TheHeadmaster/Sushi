@@ -21,7 +21,7 @@ public sealed class CompilerInspectionService : IDisposable
     /// Creates an inspection service with a bounded cache for this service lifetime.
     /// </summary>
     public CompilerInspectionService()
-        : this(CompilerInspectionCache.DefaultCapacity)
+        : this(new CompilerInspectionCache())
     {
     }
 
@@ -29,10 +29,12 @@ public sealed class CompilerInspectionService : IDisposable
     /// Creates an inspection service with a bounded cache for deterministic capacity tests.
     /// </summary>
     /// <param name="cacheCapacity">The maximum number of exact function input identities to retain.</param>
-    internal CompilerInspectionService(int cacheCapacity)
+    internal static CompilerInspectionService CreateForTesting(int cacheCapacity)
     {
-        this.cache = new CompilerInspectionCache(cacheCapacity);
+        return new CompilerInspectionService(new CompilerInspectionCache(cacheCapacity));
     }
+
+    private CompilerInspectionService(CompilerInspectionCache cache) => this.cache = cache;
 
     /// <summary>
     /// Provides cache state to focused compiler inspection tests without exposing performance counters publicly.
