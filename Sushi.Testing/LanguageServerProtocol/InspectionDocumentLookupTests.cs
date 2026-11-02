@@ -464,6 +464,118 @@ public class InspectionDocumentLookupTests
         }
     }
 
+    [TestCase(TestName = "Initialized LSP Publishes Project And Solution Diagnostics Once Per Analysis")]
+    public async Task InitializedServerShouldPublishProjectDiagnosticsOncePerAnalysis()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Diagnostic Ownership " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string configuration = """
+                name = "Ownership"
+                assembly = "Ownership"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string source = "package Example; namespace Example; public int32 Value() { return 1; }";
+            string projectPath = Path.Combine(directory, "Ownership.susproj");
+            string solutionPath = Path.Combine(directory, "Workspace.susln");
+            string sourcePath = Path.Combine(directory, "Value.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(solutionPath, "name = [");
+            await File.WriteAllTextAsync(sourcePath, source);
+            string projectUri = ExtensionUri(new Uri(projectPath));
+            string solutionUri = ExtensionUri(new Uri(solutionPath));
+            string sourceUri = ExtensionUri(new Uri(sourcePath));
+
+            await using ServerSession session = new(directory);
+            await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "Ownership" } }
+            });
+            await session.Notify("initialized", new { });
+
+            IReadOnlyList<JsonElement> initialProject = await session.CollectDiagnosticPublications(projectUri, null);
+            initialProject
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .Be(0);
+            IReadOnlyList<JsonElement> initialSolution = await session.CollectDiagnosticPublications(solutionUri, null);
+            initialSolution
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .BeGreaterThan(0);
+            IReadOnlyList<JsonElement> initialSource = await session.CollectDiagnosticPublications(sourceUri, null);
+            initialSource
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .Be(0);
+
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri = projectUri, languageId = "susproj", version = 1, text = configuration }
+            });
+            IReadOnlyList<JsonElement> openedProject = await session.CollectDiagnosticPublications(projectUri, 1);
+            openedProject
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .Be(0);
+
+            string invalidConfiguration = configuration.Replace("name = \"Ownership\"", "name = \"\"", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = projectUri, version = 2 }, contentChanges = new[] { new { text = invalidConfiguration } }
+            });
+            IReadOnlyList<JsonElement> invalidProject = await session.CollectDiagnosticPublications(projectUri, 2);
+            invalidProject
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .BeGreaterThan(0);
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = projectUri, version = 3 }, contentChanges = new[] { new { text = configuration } }
+            });
+            IReadOnlyList<JsonElement> restoredProject = await session.CollectDiagnosticPublications(projectUri, 3);
+            restoredProject
+                .Should()
+                .ContainSingle()
+                .Which
+                .GetArrayLength()
+                .Should()
+                .Be(0);
+
+            Directory.Exists(Path.Combine(directory, "bin"))
+                .Should()
+                .BeFalse("diagnostic analysis must not invoke native compilation");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static Task<JsonElement> Inspect(ServerSession session, string uri, int version) => session.Request("sourceInspection/inspectFunction",
         new { sourceUri = uri, sourceVersion = version, position = new { line = 1, character = 25 }, stage = "structuredIR" });
 
@@ -499,6 +611,7 @@ public class InspectionDocumentLookupTests
         private readonly Task<string> errors;
         private readonly List<JsonElement> notifications = [];
         private readonly CancellationTokenSource timeout = new(TimeSpan.FromSeconds(30));
+        private Task<JsonElement>? pendingRead;
         private int nextId;
 
         public ServerSession(string directory)
@@ -525,7 +638,7 @@ public class InspectionDocumentLookupTests
             await this.Send(method, parameters, id);
             while (true)
             {
-                JsonElement message = await this.ReadMessage();
+                JsonElement message = await this.ReadNextMessage();
                 if (message.TryGetProperty("id", out JsonElement responseId) && responseId.GetInt32() == id)
                 {
                     if (message.TryGetProperty("error", out JsonElement error))
@@ -547,7 +660,58 @@ public class InspectionDocumentLookupTests
                 && message.GetProperty("params").TryGetProperty("version", out JsonElement actual) && actual.ValueKind == JsonValueKind.Number
                 && actual.GetInt32() == version && message.GetProperty("params").GetProperty("diagnostics").GetArrayLength() > 0))
             {
-                this.notifications.Add(await this.ReadMessage());
+                this.notifications.Add(await this.ReadNextMessage());
+            }
+        }
+
+        public async Task<IReadOnlyList<JsonElement>> CollectDiagnosticPublications(string uri, int? version)
+        {
+            ArgumentNullException.ThrowIfNull(uri);
+            List<JsonElement> publications = [];
+            while (true)
+            {
+                int match = this.notifications.FindIndex(message => IsDiagnosticPublication(message, uri, version));
+                if (match < 0)
+                {
+                    break;
+                }
+
+                publications.Add(this.notifications[match].GetProperty("params").GetProperty("diagnostics").Clone());
+                this.notifications.RemoveAt(match);
+            }
+
+            while (publications.Count == 0)
+            {
+                JsonElement message = await this.ReadNextMessage();
+                if (IsDiagnosticPublication(message, uri, version))
+                {
+                    publications.Add(message.GetProperty("params").GetProperty("diagnostics").Clone());
+                }
+                else
+                {
+                    this.notifications.Add(message);
+                }
+            }
+
+            while (true)
+            {
+                Task<JsonElement> next = this.pendingRead ??= this.ReadMessage();
+                Task quietPeriod = Task.Delay(TimeSpan.FromMilliseconds(150), this.timeout.Token);
+                if (await Task.WhenAny(next, quietPeriod) != next)
+                {
+                    return publications;
+                }
+
+                this.pendingRead = null;
+                JsonElement message = await next;
+                if (IsDiagnosticPublication(message, uri, version))
+                {
+                    publications.Add(message.GetProperty("params").GetProperty("diagnostics").Clone());
+                }
+                else
+                {
+                    this.notifications.Add(message);
+                }
             }
         }
 
@@ -575,7 +739,43 @@ public class InspectionDocumentLookupTests
                     continue;
                 }
 
-                this.notifications.Add(await this.ReadMessage());
+                this.notifications.Add(await this.ReadNextMessage());
+            }
+        }
+
+        private static bool IsDiagnosticPublication(JsonElement message, string uri, int? version)
+        {
+            if (!message.TryGetProperty("method", out JsonElement method) || method.GetString() != "textDocument/publishDiagnostics")
+            {
+                return false;
+            }
+
+            JsonElement parameters = message.GetProperty("params");
+            if (!DocumentUri.Parse(parameters.GetProperty("uri").GetString()!).ToUri()
+                .IsSamePath(DocumentUri.Parse(uri).ToUri()))
+            {
+                return false;
+            }
+
+            bool hasVersion = parameters.TryGetProperty("version", out JsonElement actual);
+            return version is int expected
+                ? hasVersion && actual.ValueKind == JsonValueKind.Number && actual.GetInt32() == expected
+                : !hasVersion || actual.ValueKind == JsonValueKind.Null;
+        }
+
+        private async Task<JsonElement> ReadNextMessage()
+        {
+            Task<JsonElement> read = this.pendingRead ??= this.ReadMessage();
+            try
+            {
+                return await read;
+            }
+            finally
+            {
+                if (ReferenceEquals(this.pendingRead, read))
+                {
+                    this.pendingRead = null;
+                }
             }
         }
 

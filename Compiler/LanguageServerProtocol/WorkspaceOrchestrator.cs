@@ -547,7 +547,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
             !Path.GetExtension(uri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase) || !File.Exists(uri.LocalPath));
         IReadOnlyList<Uri>? effectiveAffectedUris = analyzeEntireWorkspace ? null : affectedUris;
         List<ProjectDiagnosticResult> results = [.. await this.projectDiagnosticAnalyzer.AnalyzeAsync(snapshots, effectiveAffectedUris, cancellationToken)];
-        foreach (DocumentSnapshot item in input.Documents.Where(item => !IsExtension(item.Snapshot, ".sus")
+        foreach (DocumentSnapshot item in input.Documents.Where(item => IsExtension(item.Snapshot, ".susln")
             && (effectiveAffectedUris is null || effectiveAffectedUris.Any(uri => uri.IsSamePath(item.Snapshot.Uri)))))
         {
             cancellationToken.ThrowIfCancellationRequested();
