@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
-import { InspectionDocuments, InspectionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
+import { InspectionDefinitionResponse, InspectionDocuments, InspectionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
 
 /** Registers commands and a content provider; generated text is never inserted into source or an untitled editor. */
 export function registerInspection(context: vscode.ExtensionContext, client: LanguageClient): void {
@@ -22,6 +22,14 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		vscode.workspace.registerTextDocumentContentProvider('sushi-inspect', {
 			provideTextDocumentContent: uri => documents.read(uri.toString())
 		}),
+		vscode.languages.registerDefinitionProvider(
+			{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
+			{ provideDefinition: (document, position, token) => provideDefinition(document, position, token) }
+		),
+		vscode.languages.registerDefinitionProvider(
+			{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' },
+			{ provideDefinition: (document, position, token) => provideDefinition(document, position, token) }
+		),
 		vscode.workspace.onDidCloseTextDocument(document => {
 			if (document.uri.scheme === 'sushi-inspect' && !changingLanguage.has(document.uri.toString())) {
 				// Language changes also emit close/open pairs. Check the settled document set before releasing ownership.
@@ -39,6 +47,93 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		vscode.commands.registerCommand('sushi.showStructuredIR', () => inspect('structuredIR')),
 		vscode.commands.registerCommand('sushi.showLoweredIR', () => inspect('loweredIR'))
 	);
+
+	async function provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.DefinitionLink[] | undefined> {
+		if (document.uri.scheme !== 'sushi-inspect' || !client.isRunning()) {
+			return undefined;
+		}
+		const origin = documents.get(document.uri.toString());
+		if (!origin || token.isCancellationRequested) {
+			return undefined;
+		}
+		let generatedTarget: { readonly uri: string; readonly artifactId: string } | undefined;
+		try {
+			const response = await client.sendRequest<InspectionDefinitionResponse>('sourceInspection/definition', {
+				documentUri: document.uri.toString(), artifactId: origin.artifactId,
+				position: { line: position.line, character: position.character }
+			}, token);
+			if (!response.found || !response.targetDocumentUri || !response.targetRange) {
+				if (response.error) {
+					output.appendLine(`Definition navigation failed: ${response.error}`);
+				}
+				return undefined;
+			}
+			if (token.isCancellationRequested) {
+				if (response.generated && response.targetDocumentUri && response.targetArtifactId) {
+					await release(response.targetArtifactId);
+				}
+				return undefined;
+			}
+
+			let target = documents.get(response.targetDocumentUri);
+			if (!target && response.text !== undefined && response.targetArtifactId && response.stage) {
+				if (response.generated) {
+					generatedTarget = { uri: response.targetDocumentUri, artifactId: response.targetArtifactId };
+				}
+				const content: InspectionSuccess = {
+					succeeded: true, artifactId: response.targetArtifactId, documentUri: response.targetDocumentUri,
+					stage: response.stage, text: response.text, functionLabel: response.functionLabel ?? '', sourceUri: '', sourceVersion: null
+				};
+				documents.add(content);
+				target = documents.get(response.targetDocumentUri);
+			}
+			if (!target || !response.targetArtifactId || !response.stage || target.artifactId !== response.targetArtifactId) {
+				if (generatedTarget) {
+					documents.remove(generatedTarget.uri);
+					await release(generatedTarget.artifactId);
+				}
+				output.appendLine('Definition navigation returned a target that is not available in the inspection document provider.');
+				return undefined;
+			}
+
+			const uri = vscode.Uri.parse(response.targetDocumentUri);
+			let targetDocument = await vscode.workspace.openTextDocument(uri);
+			const language = response.stage === 'structuredIR' ? 'sushi-structured-ir' : 'sushi-lowered-ir';
+			if (targetDocument.languageId !== language) {
+				changingLanguage.add(uri.toString());
+				try {
+					targetDocument = await vscode.languages.setTextDocumentLanguage(targetDocument, language);
+				} finally {
+					changingLanguage.delete(uri.toString());
+				}
+			}
+			const targetRange = toRange(response.targetRange);
+			const originRange = response.originRange ? toRange(response.originRange) : new vscode.Range(position, position);
+			if (token.isCancellationRequested) {
+				if (generatedTarget) {
+					documents.remove(generatedTarget.uri);
+					await release(generatedTarget.artifactId);
+				}
+				return undefined;
+			}
+			return [{
+				originSelectionRange: originRange, targetUri: uri, targetRange, targetSelectionRange: targetRange
+			}];
+		} catch (error) {
+			if (generatedTarget) {
+				documents.remove(generatedTarget.uri);
+				await release(generatedTarget.artifactId);
+			}
+			if (!token.isCancellationRequested) {
+				output.appendLine(`Definition navigation failed: ${String(error)}`);
+			}
+			return undefined;
+		}
+	}
+
+	function toRange(range: NonNullable<InspectionDefinitionResponse['targetRange']>): vscode.Range {
+		return new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
+	}
 
 	async function inspect(stage: InspectionStage): Promise<void> {
 		const editor = vscode.window.activeTextEditor;

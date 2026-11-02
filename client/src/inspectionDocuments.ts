@@ -18,6 +18,24 @@ export interface InspectionFailure {
 	readonly diagnostics: { code: string; message: string; line: number; character: number }[];
 }
 
+export interface InspectionDefinitionResponse {
+	readonly found: boolean;
+	readonly error?: string;
+	readonly targetDocumentUri?: string;
+	readonly targetArtifactId?: string;
+	readonly stage?: InspectionStage;
+	readonly targetRange?: InspectionRange;
+	readonly originRange?: InspectionRange;
+	readonly generated: boolean;
+	readonly text?: string;
+	readonly functionLabel?: string;
+}
+
+export interface InspectionRange {
+	readonly start: { readonly line: number; readonly character: number };
+	readonly end: { readonly line: number; readonly character: number };
+}
+
 export type InspectionResponse = InspectionSuccess | InspectionFailure;
 
 /** Frozen content owned by open virtual documents. Closing a document releases its server artifact separately. */
@@ -42,6 +60,10 @@ export class InspectionDocuments {
 			throw new Error('This inspection document is no longer available. Request inspection again.');
 		}
 		return result.text;
+	}
+
+	get(uri: string): Readonly<InspectionSuccess> | undefined {
+		return this.documents.get(uri);
 	}
 
 	remove(uri: string): string | undefined {

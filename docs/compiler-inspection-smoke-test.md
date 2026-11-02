@@ -9,10 +9,30 @@ This is a manual procedure, not a claim of completed GUI validation. The automat
 5. Right-click and invoke **Sushi: Show Structured IR**. Verify the source stays open with its selection intact and a new `sushi-inspect:` document opens beside it. Also invoke the same command from the Command Palette while the source editor is active.
 6. Verify the generated document is read-only, its language mode is **Sushi Structured IR**, and function/type/local/operator tokens receive highlighting. Try typing into it; no edit should be applied. Use **Developer: Inspect Editor Tokens and Scopes** to check grammar scopes if the current theme renders similar colors.
 7. Return focus to the source function and invoke **Sushi: Show Lowered IR**. Verify a different virtual document opens, with **Sushi Lowered IR** mode, block labels, SSA temporaries, explicit instructions, and appropriate highlighting. For a function with shifts, check the distinct `checked_shift <<` and `count_checked_shift >>` labels.
-8. Change `input + 1` to `input + 2` without saving. Invoke either command again. Verify the new document reflects `2` while the old document still contains `1`. When testing a call, unsaved edits to the dependency's supported signature should also be honored. The inspector reads project configuration from disk in this initial implementation.
+8. Change `input + 1` to `input + 2` without saving. Invoke either command again. Verify the new document reflects `2` while the old document still contains `1`. When testing a call, unsaved edits to the dependency's supported signature should also be honored.
 9. Put the cursor on whitespace outside all functions or within an activity lifecycle method. Request inspection and verify a useful explanation appears and no empty virtual document opens. Source errors and version mismatches should likewise fail clearly; retry after synchronization if requested.
 10. Verify inspection actions are absent from generated documents, `.susproj`/`.susln` editors, and unrelated languages. With a source included by multiple projects, verify the project picker requires an explicit choice. Try canceling an in-progress request.
 11. Close generated tabs and request inspection again. Closing releases their server-side metadata; changing language during initial opening must not release it. The session retains at most 32 artifacts, rejecting additional requests with a close-document explanation instead of replacing older artifacts. Shutdown releases the entire session.
 12. Compare the inspected project's files with the recorded baseline. No executable, native object, or link output should have been created by inspection. Compiler/server build artifacts from step 1 are separate and expected.
 
-The initial documents are frozen snapshots. Automatic refresh, Go to Definition, Ctrl+click navigation, hovers, and cross-stage navigation are deliberately deferred.
+The initial documents are frozen snapshots. Automatic refresh, hovers, and cross-stage navigation remain outside the current inspection feature.
+# Same-stage semantic navigation
+
+Use a real Sushi project containing package functions with parameters, local variables, control flow, and a call to a function in another source file.
+
+1. Open Structured IR for a function with parameters and local variables.
+2. Ctrl+click a parameter reference and verify it selects the parameter definition.
+3. Ctrl+click a local reference and verify it selects the matching local declaration.
+4. Open Lowered IR for a function containing control flow.
+5. Ctrl+click an SSA temporary use and verify it selects the defining instruction.
+6. Ctrl+click a branch target and verify it selects the corresponding basic-block label.
+7. Inspect a caller that references a function in a different source file.
+8. Ctrl+click the function reference and verify the callee opens as Structured IR.
+9. Repeat the cross-file test from Lowered IR and verify the callee opens as Lowered IR.
+10. Modify the callee source without saving, then navigate from an older caller inspection. Verify the target still reflects the caller artifact's captured snapshots.
+11. Verify F12 and Peek Definition use the same resolution behavior as Ctrl+click.
+12. Click whitespace or punctuation and verify there is no misleading navigation.
+13. Close generated documents, then confirm new inspections and navigation still work.
+14. Confirm navigation does not generate a native executable or object file.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. This procedure requires a graphical VS Code session; automated protocol and provider tests do not replace this manual check.

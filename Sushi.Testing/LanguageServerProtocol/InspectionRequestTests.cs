@@ -373,6 +373,154 @@ public class InspectionRequestTests
             .Be(0);
     }
 
+    [TestCase(InspectionStage.StructuredIR, "structuredIR", TestName = "Call Navigation Generates And Reuses Same Stage Target From Captured Sources")]
+    [TestCase(InspectionStage.LoweredIR, "loweredIR", TestName = "Lowered Call Navigation Keeps The Captured Stage And Snapshot")]
+    public async Task DefinitionNavigationShouldUseRetainedContextAndReuseCompatibleArtifacts(InspectionStage stage, string stageName)
+    {
+        const string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { return Helper(value); }";
+        const string callee = "package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }";
+        using Project project = await Project.Create(caller, callee);
+        InspectFunctionResponse response = await project.Inspect(stageName);
+        response.Succeeded
+            .Should()
+            .BeTrue();
+        InspectionArtifact sourceArtifact = project.Artifacts.Find(response.ArtifactId!)!;
+        InspectionDocument sourceDocument = sourceArtifact.Result.Document!;
+        InspectionSymbolOccurrence argument = sourceDocument.Occurrences.Single(item =>
+            item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Parameter, "__sushi_package_function_1", 0) && !item.IsDefinition);
+        (int line, int character) = InspectionTextCoordinates.GetPosition(sourceDocument.Text, argument.Start)!.Value;
+        string changedCallee = callee.Replace("input + 1", "input + 99", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(Path.Combine(project.DirectoryPath, "Sources", "B.sus"), changedCallee);
+
+        InspectionDefinitionHandler handler = new(new CompilerInspectionService(), project.Artifacts);
+        InspectionDefinitionParams request = new()
+        {
+            DocumentUri = DocumentUri.Parse(response.DocumentUri!), ArtifactId = response.ArtifactId!, Position = new Position(line, character)
+        };
+        InspectionDefinitionResponse target = await handler.Handle(request, CancellationToken.None);
+        target.Found
+            .Should()
+            .BeTrue();
+        target.Generated
+            .Should()
+            .BeTrue();
+        target.Stage
+            .Should()
+            .Be(stageName);
+        if (stage is InspectionStage.StructuredIR)
+        {
+            target.Text
+                .Should()
+                .Contain("input + 1")
+                .And
+                .NotContain("input + 99");
+        }
+        else
+        {
+            target.Text
+                .Should()
+                .Contain("checked +")
+                .And
+                .Contain("input")
+                .And
+                .NotContain("99");
+        }
+        target.TargetRange
+            .Should()
+            .NotBeNull();
+        target.TargetArtifactId
+            .Should()
+            .NotBe(response.ArtifactId);
+        project.Artifacts.Count
+            .Should()
+            .Be(2);
+
+        InspectionDefinitionResponse repeated = await handler.Handle(request, CancellationToken.None);
+        repeated.TargetArtifactId
+            .Should()
+            .Be(target.TargetArtifactId);
+        repeated.Generated
+            .Should()
+            .BeFalse();
+        project.Artifacts.Count
+            .Should()
+            .Be(2);
+
+        InspectionSymbolOccurrence functionReference = sourceDocument.Occurrences.Single(item =>
+            item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Function, "__sushi_package_function_1") && !item.IsDefinition);
+        (int functionLine, int functionCharacter) = InspectionTextCoordinates.GetPosition(sourceDocument.Text, functionReference.Start)!.Value;
+        InspectionDefinitionResponse functionTarget = await handler.Handle(request with
+        {
+            Position = new Position(functionLine, functionCharacter)
+        }, CancellationToken.None);
+        functionTarget.Found
+            .Should()
+            .BeTrue();
+        functionTarget.TargetArtifactId
+            .Should()
+            .Be(target.TargetArtifactId);
+        functionTarget.Generated
+            .Should()
+            .BeFalse();
+    }
+
+    [TestCase(TestName = "Same File Callee Uses The Same Lazy Same Stage Navigation")]
+    public async Task SameFileDefinitionShouldUseOriginatingStageAndContext()
+    {
+        const string source = "package Example; namespace Example;\npublic int32 Caller() { return Helper(5); } public int32 Helper(int32 input) { return input; }";
+        using Project project = await Project.Create(source);
+        InspectFunctionResponse response = await project.Inspect("structuredIR");
+        InspectionArtifact artifact = project.Artifacts.Find(response.ArtifactId!)!;
+        InspectionSymbolOccurrence reference = artifact.Result.Document!.Occurrences.Single(item =>
+            item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Function, "__sushi_package_function_1") && !item.IsDefinition);
+        (int line, int character) = InspectionTextCoordinates.GetPosition(artifact.Result.Document.Text, reference.Start)!.Value;
+        InspectionDefinitionResponse target = await new InspectionDefinitionHandler(new CompilerInspectionService(), project.Artifacts).Handle(
+            new InspectionDefinitionParams { DocumentUri = DocumentUri.Parse(response.DocumentUri!), ArtifactId = response.ArtifactId!, Position = new Position(line, character) },
+            CancellationToken.None);
+        target.Found
+            .Should()
+            .BeTrue();
+        target.Generated
+            .Should()
+            .BeTrue();
+        target.Stage
+            .Should()
+            .Be("structuredIR");
+        target.FunctionLabel
+            .Should()
+            .Be("Helper");
+    }
+
+    [TestCase(TestName = "Forged And Released Inspection Document URIs Do Not Resolve")]
+    public async Task DefinitionNavigationShouldRejectMismatchedAndReleasedArtifacts()
+    {
+        using Project project = await Project.Create(Source);
+        InspectFunctionResponse response = await project.Inspect("structuredIR");
+        InspectionArtifact artifact = project.Artifacts.Find(response.ArtifactId!)!;
+        InspectionDocument document = artifact.Result.Document!;
+        InspectionSymbolOccurrence occurrence = document.Occurrences.First(item => item.IsDefinition);
+        (int line, int character) = InspectionTextCoordinates.GetPosition(document.Text, occurrence.Start)!.Value;
+        InspectionDefinitionHandler handler = new(new CompilerInspectionService(), project.Artifacts);
+        InspectionDefinitionResponse forged = await handler.Handle(new InspectionDefinitionParams
+        {
+            DocumentUri = DocumentUri.Parse("sushi-inspect://other/forged/F.structuredIR"), ArtifactId = response.ArtifactId!, Position = new Position(line, character)
+        }, CancellationToken.None);
+        forged.Found
+            .Should()
+            .BeFalse();
+        await new ReleaseInspectionHandler(project.Artifacts).Handle(new ReleaseInspectionParams { ArtifactId = response.ArtifactId! }, CancellationToken.None);
+        InspectionDefinitionResponse released = await handler.Handle(new InspectionDefinitionParams
+        {
+            DocumentUri = DocumentUri.Parse(response.DocumentUri!), ArtifactId = response.ArtifactId!, Position = new Position(line, character)
+        }, CancellationToken.None);
+        released.Found
+            .Should()
+            .BeFalse();
+        released.Error
+            .Should()
+            .Contain("no longer available");
+    }
+
     private sealed class Project : IDisposable
     {
         private const string Configuration = """
@@ -391,11 +539,12 @@ public class InspectionRequestTests
         public WorkspaceOrchestrator Workspace { get; } = new();
         public InspectionArtifactStore Artifacts { get; }
         public InspectFunctionHandler Handler { get; }
+        public CompilerInspectionService Inspection { get; } = new();
 
         private Project(int capacity)
         {
             this.Artifacts = new InspectionArtifactStore(capacity);
-            this.Handler = new InspectFunctionHandler(this.Workspace, new CompilerInspectionService(), this.Artifacts);
+            this.Handler = new InspectFunctionHandler(this.Workspace, this.Inspection, this.Artifacts);
         }
 
         public static async Task<Project> Create(string source, string? dependency = null, bool secondProject = false,

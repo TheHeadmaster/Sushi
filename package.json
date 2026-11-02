@@ -168,7 +168,7 @@
         "watch": "tsc -p client/tsconfig.json -w",
         "lint": "eslint .",
         "vscode:prepublish": "npm run generate:syntax && npm run compile",
-        "test:inspection": "npm run compile && node --test client/test/inspectionDocuments.test.mjs client/test/inspectionCommands.test.mjs client/test/inspectionGrammar.test.mjs"
+        "test:inspection": "npm run generate:syntax && npm run compile && node --test client/test/inspectionDocuments.test.mjs client/test/inspectionCommands.test.mjs client/test/inspectionGrammar.test.mjs"
     },
     "dependencies": {
         "vscode-languageclient": "^9.0.1"

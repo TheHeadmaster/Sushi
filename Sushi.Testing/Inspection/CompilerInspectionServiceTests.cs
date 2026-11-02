@@ -175,6 +175,42 @@ public class CompilerInspectionServiceTests
             .Equal(new Uri(project.SourcePath("A.sus")), new Uri(project.SourcePath("B.sus")));
     }
 
+    [TestCase(TestName = "Semantic Resolver Uses Exact Identity And Half Open UTF16 Ranges")]
+    public async Task DefinitionResolverShouldMatchRecordedOccurrencesOnly()
+    {
+        using TestProject project = await TestProject.Create(Simple);
+        SourceSnapshot snapshot = project.Snapshot(Simple);
+        CompilerInspectionResult result = await new CompilerInspectionService().InspectAsync(project.Request(snapshot), CancellationToken.None);
+        InspectionDocument document = result.Document!;
+        InspectionSymbolOccurrence reference = document.Occurrences.First(item =>
+            !item.IsDefinition && item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Parameter, result.FunctionSymbol!, 0));
+
+        (InspectionSymbolOccurrence Origin, InspectionSymbolOccurrence Definition)? resolved =
+            InspectionDefinitionResolver.Resolve(document, reference.Start);
+        resolved
+            .Should()
+            .NotBeNull();
+        resolved!.Value.Origin.Should().Be(reference);
+        resolved.Value.Definition.Should().Be(document.Occurrences.Single(item => item.IsDefinition && item.Identity == reference.Identity));
+        InspectionDefinitionResolver.Resolve(document, reference.End)
+            .Should()
+            .BeNull();
+        InspectionDefinitionResolver.Resolve(document, -1)
+            .Should()
+            .BeNull();
+        InspectionDefinitionResolver.Resolve(document, document.Text.Length)
+            .Should()
+            .BeNull();
+    }
+
+    [TestCase("a😀b\r\n\r\nc", 0, 3, 3, TestName = "UTF16 Coordinates Count Supplementary Characters As Two Code Units")]
+    [TestCase("a\r\nb", 1, 0, 3, TestName = "UTF16 Coordinates Handle CRLF And Empty Lines")]
+    public void GeneratedTextCoordinatesShouldRoundTrip(string text, int line, int character, int expectedOffset)
+    {
+        InspectionTextCoordinates.GetOffset(text, line, character).Should().Be(expectedOffset);
+        InspectionTextCoordinates.GetPosition(text, expectedOffset).Should().Be((line, character));
+    }
+
     [TestCase(TestName = "Same Function Names In Distinct Declaration Contexts Keep Separate Symbols")]
     public async Task IdenticalNamesShouldRemainAnchoredToTheirSourceDeclarations()
     {

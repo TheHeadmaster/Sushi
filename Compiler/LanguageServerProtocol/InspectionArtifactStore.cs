@@ -74,6 +74,68 @@ public sealed class InspectionArtifactStore(int capacity = 32) : IDisposable
     }
 
     /// <summary>
+    /// Resolves a caller-supplied document URI only when it still names that exact session artifact.
+    /// </summary>
+    internal InspectionArtifact? Find(string id, string documentUri)
+    {
+        if (string.IsNullOrEmpty(id) || string.IsNullOrEmpty(documentUri))
+        {
+            return null;
+        }
+        if (!Uri.TryCreate(documentUri, UriKind.Absolute, out Uri? requested) || requested.Scheme != "sushi-inspect")
+        {
+            return null;
+        }
+
+        lock (this.syncRoot)
+        {
+            if (!this.artifacts.TryGetValue(id, out InspectionArtifact? artifact)
+                || !Uri.TryCreate(artifact.DocumentUri, UriKind.Absolute, out Uri? retained))
+            {
+                return null;
+            }
+
+            return Uri.Compare(requested, retained, UriComponents.AbsoluteUri, UriFormat.SafeUnescaped, StringComparison.Ordinal) == 0
+                ? artifact
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// Reuses an artifact only when it belongs to the same captured context, stage, and function identity.
+    /// </summary>
+    internal InspectionArtifact? FindCompatible(CompilerInspectionContext context, InspectionStage stage, string functionSymbol)
+    {
+        lock (this.syncRoot)
+        {
+            return this.artifacts.Values.FirstOrDefault(item => ReferenceEquals(item.Result.Context, context)
+                && item.Result.Stage == stage && StringComparer.Ordinal.Equals(item.Result.FunctionSymbol, functionSymbol));
+        }
+    }
+
+    /// <summary>
+    /// Atomically reuses a compatible target or retains the new result once generation has completed.
+    /// </summary>
+    internal InspectionArtifact AddOrFindCompatible(CompilerInspectionResult result, CancellationToken cancellationToken, out bool added)
+    {
+        lock (this.syncRoot)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            InspectionArtifact? existing = this.artifacts.Values.FirstOrDefault(item => ReferenceEquals(item.Result.Context, result.Context)
+                && item.Result.Stage == result.Stage && StringComparer.Ordinal.Equals(item.Result.FunctionSymbol, result.FunctionSymbol));
+            if (existing is not null)
+            {
+                added = false;
+                return existing;
+            }
+
+            added = true;
+            return this.Add(result, cancellationToken);
+        }
+    }
+
+    /// <summary>
     /// Releases a closed or abandoned artifact. Repeated releases are harmless.
     /// </summary>
     public void Release(string id)

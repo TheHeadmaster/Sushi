@@ -259,6 +259,114 @@ public class InspectionDocumentLookupTests
         }
     }
 
+    [TestCase(TestName = "Initialized LSP Resolves Lazy Cross File Definition From The Captured Snapshot")]
+    public async Task InitializedServerShouldResolveInspectionDefinitionRequest()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Navigation " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(directory, "Sources"));
+        try
+        {
+            string configuration = """
+                name = "Navigation"
+                assembly = "Navigation"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { return Helper(value); }";
+            string callee = "package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }";
+            string unsavedCallee = callee.Replace("input + 1", "input + 2", StringComparison.Ordinal);
+            string projectPath = Path.Combine(directory, "Navigation.susproj");
+            string callerPath = Path.Combine(directory, "Sources", "A.sus");
+            string calleePath = Path.Combine(directory, "Sources", "B.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+            await using ServerSession session = new(directory);
+            await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "Navigation" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 7, text = caller } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 4, text = unsavedCallee } });
+
+            JsonElement inspected = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 7,
+                position = new { line = 1, character = caller.Split('\n')[1].IndexOf("Caller", StringComparison.Ordinal) + 10 }, stage = "loweredIR"
+            });
+            inspected.GetProperty("succeeded").GetBoolean()
+                .Should()
+                .BeTrue(inspected.ToString());
+            string text = inspected.GetProperty("text").GetString()!;
+            int offset = text.IndexOf("arg0", StringComparison.Ordinal);
+            offset
+                .Should()
+                .BeGreaterThanOrEqualTo(0);
+            int line = text[..offset].Count(character => character == '\n');
+            int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+
+            string changedCallee = unsavedCallee.Replace("input + 2", "input + 99", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 5 }, contentChanges = new[] { new { text = changedCallee } }
+            });
+            await File.WriteAllTextAsync(projectPath, "name = false");
+            JsonElement definition = await session.Request("sourceInspection/definition", new
+            {
+                documentUri = inspected.GetProperty("documentUri").GetString(),
+                artifactId = inspected.GetProperty("artifactId").GetString(), position = new { line, character }
+            });
+            definition.GetProperty("found").GetBoolean()
+                .Should()
+                .BeTrue(definition.ToString());
+            definition.GetProperty("generated").GetBoolean()
+                .Should()
+                .BeTrue();
+            definition.GetProperty("stage").GetString()
+                .Should()
+                .Be("loweredIR");
+            definition.GetProperty("text").GetString()
+                .Should()
+                .Contain("checked +")
+                .And
+                .Contain("input")
+                .And
+                .Contain("2")
+                .And
+                .NotContain("99");
+            definition.GetProperty("targetRange").GetProperty("start").GetProperty("line").GetInt32()
+                .Should()
+                .BeGreaterThanOrEqualTo(0);
+
+            JsonElement reused = await session.Request("sourceInspection/definition", new
+            {
+                documentUri = inspected.GetProperty("documentUri").GetString(),
+                artifactId = inspected.GetProperty("artifactId").GetString(), position = new { line, character }
+            });
+            reused.GetProperty("generated").GetBoolean()
+                .Should()
+                .BeFalse();
+            reused.GetProperty("targetArtifactId").GetString()
+                .Should()
+                .Be(definition.GetProperty("targetArtifactId").GetString());
+            await session.Notify("sourceInspection/release", new { artifactId = definition.GetProperty("targetArtifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = inspected.GetProperty("artifactId").GetString() });
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static Task<JsonElement> Inspect(ServerSession session, string uri, int version) => session.Request("sourceInspection/inspectFunction",
         new { sourceUri = uri, sourceVersion = version, position = new { line = 1, character = 25 }, stage = "structuredIR" });
 

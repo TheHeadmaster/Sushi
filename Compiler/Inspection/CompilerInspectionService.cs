@@ -142,6 +142,98 @@ public sealed class CompilerInspectionService
         }
     }
 
+    /// <summary>
+    /// Generates one function representation from an already captured compilation context.
+    /// </summary>
+    /// <param name="context">The immutable project configuration and source snapshots to use.</param>
+    /// <param name="functionSymbol">The compiler-generated identity assigned in that context.</param>
+    /// <param name="stage">The representation stage retained by the originating artifact.</param>
+    /// <param name="cancellationToken">Cancels parsing, signature reconstruction, binding, and formatting.</param>
+    /// <returns>A representation or diagnostics for the requested function, retaining the original context.</returns>
+    /// <exception cref="InvalidOperationException">The retained context cannot reproduce its callable catalog.</exception>
+    public async Task<CompilerInspectionResult> InspectFunctionAsync(CompilerInspectionContext context, string functionSymbol,
+        InspectionStage stage, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrEmpty(functionSymbol);
+        if (stage is not (InspectionStage.StructuredIR or InspectionStage.LoweredIR))
+        {
+            throw new ArgumentOutOfRangeException(nameof(stage));
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        IDiagnosticReporter diagnostics = new DiagnosticReporter();
+        ProjectAnalysisResult projectAnalysis = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(context.ProjectSnapshot, diagnostics, cancellationToken);
+        if (diagnostics.HasErrors() || projectAnalysis.Project is null)
+        {
+            throw new InvalidOperationException("The retained project configuration cannot be analyzed for navigation.");
+        }
+
+        List<SourceAnalysisResult> sources = [];
+        foreach (SourceSnapshot snapshot in context.Sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            SourceAnalysisResult source = (SourceAnalysisResult)await this.sourceAnalyzer.AnalyzeDeclarations(snapshot, diagnostics, cancellationToken);
+            sources.Add(source);
+        }
+
+        IReadOnlyList<ProjectCallable> catalog = ProjectCallableCatalog.Collect(sources, diagnostics, cancellationToken);
+        if (diagnostics.HasErrors() || catalog.Count != context.Functions.Count)
+        {
+            throw new InvalidOperationException("The retained source snapshots cannot reproduce the originating callable catalog.");
+        }
+
+        foreach (ProjectCallable callable in catalog)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!context.Functions.TryGetValue(callable.Callable.Symbol, out SourceSpan retained)
+                || !ReferenceEquals(retained.Snapshot, callable.Declaration.Span.Snapshot)
+                || retained.Start != callable.Declaration.Span.Start || retained.End != callable.Declaration.Span.End)
+            {
+                throw new InvalidOperationException("The retained source snapshots do not match the originating callable identities.");
+            }
+        }
+
+        if (!context.Functions.TryGetValue(functionSymbol, out SourceSpan targetDeclaration))
+        {
+            throw new InvalidOperationException("The requested compiler-generated function identity is not present in the retained context.");
+        }
+
+        ProjectCallable? selected = catalog.FirstOrDefault(item => ReferenceEquals(item.Declaration.Span.Snapshot, targetDeclaration.Snapshot)
+            && item.Declaration.Span.Start == targetDeclaration.Start && item.Declaration.Span.End == targetDeclaration.End);
+        if (selected is null || !StringComparer.Ordinal.Equals(selected.Callable.Symbol, functionSymbol))
+        {
+            throw new InvalidOperationException("The requested compiler-generated function identity does not match its retained declaration.");
+        }
+
+        IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
+        FunctionBindResult bound = FunctionDeclarationBinder.Bind(selected.Declaration, diagnostics, visible, cancellationToken);
+        if (bound.Function is null && !diagnostics.HasErrors())
+        {
+            diagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, selected.Declaration.Span);
+        }
+
+        if (diagnostics.HasErrors() || bound.Function is null)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span, null, selected.Callable.Name);
+        }
+
+        BoundFunction function = bound.Function;
+        BoundFunction identified = new(function.Accessibility, selected.Callable.Symbol, function.ReturnType, function.Parameters, function.Body);
+        IRFunction structured = BoundFunctionIRConverter.Convert(identified, cancellationToken);
+        InspectionDocument document = Format(structured, stage, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span, document, selected.Callable.Name);
+    }
+
+    private static InspectionDocument Format(IRFunction function, InspectionStage stage, CancellationToken cancellationToken) => stage switch
+    {
+        InspectionStage.StructuredIR => StructuredIRFormatter.Format(function, cancellationToken),
+        InspectionStage.LoweredIR => LoweredIRFormatter.Format(IRFunctionLowerer.Lower(function, cancellationToken), cancellationToken),
+        _ => throw new ArgumentOutOfRangeException(nameof(stage))
+    };
+
     private static Dictionary<string, SourceSnapshot> CollectOverrides(CompilerInspectionRequest request, CancellationToken cancellationToken)
     {
         Dictionary<string, SourceSnapshot> snapshots = new(GetPathComparer());
