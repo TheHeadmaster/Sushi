@@ -7,5 +7,7 @@ public enum InspectionSymbolKind
 {
     Function,
     Parameter,
-    Local
+    Local,
+    BasicBlock,
+    Temporary
 }

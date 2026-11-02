@@ -7,5 +7,6 @@
 /// </summary>
 public enum InspectionStage
 {
-    StructuredIR
+    StructuredIR,
+    LoweredIR
 }
