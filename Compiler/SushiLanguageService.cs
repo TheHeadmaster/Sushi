@@ -7,6 +7,7 @@ using Serilog;
 using Sushi.LanguageServerProtocol;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
+using Sushi.Inspection;
 using DiagnosticSeverity = Sushi.Diagnostics.DiagnosticSeverity;
 
 namespace Sushi;
@@ -66,7 +67,8 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
     /// </returns>
     private async Task RunLanguageServer(Stream input, Stream output)
     {
-        LanguageServer server = await LanguageServer.From(options => options
+        using InspectionArtifactStore artifacts = new();
+        using LanguageServer server = await LanguageServer.From(options => options
             .WithInput(input)
             .WithOutput(output)
             .WithServerInfo(new ServerInfo
@@ -80,16 +82,25 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
             {
                 services.AddSingleton(this);
                 services.AddSingleton(this.workspace);
+                services.AddSingleton<CompilerInspectionService>();
+                services.AddSingleton(artifacts);
             })
             .WithHandler<WorkspaceFoldersHandler>()
             .WithHandler<WatchedFilesHandler>()
             .WithHandler<TextDocumentSyncHandler>()
             .WithHandler<SushiSemanticTokensHandler>()
+            .WithHandler<InspectFunctionHandler>()
+            .WithHandler<ReleaseInspectionHandler>()
         );
 
-        await server.WaitForExit;
-
-        this.workspace.Dispose();
+        try
+        {
+            await server.WaitForExit;
+        }
+        finally
+        {
+            this.workspace.Dispose();
+        }
     }
 
     /// <summary>

@@ -29,6 +29,11 @@ public sealed class CompilerInspectionResult
     public string? FunctionSymbol => this.Document?.FunctionSymbol;
 
     /// <summary>
+    /// Gets the semantic source name for display without deriving identity from formatted text.
+    /// </summary>
+    public string? FunctionName { get; }
+
+    /// <summary>
     /// Gets the selected declaration and its authoritative source snapshot when selection succeeded.
     /// </summary>
     public SourceSpan? Declaration { get; }
@@ -47,12 +52,13 @@ public sealed class CompilerInspectionResult
     /// Creates a result after analysis, retaining no partial generated document.
     /// </summary>
     internal CompilerInspectionResult(InspectionStage stage, CompilerInspectionContext context,
-        IReadOnlyList<SushiDiagnostic> diagnostics, SourceSpan? declaration, InspectionDocument? document)
+        IReadOnlyList<SushiDiagnostic> diagnostics, SourceSpan? declaration, InspectionDocument? document, string? functionName = null)
     {
         this.Stage = stage;
         this.Context = context;
         this.Diagnostics = Array.AsReadOnly<SushiDiagnostic>([.. diagnostics]);
         this.Declaration = declaration;
         this.Document = document;
+        this.FunctionName = functionName;
     }
 }

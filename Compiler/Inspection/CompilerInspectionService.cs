@@ -42,6 +42,7 @@ public sealed class CompilerInspectionService
         SourceSnapshot projectSnapshot = await ProjectSourceLoader.LoadSnapshot(projectPath, cancellationToken);
         IDiagnosticReporter diagnostics = new DiagnosticReporter();
         ProjectAnalysisResult analysis = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(projectSnapshot, diagnostics, cancellationToken);
+        string? functionName = null;
         List<SourceSnapshot> snapshots = [];
         Dictionary<string, SourceSpan> definitions = new(StringComparer.Ordinal);
         if (diagnostics.HasErrors())
@@ -107,6 +108,7 @@ public sealed class CompilerInspectionService
             throw new ArgumentException("The selection must be within a supported package-level function declaration or body.", nameof(request));
         }
 
+        functionName = selected.Callable.Name;
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
         FunctionBindResult bound = FunctionDeclarationBinder.Bind(selected.Declaration, diagnostics, visible, cancellationToken);
         if (bound.Function is null && !diagnostics.HasErrors())
@@ -134,7 +136,7 @@ public sealed class CompilerInspectionService
         {
             cancellationToken.ThrowIfCancellationRequested();
             CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions);
-            CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document);
+            CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document, functionName);
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }

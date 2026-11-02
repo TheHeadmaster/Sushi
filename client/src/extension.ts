@@ -1,5 +1,6 @@
 import * as net from 'net';
 import * as path from 'path';
+import { registerInspection } from './inspection';
 import {
 	ExtensionContext,
 	ExtensionMode
@@ -34,6 +35,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 		clientOptions
 	);
 
+	registerInspection(context, client);
 	await client.start();
 }
 

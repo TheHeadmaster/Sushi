@@ -263,6 +263,63 @@ public sealed class WorkspaceOrchestrator : IDisposable
     }
 
     /// <summary>
+    /// Captures authoritative inspection inputs under the mutation gate, without retaining that gate during compilation.
+    /// </summary>
+    /// <param name="documentUri">
+    /// The ordinary Sushi source document selected by the client.
+    /// </param>
+    /// <param name="version">
+    /// The client version that must match the current snapshot when supplied.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels waiting for workspace synchronization.
+    /// </param>
+    /// <returns>
+    /// Frozen snapshot references and deterministic project candidates for this request.
+    /// </returns>
+    internal async Task<InspectionWorkspaceSnapshot> CaptureInspectionInputs(Uri documentUri, int? version, CancellationToken cancellationToken)
+    {
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!documentUri.IsFile || !Path.GetExtension(documentUri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase)
+                || !this.workspace.TryGetDocument(documentUri, out SourceDocument? document))
+            {
+                throw new InspectionInputException("Open an ordinary Sushi source file before requesting inspection.");
+            }
+
+            SourceSnapshot selected = document.CurrentSnapshot;
+            if (version is not null && selected.Version != version)
+            {
+                throw new InspectionInputException("The source version has not synchronized with the language server. Retry inspection.");
+            }
+
+            List<SourceSnapshot> open = [];
+            List<Uri> projects = [];
+            foreach (SourceDocument item in this.workspace.Documents)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string extension = Path.GetExtension(item.Uri.LocalPath);
+                if (item.IsOpen && extension.Equals(".sus", StringComparison.OrdinalIgnoreCase))
+                {
+                    open.Add(item.CurrentSnapshot);
+                }
+                else if (extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase))
+                {
+                    projects.Add(item.Uri);
+                }
+            }
+
+            return new InspectionWorkspaceSnapshot(selected, Array.AsReadOnly(open.ToArray()),
+                Array.AsReadOnly(projects.OrderBy(uri => uri.LocalPath, StringComparer.Ordinal).ToArray()));
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+    }
+
+    /// <summary>
     /// Gets current Sushi syntax for semantic highlighting. Reuses an analyzed
     /// syntax tree when it belongs to the active snapshot, otherwise parses the
     /// current editor snapshot without waiting for debounced semantic analysis.

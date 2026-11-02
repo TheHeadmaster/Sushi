@@ -1,0 +1,114 @@
+{
+  "name": "Sushi Structured IR",
+  "scopeName": "source.sushi.structured-ir",
+  "patterns": [
+    {
+      "match": "^(public|internal|package|protected|private) (function) (int32|bool|void) ([^\\s(]+)(\\()",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.access.sushi-ir"
+        },
+        "2": {
+          "name": "keyword.declaration.function.sushi-ir"
+        },
+        "3": {
+          "name": "storage.type.sushi-ir"
+        },
+        "4": {
+          "name": "entity.name.function.sushi-ir"
+        },
+        "5": {
+          "name": "punctuation.section.parameters.begin.sushi-ir"
+        }
+      }
+    },
+    {
+      "match": "\\b(call) (int32|bool|void) ([^\\s(]+)(\\()",
+      "captures": {
+        "1": {
+          "name": "keyword.control.call.sushi-ir"
+        },
+        "2": {
+          "name": "storage.type.sushi-ir"
+        },
+        "3": {
+          "name": "entity.name.function.sushi-ir"
+        },
+        "4": {
+          "name": "punctuation.section.arguments.begin.sushi-ir"
+        }
+      }
+    },
+    {
+      "match": "%local[0-9]+\\b",
+      "name": "variable.other.local.sushi-ir"
+    },
+    {
+      "match": "\\b(int32|bool) ([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "storage.type.sushi-ir"
+        },
+        "2": {
+          "name": "variable.parameter.sushi-ir"
+        }
+      }
+    },
+    {
+      "match": "\\barg[0-9]+(?=:)",
+      "name": "variable.parameter.argument.sushi-ir"
+    },
+    {
+      "match": "^\\s*(return|if|else|while|do|for|break|continue|local|store|update|initialize|condition|iterate|body)\\b",
+      "captures": {
+        "1": {
+          "name": "keyword.control.sushi-ir"
+        }
+      }
+    },
+    {
+      "match": "\\b(evaluate_then)(?=\\()|(?<=break )(depth)\\b|(?<=continue )(depth)\\b",
+      "name": "keyword.other.evaluation.sushi-ir"
+    },
+    {
+      "match": "\\bresult(?=:)",
+      "name": "variable.parameter.result.sushi-ir"
+    },
+    {
+      "match": "\\bnot(?= \\()",
+      "name": "keyword.operator.logical.sushi-ir"
+    },
+    {
+      "match": "(?<=[\\w)]) (and|or)(?= [\\w(+\\-~])",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.logical.sushi-ir"
+        }
+      }
+    },
+    {
+      "match": "\\b(?:int32|bool|void)\\b",
+      "name": "storage.type.sushi-ir"
+    },
+    {
+      "match": "\\b(?:true|false)\\b",
+      "name": "constant.language.boolean.sushi-ir"
+    },
+    {
+      "match": "(?<![\\w%.])-?\\b[0-9]+\\b",
+      "name": "constant.numeric.integer.sushi-ir"
+    },
+    {
+      "match": "<<|>>|==|!=|<=|>=|\\+\\+|--|[+*/%&|^~<>!=\\-]",
+      "name": "keyword.operator.sushi-ir"
+    },
+    {
+      "match": "[{}()\\[\\],;:]",
+      "name": "punctuation.structural.sushi-ir"
+    },
+    {
+      "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b",
+      "name": "variable.other.sushi-ir"
+    }
+  ]
+}

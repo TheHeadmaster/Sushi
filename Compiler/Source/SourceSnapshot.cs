@@ -225,6 +225,73 @@ public sealed class SourceSnapshot
     }
 
     /// <summary>
+    /// Resolves a validated UTF-16 editor position to canonical UTF-8 bytes.
+    /// Line terminators are excluded from line content; surrogate-pair interiors are not valid positions.
+    /// </summary>
+    /// <param name="line">
+    /// The zero-based logical line.
+    /// </param>
+    /// <param name="character">
+    /// The zero-based UTF-16 character offset within that line.
+    /// </param>
+    /// <returns>
+    /// The corresponding byte boundary in this snapshot.
+    /// </returns>
+    /// <exception cref="ArgumentException">
+    /// The position is outside the source or splits a supplementary Unicode scalar.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// Malformed UTF-8 prevents exact coordinate conversion.
+    /// </exception>
+    public int GetByteOffset(int line, int character)
+    {
+        if (line < 0 || line >= this.lineStarts.Length)
+        {
+            throw new ArgumentOutOfRangeException(nameof(line));
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNegative(character);
+        if (!this.IsValidUtf8)
+        {
+            throw new InvalidOperationException("Editor positions cannot be resolved in malformed UTF-8 source.");
+        }
+
+        int position = this.lineStarts[line];
+        int end = line + 1 < this.lineStarts.Length ? this.lineStarts[line + 1] : this.bytes.Length;
+        if (end > position && this.bytes[end - 1] == (byte)'\n')
+        {
+            end--;
+        }
+
+        if (end > position && this.bytes[end - 1] == (byte)'\r')
+        {
+            end--;
+        }
+
+        int characters = 0;
+        while (position < end && characters < character)
+        {
+            OperationStatus status = Rune.DecodeFromUtf8(this.bytes.AsSpan(position, end - position), out Rune rune, out int consumed);
+            if (status != OperationStatus.Done)
+            {
+                throw new InvalidOperationException("Editor position does not resolve to a complete Unicode scalar.");
+            }
+
+            if (rune.Utf16SequenceLength > character - characters)
+            {
+                throw new ArgumentException("Editor position splits a UTF-16 surrogate pair.", nameof(character));
+            }
+
+            characters += rune.Utf16SequenceLength;
+            position += consumed;
+        }
+
+        ArgumentOutOfRangeException.ThrowIfNotEqual(characters, character, nameof(character));
+
+        return position;
+    }
+
+    /// <summary>
     /// Gets the UTF-16 position from a byte offset.
     /// </summary>
     /// <param name="byteOffset">
