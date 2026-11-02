@@ -309,7 +309,7 @@ public class InspectionDocumentLookupTests
                 .BeTrue(structured.ToString());
             structured.GetProperty("text").GetString()
                 .Should()
-                .Contain("function int32 Caller");
+                .Contain("function int32 __sushi_package_function_0");
 
             JsonElement inspected = await session.Request("sourceInspection/inspectFunction", new
             {
