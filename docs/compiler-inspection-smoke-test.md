@@ -97,8 +97,10 @@ Use a valid Sushi project with a function that declares multiple locals, includi
 4. Navigate from a nested-scope local and a local declared in a supported `for` initialization.
 5. Change the source without saving. Navigate from the older IR and verify a historical preview opens with the old declaration and correct selection.
 6. Insert source text before the function without changing its declaration. Inspect it again and verify navigation selects the new source position; return to the older IR and verify its historical selection remains correct.
-7. Verify Ctrl+click and F12 still navigate within the same IR stage. Verify SSA temporaries and basic blocks do not claim direct source declarations, and repeated navigation does not create redundant tabs.
-8. Confirm no native executable or object output was generated.
+7. Add a bound local declaration after an unconditional `return`. Verify Structured IR can navigate its occurrence, Lowered IR inspection still succeeds, and every local occurrence that Lowered IR retains navigates to its declaration.
+8. Add local declarations to both branches of `if (true)` and `if (false)`. Verify the lowered representation can omit the unselected branch's local while visible locals still navigate correctly.
+9. Verify Ctrl+click and F12 still navigate within the same IR stage. Verify SSA temporaries and basic blocks do not claim direct source declarations, and repeated navigation does not create redundant tabs.
+10. Confirm no native executable or object output was generated.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not claim graphical verification unless this was exercised in the Extension Development Host.
 

@@ -21,7 +21,7 @@ internal static class InspectionLocalDefinitions
     /// The selected function declaration in its authoritative snapshot.
     /// </param>
     /// <param name="document">
-    /// The formatted representation whose local identities must match the mapping.
+    /// The formatted representation whose local identities must have entries in the mapping.
     /// </param>
     /// <param name="functionSymbol">
     /// The selected callable identity that owns the representation.
@@ -40,7 +40,7 @@ internal static class InspectionLocalDefinitions
         ArgumentException.ThrowIfNullOrEmpty(functionSymbol);
         cachedDefinitions = Array.Empty<CachedLocalDefinition>();
         if (declaration.Snapshot is null || !declaration.Snapshot.IsValidUtf8
-            || !HasMatchingLocalIdentities(definitions.Keys, declaration, document, functionSymbol))
+            || !HasValidLocalIdentityCoverage(definitions.Keys, declaration, document, functionSymbol))
         {
             return false;
         }
@@ -78,7 +78,7 @@ internal static class InspectionLocalDefinitions
     /// The current selected declaration and authoritative source snapshot.
     /// </param>
     /// <param name="document">
-    /// The formatted representation whose local identities must match the offsets.
+    /// The formatted representation whose local identities must have entries in the offsets.
     /// </param>
     /// <param name="functionSymbol">
     /// The selected callable identity that owns the representation.
@@ -126,7 +126,7 @@ internal static class InspectionLocalDefinitions
             previousEnd = (int)end;
         }
 
-        if (!HasMatchingLocalIdentities(rebased.Keys, declaration, document, functionSymbol))
+        if (!HasValidLocalIdentityCoverage(rebased.Keys, declaration, document, functionSymbol))
         {
             return false;
         }
@@ -135,7 +135,7 @@ internal static class InspectionLocalDefinitions
         return true;
     }
 
-    private static bool HasMatchingLocalIdentities(IEnumerable<int> localIndexes, SourceSpan declaration, InspectionDocument document,
+    private static bool HasValidLocalIdentityCoverage(IEnumerable<int> localIndexes, SourceSpan declaration, InspectionDocument document,
         string functionSymbol)
     {
         if (!StringComparer.Ordinal.Equals(document.FunctionSymbol, functionSymbol))
@@ -143,18 +143,38 @@ internal static class InspectionLocalDefinitions
             return false;
         }
 
-        HashSet<int> definitions = [.. localIndexes];
-        HashSet<int> representation = [];
-        foreach (InspectionSymbolIdentity identity in document.SymbolMetadata.Keys)
+        int[] indexes = [.. localIndexes];
+        HashSet<int> definitions = [.. indexes];
+        if (definitions.Count != indexes.Length)
         {
-            if (identity.Kind is InspectionSymbolKind.Local && StringComparer.Ordinal.Equals(identity.FunctionSymbol, document.FunctionSymbol)
-                && identity.Index is int index && !representation.Add(index))
+            return false;
+        }
+
+        int expectedIndex = 0;
+        foreach (int index in definitions.OrderBy(index => index))
+        {
+            if (index != expectedIndex++)
             {
                 return false;
             }
         }
 
-        return definitions.SetEquals(representation)
+        HashSet<int> representation = [];
+        foreach (InspectionSymbolIdentity identity in document.SymbolMetadata.Keys)
+        {
+            if (identity.Kind is not InspectionSymbolKind.Local)
+            {
+                continue;
+            }
+
+            if (!StringComparer.Ordinal.Equals(identity.FunctionSymbol, document.FunctionSymbol)
+                || identity.Index is not int index || !representation.Add(index))
+            {
+                return false;
+            }
+        }
+
+        return representation.IsSubsetOf(definitions)
             && declaration.Start >= 0 && declaration.Start < declaration.End
             && declaration.End <= declaration.Snapshot.SourceLength;
     }

@@ -436,7 +436,7 @@ public class CompilerInspectionServiceTests
             .BeSameAs(firstEntry.StructuredIR);
         changed.LocalDefinitions.Keys
             .Should()
-            .BeEquivalentTo(new[] { 0, 1, 2, 3 });
+            .BeEquivalentTo(Enumerable.Range(0, 4));
         changed.LocalDefinitions[0]
             .Should()
             .Be(FindLocalToken(changedSnapshot, "int32 alpha"));
@@ -537,6 +537,160 @@ public class CompilerInspectionServiceTests
         result.LocalDefinitions
             .Should()
             .BeEmpty();
+    }
+
+    [TestCase(InspectionStage.StructuredIR, InspectionStage.LoweredIR)]
+    [TestCase(InspectionStage.LoweredIR, InspectionStage.StructuredIR)]
+    public async Task OmittedLoweredLocalsShouldKeepRebasedProvenanceInEitherStageOrder(
+        InspectionStage firstStage, InspectionStage changedStage)
+    {
+        const string function = "public int32 Calculate() { int32 result = 42; return result; int32 unreachable = 100; }";
+        const string firstSource = Header + "public int32 Earlier() { return 1; }\n" + function;
+        const string changedSource = Header + "public int32 Earlier() { return 123456789; }\n" + function;
+        using TestProject project = await TestProject.Create(firstSource);
+        using CompilerInspectionService service = new();
+        SourceSnapshot firstSnapshot = project.Snapshot(firstSource, 1);
+        CompilerInspectionResult first = await service.InspectAsync(
+            project.Request(firstSnapshot, firstStage, "Calculate"), CancellationToken.None);
+
+        first.Succeeded
+            .Should()
+            .BeTrue(first.Diagnostics.ToString());
+        first.LocalDefinitions.Keys
+            .Should()
+            .BeEquivalentTo(Enumerable.Range(0, 2));
+        if (firstStage is InspectionStage.StructuredIR)
+        {
+            GetLocalIndexes(first.Document!)
+                .Should()
+                .Contain(0)
+                .And
+                .Contain(1);
+        }
+        else
+        {
+            GetLocalIndexes(first.Document!)
+                .Should()
+                .ContainSingle()
+                .Which
+                .Should()
+                .Be(0);
+        }
+
+        AssertLocalOccurrencesResolve(first);
+        service.Cache.TryGet(CacheKey(first), out CompilerInspectionCacheEntry firstEntry)
+            .Should()
+            .BeTrue();
+        SourceSnapshot changedSnapshot = project.Snapshot(changedSource, 2);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(changedSnapshot, changedStage, "Calculate"), CancellationToken.None);
+
+        changed.Succeeded
+            .Should()
+            .BeTrue(changed.Diagnostics.ToString());
+        changed.Declaration!.Value.Start
+            .Should()
+            .BeGreaterThan(first.Declaration!.Value.Start);
+        changed.LocalDefinitions.Keys
+            .Should()
+            .BeEquivalentTo(Enumerable.Range(0, 2));
+        changed.LocalDefinitions[0]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 result = 42;"));
+        changed.LocalDefinitions[1]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 unreachable = 100;"));
+        first.LocalDefinitions[0]
+            .Should()
+            .Be(FindLocalToken(firstSnapshot, "int32 result = 42;"));
+        first.LocalDefinitions[1]
+            .Should()
+            .Be(FindLocalToken(firstSnapshot, "int32 unreachable = 100;"));
+        changed.LocalDefinitions[0].Snapshot
+            .Should()
+            .BeSameAs(changedSnapshot);
+        first.LocalDefinitions[0].Snapshot
+            .Should()
+            .BeSameAs(firstSnapshot);
+        AssertLocalOccurrencesResolve(changed);
+        service.Cache.TryGet(CacheKey(changed), out CompilerInspectionCacheEntry changedEntry)
+            .Should()
+            .BeTrue();
+        changedEntry.StructuredIR
+            .Should()
+            .BeSameAs(firstEntry.StructuredIR);
+        if (firstStage is InspectionStage.LoweredIR)
+        {
+            changedEntry.LoweredIR
+                .Should()
+                .BeSameAs(firstEntry.LoweredIR);
+        }
+
+        if (changedStage is InspectionStage.LoweredIR)
+        {
+            GetLocalIndexes(changed.Document!)
+                .Should()
+                .ContainSingle()
+                .Which
+                .Should()
+                .Be(0);
+        }
+        else
+        {
+            GetLocalIndexes(changed.Document!)
+                .Should()
+                .Contain(0)
+                .And
+                .Contain(1);
+        }
+
+        AssertLocalOccurrencesResolve(first);
+    }
+
+    [TestCase(TestName = "Constant Conditional Lowering May Omit Either Branch Local Without Losing Provenance")]
+    public async Task ConstantConditionalLocalOmissionShouldRetainVisibleSourceMappings()
+    {
+        const string source = Header + "public int32 WhenTrue() { int32 result = 0; if (true) { int32 selected = 1; } else { int32 omitted = 2; } return result; }"
+            + "public int32 WhenFalse() { int32 result = 0; if (false) { int32 omitted = 2; } else { int32 selected = 1; } return result; }";
+        using TestProject project = await TestProject.Create(source);
+        using CompilerInspectionService service = new();
+        SourceSnapshot snapshot = project.Snapshot(source);
+
+        await AssertConstantConditionalLocals(project, service, snapshot, "WhenTrue", visibleIndex: 1, omittedIndex: 2);
+        await AssertConstantConditionalLocals(project, service, snapshot, "WhenFalse", visibleIndex: 2, omittedIndex: 1);
+    }
+
+    [TestCase(TestName = "Generated Local Identities Require Matching Bound Provenance")]
+    public async Task GeneratedLocalIdentityWithoutMatchingProvenanceShouldBeRejected()
+    {
+        const string source = Header + "public int32 Calculate() { int32 result = 42; return result; }";
+        using TestProject project = await TestProject.Create(source);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(
+            project.Request(project.Snapshot(source), marker: "Calculate"), CancellationToken.None);
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+        SourceSpan declaration = result.Declaration!.Value;
+        InspectionDocument document = result.Document!;
+        string functionSymbol = result.FunctionSymbol!;
+        InspectionLocalDefinitions.TryCapture(new Dictionary<int, SourceSpan>(), declaration, document, functionSymbol, out _)
+            .Should()
+            .BeFalse();
+        InspectionLocalDefinitions.TryCapture(new Dictionary<int, SourceSpan> { [1] = result.LocalDefinitions[0] },
+            declaration, document, functionSymbol, out _)
+            .Should()
+            .BeFalse();
+        SourceSnapshot foreignSnapshot = SourceSnapshot.FromText(declaration.Snapshot.Uri, 99, source);
+        SourceSpan foreignDeclaration = new(foreignSnapshot, result.LocalDefinitions[0].Start, result.LocalDefinitions[0].End);
+        InspectionLocalDefinitions.TryCapture(new Dictionary<int, SourceSpan> { [0] = foreignDeclaration },
+            declaration, document, functionSymbol, out _)
+            .Should()
+            .BeFalse();
+        InspectionLocalDefinitions.TryCapture(result.LocalDefinitions, declaration, document, "another-function", out _)
+            .Should()
+            .BeFalse();
     }
 
     [TestCase("public int32 Helper(int32 input) { return input; }")]
@@ -1283,6 +1437,80 @@ public class CompilerInspectionServiceTests
         int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
         int byteLength = Encoding.UTF8.GetByteCount(name);
         return new SourceSpan(snapshot, byteStart, byteStart + byteLength);
+    }
+
+    private static SourceSpan FindLocalToken(SourceSnapshot snapshot, string functionName, string declaration)
+    {
+        int functionStart = snapshot.Text.IndexOf(functionName, StringComparison.Ordinal);
+        functionStart
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        int declarationStart = snapshot.Text.IndexOf(declaration, functionStart, StringComparison.Ordinal);
+        declarationStart
+            .Should()
+            .BeGreaterThanOrEqualTo(functionStart);
+        string name = declaration[(declaration.LastIndexOf(' ') + 1)..];
+        int nameStart = declarationStart + declaration.Length - name.Length;
+        int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
+        int byteLength = Encoding.UTF8.GetByteCount(name);
+        return new SourceSpan(snapshot, byteStart, byteStart + byteLength);
+    }
+
+    private static HashSet<int> GetLocalIndexes(InspectionDocument document)
+        => [.. document.Occurrences.Where(item => item.Identity.Kind is InspectionSymbolKind.Local)
+            .Select(item => item.Identity.Index!.Value)];
+
+    private static void AssertLocalOccurrencesResolve(CompilerInspectionResult result)
+    {
+        foreach (InspectionSymbolOccurrence occurrence in result.Document!.Occurrences
+            .Where(item => item.Identity.Kind is InspectionSymbolKind.Local))
+        {
+            SourceSpan expected = result.LocalDefinitions[occurrence.Identity.Index!.Value];
+            InspectionSourceDefinition? actual = InspectionSourceDefinitionResolver.Resolve(
+                result.Document, occurrence.Start, result.Context, result.LocalDefinitions);
+            actual
+                .Should()
+                .NotBeNull();
+            actual!.SourceSpan
+                .Should()
+                .Be(expected);
+        }
+    }
+
+    private static async Task AssertConstantConditionalLocals(TestProject project, CompilerInspectionService service,
+        SourceSnapshot snapshot, string functionName, int visibleIndex, int omittedIndex)
+    {
+        CompilerInspectionResult structured = await service.InspectAsync(
+            project.Request(snapshot, InspectionStage.StructuredIR, functionName), CancellationToken.None);
+        CompilerInspectionResult lowered = await service.InspectAsync(
+            project.Request(snapshot, InspectionStage.LoweredIR, functionName), CancellationToken.None);
+
+        structured.Succeeded
+            .Should()
+            .BeTrue(structured.Diagnostics.ToString());
+        lowered.Succeeded
+            .Should()
+            .BeTrue(lowered.Diagnostics.ToString());
+        GetLocalIndexes(structured.Document!)
+            .Should()
+            .Contain(visibleIndex)
+            .And
+            .Contain(omittedIndex);
+        GetLocalIndexes(lowered.Document!)
+            .Should()
+            .Contain(0)
+            .And
+            .Contain(visibleIndex)
+            .And
+            .NotContain(omittedIndex);
+        AssertLocalOccurrencesResolve(structured);
+        AssertLocalOccurrencesResolve(lowered);
+        lowered.LocalDefinitions[visibleIndex]
+            .Should()
+            .Be(FindLocalToken(snapshot, functionName, "int32 selected = 1;"));
+        lowered.LocalDefinitions[omittedIndex]
+            .Should()
+            .Be(FindLocalToken(snapshot, functionName, "int32 omitted = 2;"));
     }
 
     private static async Task<CompilerInspectionResult> InspectWithDisposableService(CompilerInspectionRequest request,
