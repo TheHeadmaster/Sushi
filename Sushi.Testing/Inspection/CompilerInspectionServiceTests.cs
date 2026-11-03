@@ -1432,11 +1432,7 @@ public class CompilerInspectionServiceTests
         declarationStart
             .Should()
             .BeGreaterThanOrEqualTo(0);
-        string name = declaration.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
-        int nameStart = declarationStart + declaration.Length - name.Length;
-        int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
-        int byteLength = Encoding.UTF8.GetByteCount(name);
-        return new SourceSpan(snapshot, byteStart, byteStart + byteLength);
+        return CreateLocalTokenSpan(snapshot, declarationStart, declaration);
     }
 
     private static SourceSpan FindLocalToken(SourceSnapshot snapshot, string functionName, string declaration)
@@ -1449,11 +1445,26 @@ public class CompilerInspectionServiceTests
         declarationStart
             .Should()
             .BeGreaterThanOrEqualTo(functionStart);
+        return CreateLocalTokenSpan(snapshot, declarationStart, declaration);
+    }
+
+    private static SourceSpan CreateLocalTokenSpan(SourceSnapshot snapshot, int declarationStart, string declaration)
+    {
         string name = declaration.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
-        int nameStart = declarationStart + declaration.Length - name.Length;
+        int nameOffset = declaration.IndexOf(name, StringComparison.Ordinal);
+        nameOffset
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        int nameStart = declarationStart + nameOffset;
         int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
         int byteLength = Encoding.UTF8.GetByteCount(name);
-        return new SourceSpan(snapshot, byteStart, byteStart + byteLength);
+        SourceSpan span = new(snapshot, byteStart, byteStart + byteLength);
+
+        Encoding.UTF8.GetString(snapshot.Bytes.Span.Slice(span.Start, span.Length))
+            .Should()
+            .Be(name);
+
+        return span;
     }
 
     private static HashSet<int> GetLocalIndexes(InspectionDocument document)
