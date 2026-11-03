@@ -68,7 +68,7 @@ public class InspectionReferencesResolverTests
             .And
             .OnlyContain(occurrence => occurrence.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Parameter, "callee", 0));
 
-        InspectionReferencesResolver.Resolve(document, document.Text.IndexOf(' '), includeDeclaration: true)
+        InspectionReferencesResolver.Resolve(document, document.Text.IndexOf(' ', StringComparison.Ordinal), includeDeclaration: true)
             .Should()
             .BeEmpty();
         InspectionReferencesResolver.Resolve(document, -1, includeDeclaration: true)
