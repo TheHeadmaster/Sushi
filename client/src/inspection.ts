@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
-import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionResponse, InspectionSourceDefinitionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
+import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionRange, InspectionReferencesResponse, InspectionResponse, InspectionSourceDefinitionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
 import { SourceSnapshotDocuments } from './sourceSnapshotDocuments';
 
 const inspectionProgressDelayMs = 500;
@@ -121,6 +121,14 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		vscode.languages.registerHoverProvider(
 			{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' },
 			{ provideHover: (document, position, token) => provideHover(document, position, token) }
+		),
+		vscode.languages.registerReferenceProvider(
+			{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
+			{ provideReferences: (document, position, referenceContext, token) => provideReferences(document, position, referenceContext, token) }
+		),
+		vscode.languages.registerReferenceProvider(
+			{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' },
+			{ provideReferences: (document, position, referenceContext, token) => provideReferences(document, position, referenceContext, token) }
 		),
 		vscode.workspace.onDidCloseTextDocument(document => {
 			if ((document.uri.scheme === 'sushi-inspect' || document.uri.scheme === 'sushi-source-snapshot')
@@ -383,7 +391,45 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		}
 	}
 
-	function toRange(range: NonNullable<InspectionDefinitionResponse['targetRange']>): vscode.Range {
+	async function provideReferences(
+		document: vscode.TextDocument,
+		position: vscode.Position,
+		referenceContext: vscode.ReferenceContext,
+		token: vscode.CancellationToken
+	): Promise<vscode.Location[]> {
+		if (document.uri.scheme !== 'sushi-inspect' || !client.isRunning() || token.isCancellationRequested
+			|| (document.languageId !== 'sushi-structured-ir' && document.languageId !== 'sushi-lowered-ir')) {
+			return [];
+		}
+		const artifact = documents.get(document.uri.toString());
+		const expectedStage = document.languageId === 'sushi-structured-ir' ? 'structuredIR' : 'loweredIR';
+		if (!artifact || artifact.stage !== expectedStage) {
+			return [];
+		}
+
+		try {
+			const response = await client.sendRequest<InspectionReferencesResponse>('sourceInspection/references', {
+				documentUri: document.uri.toString(), artifactId: artifact.artifactId,
+				position: { line: position.line, character: position.character },
+				includeDeclaration: referenceContext.includeDeclaration
+			}, token);
+			if (token.isCancellationRequested) {
+				return [];
+			}
+			if (response.error) {
+				output.appendLine(`Find All References failed: ${response.error}`);
+				return [];
+			}
+			return response.ranges.map(range => new vscode.Location(document.uri, toRange(range)));
+		} catch (error) {
+			if (!token.isCancellationRequested) {
+				output.appendLine(`Find All References failed: ${String(error)}`);
+			}
+			return [];
+		}
+	}
+
+	function toRange(range: InspectionRange): vscode.Range {
 		return new vscode.Range(range.start.line, range.start.character, range.end.line, range.end.character);
 	}
 

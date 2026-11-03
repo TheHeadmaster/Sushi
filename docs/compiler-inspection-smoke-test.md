@@ -37,6 +37,22 @@ Use a real Sushi project containing package functions with parameters, local var
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. This procedure requires a graphical VS Code session; automated protocol and provider tests do not replace this manual check.
 
+# Generated IR Find All References
+
+Find All References searches only the exact generated representation containing the cursor. It does not search every project function, another compilation stage, or original Sushi source. The results use the originating `sushi-inspect:` document and its captured semantic identities.
+
+Use a Sushi project with a parameter and local used several times, repeated calls to a helper, and a Lowered IR function with branches and SSA values.
+
+1. Open Structured IR and place the cursor on a local declaration or use. Press **Shift+F12**. Verify the native VS Code references view lists only that local's occurrences in this representation; repeat from the declaration and with a parameter.
+2. Search from a generated function call. Verify repeated calls to that same function within the inspected function appear, while its definition and calls in other functions do not appear.
+3. Open Lowered IR. Search from a local slot, an SSA temporary, and a basic-block label or branch target. Verify each result set contains only occurrences with the same semantic identity in this generated document.
+4. Search from a supported `for` initializer local and its updates. Verify a bound local omitted by lowering has no fabricated result.
+5. Repeat searches after changing source without saving. Verify an older generated document returns its own historical ranges and does not combine results from a newer inspection.
+6. Search from whitespace or punctuation and verify there are no results. Confirm ordinary definition navigation, source-definition navigation, and hover behavior remain unchanged.
+7. Verify Find All References opens no duplicate inspection tab and generates no new inspection artifact, executable, or native object.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in an actual VS Code Extension Development Host.
+
 # Snapshot-aware cache reuse
 
 Use a real Sushi project with an `InspectMe()` function and, for the snapshot check, a called function in another source file. This is a manual procedure; automated cache tests do not replace graphical validation.

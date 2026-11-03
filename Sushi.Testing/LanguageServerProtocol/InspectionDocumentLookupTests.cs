@@ -908,6 +908,126 @@ public class InspectionDocumentLookupTests
         }
     }
 
+    [TestCase(TestName = "Initialized LSP Resolves References Only Within The Originating Structured Or Lowered Artifact")]
+    public async Task InitializedServerShouldResolveInspectionReferencesWithinTheRequestedArtifact()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Inspection References " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            string configuration = """
+                name = "InspectionReferences"
+                assembly = "InspectionReferences"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string source = "package Example; namespace Example;\npublic int32 Calculate(int32 input) { int32 local = input; local = local + 1; if (local > 2) { local = local + input; } return Helper(local) + Helper(input); }\npublic int32 Helper(int32 value) { return value; }";
+            string projectPath = Path.Combine(directory, "InspectionReferences.susproj");
+            string sourcePath = Path.Combine(sourcesDirectory, "References.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(sourcePath, source);
+            string sourceUri = ExtensionUri(new Uri(sourcePath));
+            await using ServerSession session = new(directory);
+            await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "InspectionReferences" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = sourceUri, languageId = "sushi", version = 1, text = source } });
+
+            foreach (string stage in new[] { "structuredIR", "loweredIR" })
+            {
+                JsonElement inspection = await InspectFunction(session, sourceUri, source, "Calculate", stage);
+                inspection.GetProperty("succeeded").GetBoolean()
+                    .Should()
+                    .BeTrue(inspection.ToString());
+                string text = inspection.GetProperty("text").GetString()!;
+                IReadOnlyList<(int Line, int Character)> localPositions = GetGeneratedPositions(text, "%local0");
+                localPositions
+                    .Should()
+                    .NotBeEmpty();
+                (int localLine, int localCharacter) = localPositions[^1];
+                object request = new
+                {
+                    documentUri = inspection.GetProperty("documentUri").GetString(),
+                    artifactId = inspection.GetProperty("artifactId").GetString(),
+                    position = new { line = localLine, character = localCharacter },
+                    includeDeclaration = true
+                };
+                JsonElement withDeclaration = await session.Request("sourceInspection/references", request);
+                JsonElement[] localRanges = [.. withDeclaration.GetProperty("ranges").EnumerateArray()];
+                localRanges
+                    .Should()
+                    .HaveCount(localPositions.Count);
+                JsonElement repeated = await session.Request("sourceInspection/references", request);
+                repeated.GetRawText()
+                    .Should()
+                    .Be(withDeclaration.GetRawText());
+
+                JsonElement withoutDeclaration = await session.Request("sourceInspection/references", new
+                {
+                    documentUri = inspection.GetProperty("documentUri").GetString(),
+                    artifactId = inspection.GetProperty("artifactId").GetString(),
+                    position = new { line = localLine, character = localCharacter },
+                    includeDeclaration = false
+                });
+                withoutDeclaration.GetProperty("ranges").GetArrayLength()
+                    .Should()
+                    .Be(localPositions.Count - 1);
+
+                (int callLine, int callCharacter) = GetGeneratedPosition(text, "__sushi_package_function_1");
+                JsonElement calls = await session.Request("sourceInspection/references", new
+                {
+                    documentUri = inspection.GetProperty("documentUri").GetString(),
+                    artifactId = inspection.GetProperty("artifactId").GetString(),
+                    position = new { line = callLine, character = callCharacter },
+                    includeDeclaration = false
+                });
+                calls.GetProperty("ranges").GetArrayLength()
+                    .Should()
+                    .Be(2);
+
+                JsonElement noSymbol = await session.Request("sourceInspection/references", new
+                {
+                    documentUri = inspection.GetProperty("documentUri").GetString(),
+                    artifactId = inspection.GetProperty("artifactId").GetString(),
+                    position = new { line = 0, character = 0 },
+                    includeDeclaration = true
+                });
+                noSymbol.GetProperty("ranges").GetArrayLength()
+                    .Should()
+                    .Be(0);
+
+                JsonElement forged = await session.Request("sourceInspection/references", new
+                {
+                    documentUri = "sushi-inspect://another-session/forged/Calculate.structuredIR",
+                    artifactId = inspection.GetProperty("artifactId").GetString(),
+                    position = new { line = localLine, character = localCharacter },
+                    includeDeclaration = true
+                });
+                forged.GetProperty("error").GetString()
+                    .Should()
+                    .Contain("no longer available");
+                await session.Notify("sourceInspection/release", new { artifactId = inspection.GetProperty("artifactId").GetString() });
+                JsonElement released = await session.Request("sourceInspection/references", request);
+                released.GetProperty("error").GetString()
+                    .Should()
+                    .Contain("no longer available");
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [TestCase(TestName = "Initialized LSP Binds Cross File Calls And Invalidates Caller Diagnostics From Unsaved Signatures")]
     public async Task InitializedServerShouldBindProjectFunctionsAndRefreshAffectedCallers()
     {

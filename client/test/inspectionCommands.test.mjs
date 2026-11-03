@@ -66,6 +66,7 @@ function harness(options = {}) {
 	const quickPicks = [];
 	const definitions = [];
 	const hovers = [];
+	const references = [];
 	const providers = new Map();
 	let close;
 	let resolveErrorShown;
@@ -147,9 +148,11 @@ function harness(options = {}) {
 			appendText(value) { this.value.push({ kind: 'text', value }); return this; }
 		},
 		Hover: class Hover { constructor(contents, range) { this.contents = contents; this.range = range; } },
+		Location: class Location { constructor(documentUri, range) { this.uri = documentUri; this.range = range; } },
 		languages: {
 			registerDefinitionProvider(selector, providerDefinition) { definitions.push({ selector, provider: providerDefinition }); return disposable; },
 			registerHoverProvider(selector, providerHover) { hovers.push({ selector, provider: providerHover }); return disposable; },
+			registerReferenceProvider(selector, providerReferences) { references.push({ selector, provider: providerReferences }); return disposable; },
 			async setTextDocumentLanguage(document, language) {
 				close(document);
 				const updated = { ...document, languageId: language };
@@ -212,6 +215,9 @@ function harness(options = {}) {
 			if (method === 'sourceInspection/hover') {
 				return Promise.resolve(options.hoverReply);
 			}
+			if (method === 'sourceInspection/references') {
+				return Promise.resolve(options.referencesReply ?? { ranges: [] });
+			}
 			if (options.throwRequest) { return Promise.reject(new Error('Unexpected inspection request failure')); }
 			if (options.ambiguous && !params.projectUri) {
 				return Promise.resolve({ succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] });
@@ -231,7 +237,7 @@ function harness(options = {}) {
 	} finally {
 		Module._load = originalLoad;
 	}
-	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, openDocuments, source, sourceDocument, reply,
+	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, references, openDocuments, source, sourceDocument, reply,
 		progressCalls, cancellationSources, quickPicks,
 		tabGroups, visibleEditors,
 		get activeEditor() { return activeTextEditor; },
@@ -538,6 +544,68 @@ test('native IR hover providers request semantic metadata and return safe Markdo
 	]);
 	assert.equal(hover.contents.isTrusted, false);
 	assert.equal(hover.contents.supportHtml, false);
+});
+
+test('native IR reference providers preserve artifact identity, editor coordinates, and declaration preference', async () => {
+	const h = harness({ referencesReply: { ranges: [
+		{ start: { line: 0, character: 4 }, end: { line: 0, character: 10 } },
+		{ start: { line: 2, character: 8 }, end: { line: 2, character: 14 } }
+	] } });
+	assert.deepEqual(h.references.map(item => item.selector), [
+		{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
+		{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' }
+	]);
+	await h.commands.get('sushi.showStructuredIR')();
+	const document = h.shown[0];
+	const locations = await h.references[0].provider.provideReferences(document, { line: 2, character: 8 },
+		{ includeDeclaration: false }, { isCancellationRequested: false });
+	assert.equal(h.requests[1].method, 'sourceInspection/references');
+	assert.deepEqual(h.requests[1].params, {
+		documentUri: h.reply.documentUri, artifactId: 'one', position: { line: 2, character: 8 }, includeDeclaration: false
+	});
+	assert.deepEqual(locations.map(location => location.uri.toString()), [h.reply.documentUri, h.reply.documentUri]);
+	assert.deepEqual(locations.map(location => location.range.start), [
+		{ line: 0, character: 4 }, { line: 2, character: 8 }
+	]);
+	assert.equal(h.shown.length, 1, 'reference lookup must not open or duplicate documents');
+	await h.references[1].provider.provideReferences(document, { line: 0, character: 1 },
+		{ includeDeclaration: true }, { isCancellationRequested: false });
+	assert.equal(h.requests[2].params.includeDeclaration, true);
+});
+
+test('native IR reference providers return no locations for missing artifacts, disconnection, or cancellation', async () => {
+	const h = harness({ referencesReply: { ranges: [{ start: { line: 0, character: 2 }, end: { line: 0, character: 4 } }] } });
+	await h.commands.get('sushi.showLoweredIR')();
+	const document = h.shown[0];
+	const provider = h.references[1].provider;
+	const sourceResult = await provider.provideReferences(h.sourceDocument, { line: 0, character: 2 },
+		{ includeDeclaration: true }, { isCancellationRequested: false });
+	assert.deepEqual(sourceResult, []);
+	const canceled = await provider.provideReferences(document, { line: 0, character: 2 },
+		{ includeDeclaration: true }, { isCancellationRequested: true });
+	assert.deepEqual(canceled, []);
+	const response = deferred();
+	h.setRequestHandler((method) => method === 'sourceInspection/references' ? response.promise : Promise.resolve(h.reply));
+	let cancellationRequested = false;
+	const token = { get isCancellationRequested() { return cancellationRequested; } };
+	const pending = provider.provideReferences(document, { line: 0, character: 2 }, { includeDeclaration: true }, token);
+	cancellationRequested = true;
+	response.resolve({ ranges: [{ start: { line: 0, character: 2 }, end: { line: 0, character: 4 } }] });
+	assert.deepEqual(await pending, [], 'a response arriving after cancellation must not return stale locations');
+	h.activate(document);
+	h.close(document);
+	await Promise.resolve();
+	const missing = await provider.provideReferences(document, { line: 0, character: 2 },
+		{ includeDeclaration: true }, { isCancellationRequested: false });
+	assert.deepEqual(missing, []);
+	assert.equal(h.requests.length, 2, 'unsupported, canceled, and missing documents must not make additional requests');
+	const disconnectedOptions = {};
+	const disconnected = harness(disconnectedOptions);
+	await disconnected.commands.get('sushi.showStructuredIR')();
+	disconnectedOptions.disconnected = true;
+	const unavailable = await disconnected.references[0].provider.provideReferences(disconnected.shown[0],
+		{ line: 0, character: 0 }, { includeDeclaration: true }, { isCancellationRequested: false });
+	assert.deepEqual(unavailable, []);
 });
 
 test('source definition command opens matching live Sushi content and selects the exact declaration token', async () => {

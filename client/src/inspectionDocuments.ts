@@ -39,6 +39,11 @@ export interface InspectionHoverResponse {
 	readonly range?: InspectionRange;
 }
 
+export interface InspectionReferencesResponse {
+	readonly ranges: readonly InspectionRange[];
+	readonly error?: string;
+}
+
 export interface InspectionSourceDefinitionResponse {
 	readonly found: boolean;
 	readonly error?: string;
