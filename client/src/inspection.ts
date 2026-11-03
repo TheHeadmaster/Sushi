@@ -120,7 +120,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 			}
 
 			if (sourceDocument && hasCapturedContent(sourceDocument, response.text)) {
-				const sourceEditor = await vscode.window.showTextDocument(sourceDocument, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+				const sourceEditor = await showDestinationDocument(sourceDocument, sourceUri);
 				if (hasCapturedContent(sourceEditor.document, response.text) && await sourceFileExists(sourceUri)) {
 					selectSourceRange(sourceEditor, response.sourceRange);
 					return;
@@ -140,7 +140,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 						changingLanguage.delete(preview.uri.toString());
 					}
 				}
-				const previewEditor = await vscode.window.showTextDocument(preview, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+				const previewEditor = await showDestinationDocument(preview, preview.uri);
 				if (previewEditor.document.getText() !== response.text) {
 					throw new Error('The historical source preview did not retain the captured inspection text.');
 				}
@@ -175,6 +175,18 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		const selection = new vscode.Selection(range.start.line, range.start.character, range.end.line, range.end.character);
 		editor.selection = selection;
 		editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+	}
+
+	async function showDestinationDocument(document: vscode.TextDocument, uri: vscode.Uri): Promise<vscode.TextEditor> {
+		const visibleEditor = vscode.window.visibleTextEditors.find(editor => editor.document.uri.toString() === uri.toString());
+		const existingGroup = visibleEditor
+			? vscode.window.tabGroups.all.find(group => group.viewColumn === visibleEditor.viewColumn)
+			: vscode.window.tabGroups.all.find(group => group.tabs.some(tab => tab.input instanceof vscode.TabInputText
+				&& tab.input.uri.toString() === uri.toString()));
+		return vscode.window.showTextDocument(document, {
+			viewColumn: existingGroup?.viewColumn ?? vscode.ViewColumn.Beside,
+			preview: false
+		});
 	}
 
 	async function provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.DefinitionLink[] | undefined> {
@@ -320,6 +332,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 			cancellable: true
 		}, async (_progress, token) => {
 			let artifact: InspectionSuccess | undefined;
+			let registeredHere = false;
 			try {
 				let projectUri: string | undefined;
 				let response: InspectionResponse;
@@ -356,7 +369,15 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 				}
 
 				const uri = vscode.Uri.parse(artifact.documentUri);
-				documents.add({ ...artifact, documentUri: uri.toString() });
+				const existing = documents.get(uri.toString());
+				if (existing && (existing.artifactId !== artifact.artifactId || existing.stage !== artifact.stage || existing.text !== artifact.text)) {
+					await release(artifact.artifactId);
+					throw new Error('The language server reused a virtual URI for a different inspection snapshot.');
+				}
+				registeredHere = !existing;
+				if (registeredHere) {
+					documents.add({ ...artifact, documentUri: uri.toString() });
+				}
 				let document = await vscode.workspace.openTextDocument(uri);
 				const language = artifact.stage === 'structuredIR' ? 'sushi-structured-ir' : 'sushi-lowered-ir';
 				if (document.languageId !== language) {
@@ -368,9 +389,9 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 						changingLanguage.delete(uri.toString());
 					}
 				}
-				await vscode.window.showTextDocument(document, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+				await showDestinationDocument(document, uri);
 			} catch (error) {
-				if (artifact) {
+				if (artifact && registeredHere) {
 					documents.remove(vscode.Uri.parse(artifact.documentUri).toString());
 					await release(artifact.artifactId);
 				}

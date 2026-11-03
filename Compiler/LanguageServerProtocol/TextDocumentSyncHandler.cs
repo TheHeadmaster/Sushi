@@ -29,9 +29,9 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     {
         Uri documentUri = uri.ToUri();
 
-        if (!documentUri.IsFile)
+        if (!IsManagedDocument(documentUri))
         {
-            throw new InvalidOperationException($"Unsupported Sushi document URI scheme \"{documentUri.Scheme}\".");
+            return new(uri, "plaintext");
         }
 
         string extension = Path.GetExtension(documentUri.LocalPath);
@@ -41,7 +41,7 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
             ".susproj" => new(uri, "susproj"),
             ".susln" => new(uri, "susln"),
             ".sus" => new(uri, "sushi"),
-            _ => throw new InvalidOperationException($"Unrecognized Sushi document type \"{extension}\".")
+            _ => new(uri, "plaintext")
         };
     }
 
@@ -59,6 +59,11 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidOpenTextDocumentParams request, CancellationToken cancellationToken)
     {
+        if (!IsManagedDocument(request.TextDocument.Uri.ToUri()))
+        {
+            return Unit.Value;
+        }
+
         await workspaceOrchestrator.OpenDocument(
             request.TextDocument.Uri.ToUri(),
             request.TextDocument.Version,
@@ -81,6 +86,11 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidChangeTextDocumentParams request, CancellationToken cancellationToken)
     {
+        if (!IsManagedDocument(request.TextDocument.Uri.ToUri()))
+        {
+            return Unit.Value;
+        }
+
         await workspaceOrchestrator.ChangeDocument(
             request.TextDocument.Uri.ToUri(),
             request.TextDocument.Version,
@@ -103,6 +113,11 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidSaveTextDocumentParams request, CancellationToken cancellationToken)
     {
+        if (!IsManagedDocument(request.TextDocument.Uri.ToUri()))
+        {
+            return Unit.Value;
+        }
+
         await workspaceOrchestrator.SaveDocument(
             request.TextDocument.Uri.ToUri(),
             cancellationToken);
@@ -123,6 +138,11 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
     /// </returns>
     public override async Task<Unit> Handle([NotNull] DidCloseTextDocumentParams request, CancellationToken cancellationToken)
     {
+        if (!IsManagedDocument(request.TextDocument.Uri.ToUri()))
+        {
+            return Unit.Value;
+        }
+
         await workspaceOrchestrator.CloseDocument(request.TextDocument.Uri.ToUri(), cancellationToken);
         return Unit.Value;
     }
@@ -150,5 +170,18 @@ public sealed class TextDocumentSyncHandler([NotNull] WorkspaceOrchestrator work
             Change = TextDocumentSyncKind.Full,
             Save = true
         };
+    }
+
+    private static bool IsManagedDocument(Uri uri)
+    {
+        if (!uri.IsFile)
+        {
+            return false;
+        }
+
+        string extension = Path.GetExtension(uri.LocalPath);
+        return extension.Equals(".sus", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".susproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".susln", StringComparison.OrdinalIgnoreCase);
     }
 }

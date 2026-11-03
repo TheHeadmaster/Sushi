@@ -86,8 +86,8 @@ public sealed class InspectFunctionHandler(WorkspaceOrchestrator workspace, Comp
                 };
             }
 
-            InspectionArtifact artifact = artifacts.Add(result, cancellationToken);
-            registered = artifact.Id;
+            InspectionArtifact artifact = artifacts.AddOrFindEquivalentSnapshot(result, cancellationToken, out bool added);
+            registered = added ? artifact.Id : null;
             cancellationToken.ThrowIfCancellationRequested();
             InspectFunctionResponse response = new()
             {

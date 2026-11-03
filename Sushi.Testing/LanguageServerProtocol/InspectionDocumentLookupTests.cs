@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -7,6 +8,7 @@ using FluentAssertions;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Sushi.LanguageServerProtocol;
 using Sushi.Source;
@@ -66,6 +68,48 @@ public class InspectionDocumentLookupTests
         request.ProjectUri!.ToUri().IsSamePath(semanticUri)
             .Should()
             .BeTrue();
+    }
+
+    [TestCaseSource(nameof(DocumentAttributeCases))]
+    public void TextDocumentMatchingShouldClassifyOnlyManagedSushiFileTypes(DocumentUri documentUri, string languageId)
+    {
+        using WorkspaceOrchestrator workspace = new();
+        TextDocumentSyncHandler handler = new(workspace);
+        TextDocumentAttributes attributes = handler.GetTextDocumentAttributes(documentUri);
+
+        attributes.LanguageId
+            .Should()
+            .Be(languageId);
+    }
+
+    private static IEnumerable<TestCaseData> DocumentAttributeCases()
+    {
+        yield return new TestCaseData(DocumentUri.Parse("file:///tmp/Source.sus"), "sushi");
+        yield return new TestCaseData(DocumentUri.Parse("file:///tmp/Project.susproj"), "susproj");
+        yield return new TestCaseData(DocumentUri.Parse("file:///tmp/Solution.susln"), "susln");
+        yield return new TestCaseData(DocumentUri.Parse("sushi-source-snapshot:/snapshot/Source.sus%20(Historical)"), "plaintext");
+        yield return new TestCaseData(DocumentUri.Parse("untitled:Untitled-1"), "plaintext");
+        yield return new TestCaseData(DocumentUri.Parse("file:///tmp/Notes.txt"), "plaintext");
+    }
+
+    [Test]
+    public void SemanticTokenRegistrationShouldRequireSushiFileDocuments()
+    {
+        using WorkspaceOrchestrator workspace = new();
+        SushiSemanticTokensHandler handler = new(workspace);
+        MethodInfo createOptions = typeof(SushiSemanticTokensHandler).GetMethod("CreateRegistrationOptions", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        SemanticTokensRegistrationOptions options = (SemanticTokensRegistrationOptions)createOptions.Invoke(handler, [null!, null!])!;
+        string selector = JsonConvert.SerializeObject(options.DocumentSelector);
+
+        selector
+            .Should()
+            .Contain("\"Language\":\"sushi\"")
+            .And
+            .Contain("\"Scheme\":\"file\"")
+            .And
+            .Contain("**/*.sus")
+            .And
+            .NotContain("sushi-source-snapshot");
     }
 
     [TestCase(TestName = "Escaped Drive Colon Demonstrates All Three Original Lookup Predicates")]
@@ -191,6 +235,16 @@ public class InspectionDocumentLookupTests
             await session.Notify("initialized", new { });
             string unsaved = Source.Replace("return 1", "return 7", StringComparison.Ordinal).Replace("Application", "EditorApplication", StringComparison.Ordinal);
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = wire, languageId = "sushi", version = 7, text = unsaved } });
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new
+                {
+                    uri = "sushi-source-snapshot:/snapshot/Source.sus%20(Historical)",
+                    languageId = "sushi",
+                    version = 1,
+                    text = Source
+                }
+            });
             JsonElement tokens = await session.Request("textDocument/semanticTokens/full", new { textDocument = new { uri = wire } });
             HasClassToken(tokens, legend, unsaved, "EditorApplication")
                 .Should()
@@ -277,7 +331,7 @@ public class InspectionDocumentLookupTests
                 type = "Sushi.MVP.Debug"
                 """;
             string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { int32 result = Helper(value); return result; }";
-            string callee = "package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }";
+            string callee = "package Example; namespace Example;\r\n// 🍣\r\npublic int32 Helper(int32 input) { return input + 1; }";
             string unsavedCallee = callee.Replace("input + 1", "input + 2", StringComparison.Ordinal);
             string projectPath = Path.Combine(directory, "Navigation.susproj");
             string callerPath = Path.Combine(directory, "Sources", "A.sus");
@@ -330,6 +384,12 @@ public class InspectionDocumentLookupTests
             structuredAgain.GetProperty("text").GetString()
                 .Should()
                 .Be(structured.GetProperty("text").GetString());
+            structuredAgain.GetProperty("documentUri").GetString()
+                .Should()
+                .Be(structured.GetProperty("documentUri").GetString());
+            structuredAgain.GetProperty("artifactId").GetString()
+                .Should()
+                .Be(structured.GetProperty("artifactId").GetString());
 
             string structuredText = structured.GetProperty("text").GetString()!;
             (int functionLine, int functionCharacter) = GetGeneratedPosition(structuredText, "__sushi_package_function_1");
@@ -364,12 +424,7 @@ public class InspectionDocumentLookupTests
             functionSource.GetProperty("text").GetString()
                 .Should()
                 .Be(unsavedCallee);
-            functionSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
-                .Should()
-                .Be(unsavedCallee.IndexOf("Helper", StringComparison.Ordinal));
-            functionSource.GetProperty("sourceRange").GetProperty("end").GetProperty("character").GetInt32()
-                .Should()
-                .Be(unsavedCallee.IndexOf("Helper", StringComparison.Ordinal) + "Helper".Length);
+            AssertSourceTokenRange(functionSource, unsavedCallee, "Helper");
 
             (int structuredFunctionLine, int structuredFunctionCharacter) = GetGeneratedPosition(structuredText, "__sushi_package_function_0");
             JsonElement structuredDeclarationSource = await session.Request("sourceInspection/sourceDefinition", new
@@ -421,9 +476,7 @@ public class InspectionDocumentLookupTests
             parameterSource.GetProperty("sourceUri").GetString()
                 .Should()
                 .Be(DocumentUri.FromFileSystemPath(calleePath).ToString());
-            parameterSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
-                .Should()
-                .Be(unsavedCallee.IndexOf("input", StringComparison.Ordinal));
+            AssertSourceTokenRange(parameterSource, unsavedCallee, "input");
 
             (int loweredFunctionLine, int loweredFunctionCharacter) = GetGeneratedPosition(inspected.GetProperty("text").GetString()!, "__sushi_package_function_0");
             JsonElement loweredFunctionSource = await session.Request("sourceInspection/sourceDefinition", new
@@ -555,9 +608,7 @@ public class InspectionDocumentLookupTests
             historicalParameter.GetProperty("text").GetString()
                 .Should()
                 .Be(unsavedCallee);
-            historicalParameter.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
-                .Should()
-                .Be(unsavedCallee.IndexOf("input", StringComparison.Ordinal));
+            AssertSourceTokenRange(historicalParameter, unsavedCallee, "input");
 
             JsonElement currentParameter = await session.Request("sourceInspection/sourceDefinition", new
             {
@@ -568,9 +619,7 @@ public class InspectionDocumentLookupTests
             currentParameter.GetProperty("text").GetString()
                 .Should()
                 .Be(changedCallee);
-            currentParameter.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
-                .Should()
-                .Be(changedCallee.IndexOf("renamed", StringComparison.Ordinal));
+            AssertSourceTokenRange(currentParameter, changedCallee, "renamed");
 
             string shiftedCaller = "// prefix\n" + changedCaller;
             await session.Notify("textDocument/didChange", new
@@ -682,6 +731,35 @@ public class InspectionDocumentLookupTests
         int line = text[..offset].Count(character => character == '\n');
         int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
         return (line, character);
+    }
+
+    private static (int Line, int Character) GetSourcePosition(string text, string token)
+    {
+        int offset = text.IndexOf(token, StringComparison.Ordinal);
+        offset
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        int line = text[..offset].Count(character => character == '\n');
+        int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+        return (line, character);
+    }
+
+    private static void AssertSourceTokenRange(JsonElement response, string sourceText, string token)
+    {
+        (int line, int character) = GetSourcePosition(sourceText, token);
+        JsonElement range = response.GetProperty("sourceRange");
+        range.GetProperty("start").GetProperty("line").GetInt32()
+            .Should()
+            .Be(line);
+        range.GetProperty("start").GetProperty("character").GetInt32()
+            .Should()
+            .Be(character);
+        range.GetProperty("end").GetProperty("line").GetInt32()
+            .Should()
+            .Be(line);
+        range.GetProperty("end").GetProperty("character").GetInt32()
+            .Should()
+            .Be(character + token.Length);
     }
 
     [TestCase(TestName = "Initialized LSP Reuses A Caller Representation Without Replacing Its Compilation Snapshot")]

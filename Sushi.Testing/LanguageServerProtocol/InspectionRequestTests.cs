@@ -339,10 +339,16 @@ public class InspectionRequestTests
         InspectFunctionResponse full = await project.Inspect("structuredIR", version: 2);
         full.Succeeded
             .Should()
-            .BeFalse();
-        full.Error
+            .BeTrue();
+        full.ArtifactId
             .Should()
-            .Contain("session limit");
+            .Be(changed.ArtifactId);
+        full.DocumentUri
+            .Should()
+            .Be(changed.DocumentUri);
+        project.Artifacts.Count
+            .Should()
+            .Be(3);
         await new ReleaseInspectionHandler(project.Artifacts).Handle(new ReleaseInspectionParams { ArtifactId = first.ArtifactId! }, CancellationToken.None);
         project.Artifacts.Find(first.ArtifactId!)
             .Should()

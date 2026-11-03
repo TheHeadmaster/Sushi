@@ -1,4 +1,5 @@
 ﻿using Sushi.Inspection;
+using Sushi.Source;
 
 namespace Sushi.LanguageServerProtocol;
 
@@ -133,6 +134,71 @@ public sealed class InspectionArtifactStore(int capacity = 32) : IDisposable
             added = true;
             return this.Add(result, cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Reuses an open artifact only when every captured project/source snapshot, version, stage, and function identity match.
+    /// </summary>
+    internal InspectionArtifact AddOrFindEquivalentSnapshot(CompilerInspectionResult result, CancellationToken cancellationToken, out bool added)
+    {
+        lock (this.syncRoot)
+        {
+            ObjectDisposedException.ThrowIf(this.disposed, this);
+            cancellationToken.ThrowIfCancellationRequested();
+            InspectionArtifact? existing = this.artifacts.Values.FirstOrDefault(item => IsEquivalentInspection(item.Result, result));
+            if (existing is not null)
+            {
+                added = false;
+                return existing;
+            }
+
+            added = true;
+            return this.Add(result, cancellationToken);
+        }
+    }
+
+    private static bool IsEquivalentInspection(CompilerInspectionResult left, CompilerInspectionResult right)
+    {
+        if (left.Document is not InspectionDocument leftDocument || right.Document is not InspectionDocument rightDocument
+            || left.FunctionSymbol is not string leftFunctionSymbol || right.FunctionSymbol is not string rightFunctionSymbol)
+        {
+            return false;
+        }
+
+        if (left.Stage != right.Stage || !StringComparer.Ordinal.Equals(left.FunctionSymbol, right.FunctionSymbol)
+            || !SamePath(left.Context.ProjectPath, right.Context.ProjectPath)
+            || !SameSnapshot(left.Context.ProjectSnapshot, right.Context.ProjectSnapshot)
+            || left.Context.Sources.Count != right.Context.Sources.Count
+            || !left.Context.Functions.TryGetValue(leftFunctionSymbol, out SourceSpan leftDeclaration)
+            || !right.Context.Functions.TryGetValue(rightFunctionSymbol, out SourceSpan rightDeclaration)
+            || leftDeclaration.Start != rightDeclaration.Start || leftDeclaration.End != rightDeclaration.End
+            || !SameSourceIdentity(leftDeclaration.Snapshot, rightDeclaration.Snapshot))
+        {
+            return false;
+        }
+
+        for (int index = 0; index < left.Context.Sources.Count; index++)
+        {
+            if (!SameSnapshot(left.Context.Sources[index], right.Context.Sources[index]))
+            {
+                return false;
+            }
+        }
+
+        return leftDocument.Text == rightDocument.Text && leftDocument.Occurrences.SequenceEqual(rightDocument.Occurrences);
+    }
+
+    private static bool SameSnapshot(SourceSnapshot left, SourceSnapshot right)
+        => left.Version == right.Version && SameSourceIdentity(left, right)
+            && left.Bytes.Span.SequenceEqual(right.Bytes.Span);
+
+    private static bool SameSourceIdentity(SourceSnapshot left, SourceSnapshot right)
+        => SamePath(left.Uri.LocalPath, right.Uri.LocalPath);
+
+    private static bool SamePath(string left, string right)
+    {
+        StringComparer comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        return comparer.Equals(Path.GetFullPath(left), Path.GetFullPath(right));
     }
 
     /// <summary>

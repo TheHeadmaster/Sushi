@@ -71,7 +71,12 @@ public sealed class SushiSemanticTokensHandler(WorkspaceOrchestrator workspace) 
     protected override SemanticTokensRegistrationOptions CreateRegistrationOptions(SemanticTokensCapability capability, ClientCapabilities clientCapabilities)
         => new()
         {
-            DocumentSelector = TextDocumentSelector.ForLanguage("sushi"),
+            DocumentSelector = new TextDocumentSelector(new TextDocumentFilter
+            {
+                Language = "sushi",
+                Scheme = "file",
+                Pattern = "**/*.sus"
+            }),
             Legend = new SemanticTokensLegend(),
             Full = new SemanticTokensCapabilityRequestFull { Delta = false },
             Range = false

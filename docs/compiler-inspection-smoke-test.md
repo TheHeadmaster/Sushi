@@ -68,6 +68,9 @@ Use a configured Sushi project with package functions in at least two source fil
 10. Close a historical preview and verify its retained client content is released. Closing the originating IR document must not close an already-open historical preview.
 11. Confirm earlier generated IR documents remain read-only and unchanged, and that hover behavior still works.
 12. Confirm source navigation generated no native executable or object output.
+13. Open both `Caller.sus` and `Helper.sus`, open Caller Structured IR, and navigate to Helper IR and back several times. Verify existing same-stage IR tabs are focused and identical tabs do not accumulate.
+14. Invoke Go to Source Definition for Helper while its source tab is already open. Verify that tab receives focus without a second source mirror; repeat with the source tab inactive and with the source file closed.
+15. Modify Helper without saving and navigate from the older IR. Verify a separate historical preview opens; repeat navigation and verify the same preview is focused. Inspect a different source snapshot and confirm it remains separate.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless exercised in an actual VS Code Extension Development Host.
 
