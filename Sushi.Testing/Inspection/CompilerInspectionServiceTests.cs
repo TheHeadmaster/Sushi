@@ -1432,7 +1432,7 @@ public class CompilerInspectionServiceTests
         declarationStart
             .Should()
             .BeGreaterThanOrEqualTo(0);
-        string name = declaration[(declaration.LastIndexOf(' ') + 1)..];
+        string name = declaration.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
         int nameStart = declarationStart + declaration.Length - name.Length;
         int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
         int byteLength = Encoding.UTF8.GetByteCount(name);
@@ -1449,7 +1449,7 @@ public class CompilerInspectionServiceTests
         declarationStart
             .Should()
             .BeGreaterThanOrEqualTo(functionStart);
-        string name = declaration[(declaration.LastIndexOf(' ') + 1)..];
+        string name = declaration.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1];
         int nameStart = declarationStart + declaration.Length - name.Length;
         int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
         int byteLength = Encoding.UTF8.GetByteCount(name);
