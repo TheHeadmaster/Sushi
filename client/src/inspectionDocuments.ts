@@ -31,6 +31,14 @@ export interface InspectionDefinitionResponse {
 	readonly functionLabel?: string;
 }
 
+export interface InspectionHoverResponse {
+	readonly found: boolean;
+	readonly error?: string;
+	readonly signature?: string;
+	readonly details?: string;
+	readonly range?: InspectionRange;
+}
+
 export interface InspectionRange {
 	readonly start: { readonly line: number; readonly character: number };
 	readonly end: { readonly line: number; readonly character: number };

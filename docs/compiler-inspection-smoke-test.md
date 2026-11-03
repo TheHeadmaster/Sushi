@@ -15,7 +15,7 @@ This is a manual procedure, not a claim of completed GUI validation. The automat
 11. Close generated tabs and request inspection again. Closing releases their server-side metadata; changing language during initial opening must not release it. The session retains at most 32 artifacts, rejecting additional requests with a close-document explanation instead of replacing older artifacts. Shutdown releases the entire session.
 12. Compare the inspected project's files with the recorded baseline. No executable, native object, or link output should have been created by inspection. Compiler/server build artifacts from step 1 are separate and expected.
 
-The initial documents are frozen snapshots. Automatic refresh, hovers, and cross-stage navigation remain outside the current inspection feature.
+The initial documents are frozen snapshots. Automatic refresh and cross-stage navigation remain outside the current inspection feature.
 # Same-stage semantic navigation
 
 Use a real Sushi project containing package functions with parameters, local variables, control flow, and a call to a function in another source file.
@@ -51,6 +51,19 @@ Use a real Sushi project with an `InspectMe()` function and, for the snapshot ch
 8. Confirm inspection and navigation did not generate a native executable or object file.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.
+
+# Generated IR semantic hovers
+
+Use a configured Sushi project with a caller and callee, local storage, and a function that lowers to multiple basic blocks and SSA temporaries. Hover information comes from captured compiler identities and formatter metadata; this procedure requires a graphical VS Code session.
+
+1. Open Structured IR for a function with parameters and a local variable. Hover over the function name, parameter declaration and reference, and local declaration and reference. Verify the function hover shows its source-level accessibility, return type, and ordered typed parameters, while parameter and local hovers show their type and owner.
+2. Hover over a call's generated function symbol and an `argN` call-argument label. Verify the function signature and the specifically indexed callee parameter are shown, even when the callee is in another source file.
+3. Open Lowered IR for a function with control flow. Hover over local-slot references, SSA temporary definitions and uses, and block labels and branch targets. Verify type and owner details, and verify each block hover shows its label and index.
+4. Hover over punctuation, whitespace, and positions outside the generated text. Verify no hover appears.
+5. Close a generated document and verify hovering another still-open inspection continues to work. Reopen an inspection and verify its hover metadata is available.
+6. Verify hovers do not generate a referenced function, change the displayed text, or create native executable or object output.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Protocol tests exercise the actual language-server request; they do not replace graphical validation.
 
 # Dependency-aware cache reuse
 

@@ -276,7 +276,7 @@ public class InspectionDocumentLookupTests
                 [build.targets.debug]
                 type = "Sushi.MVP.Debug"
                 """;
-            string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { return Helper(value); }";
+            string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { int32 result = Helper(value); return result; }";
             string callee = "package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }";
             string unsavedCallee = callee.Replace("input + 1", "input + 2", StringComparison.Ordinal);
             string projectPath = Path.Combine(directory, "Navigation.susproj");
@@ -331,6 +331,79 @@ public class InspectionDocumentLookupTests
                 .Should()
                 .Be(structured.GetProperty("text").GetString());
 
+            string structuredText = structured.GetProperty("text").GetString()!;
+            (int functionLine, int functionCharacter) = GetGeneratedPosition(structuredText, "__sushi_package_function_1");
+            JsonElement functionHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            functionHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeTrue(functionHover.ToString());
+            functionHover.GetProperty("signature").GetString()
+                .Should()
+                .Be("public int32 Helper(int32 input)");
+            functionHover.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32()
+                .Should()
+                .Be(functionLine);
+
+            (int parameterLine, int parameterCharacter) = GetGeneratedPosition(structuredText, "arg0");
+            JsonElement parameterHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = parameterLine, character = parameterCharacter }
+            });
+            parameterHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeTrue(parameterHover.ToString());
+            parameterHover.GetProperty("details").GetString()
+                .Should()
+                .Contain("Parameter 0: input")
+                .And
+                .Contain("Function: Helper");
+
+            string loweredText = inspected.GetProperty("text").GetString()!;
+            foreach ((string symbolText, string expectedDetail) in new[]
+            {
+                ("%local0", "Lowered IR local slot: %local0"),
+                ("%temp0", "SSA temporary: %temp0"),
+                ("entry", "Basic block: entry")
+            })
+            {
+                (int hoverLine, int hoverCharacter) = GetGeneratedPosition(loweredText, symbolText);
+                JsonElement hover = await session.Request("sourceInspection/hover", new
+                {
+                    documentUri = inspected.GetProperty("documentUri").GetString(),
+                    artifactId = inspected.GetProperty("artifactId").GetString(),
+                    position = new { line = hoverLine, character = hoverCharacter }
+                });
+                hover.GetProperty("details").GetString()
+                    .Should()
+                    .Contain(expectedDetail);
+            }
+
+            JsonElement noHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = 1, character = 0 }
+            });
+            noHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeFalse();
+            JsonElement forgedHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = "sushi-inspect://other/forged/Caller.structuredIR",
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            forgedHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeFalse();
+
             string changedCaller = caller.Replace("Helper(value)", "Helper(value + 1)", StringComparison.Ordinal);
             await session.Notify("textDocument/didChange", new
             {
@@ -355,11 +428,29 @@ public class InspectionDocumentLookupTests
             int line = text[..offset].Count(character => character == '\n');
             int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
 
-            string changedCallee = unsavedCallee.Replace("input + 2", "input + 99", StringComparison.Ordinal);
+            string changedCallee = unsavedCallee.Replace("int32 input", "int32 renamed", StringComparison.Ordinal)
+                .Replace("return input + 2", "return renamed + 99", StringComparison.Ordinal);
             await session.Notify("textDocument/didChange", new
             {
                 textDocument = new { uri = calleeUri, version = 5 }, contentChanges = new[] { new { text = changedCallee } }
             });
+
+            JsonElement currentInspection = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 8,
+                position = new { line = 1, character = changedCaller.Split('\n')[1].IndexOf("Caller", StringComparison.Ordinal) + 10 }, stage = "structuredIR"
+            });
+            (int currentArgumentLine, int currentArgumentCharacter) = GetGeneratedPosition(currentInspection.GetProperty("text").GetString()!, "arg0");
+            JsonElement currentParameterHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = currentInspection.GetProperty("documentUri").GetString(),
+                artifactId = currentInspection.GetProperty("artifactId").GetString(),
+                position = new { line = currentArgumentLine, character = currentArgumentCharacter }
+            });
+            currentParameterHover.GetProperty("details").GetString()
+                .Should()
+                .Contain("Parameter 0: renamed");
+
             await File.WriteAllTextAsync(projectPath, "name = false");
             JsonElement definition = await session.Request("sourceInspection/definition", new
             {
@@ -383,7 +474,9 @@ public class InspectionDocumentLookupTests
                 .And
                 .Contain("2")
                 .And
-                .NotContain("99");
+                .NotContain("99")
+                .And
+                .NotContain("renamed");
             definition.GetProperty("targetRange").GetProperty("start").GetProperty("line").GetInt32()
                 .Should()
                 .BeGreaterThanOrEqualTo(0);
@@ -404,11 +497,33 @@ public class InspectionDocumentLookupTests
             await session.Notify("sourceInspection/release", new { artifactId = structured.GetProperty("artifactId").GetString() });
             await session.Notify("sourceInspection/release", new { artifactId = structuredAgain.GetProperty("artifactId").GetString() });
             await session.Notify("sourceInspection/release", new { artifactId = changedInspection.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = currentInspection.GetProperty("artifactId").GetString() });
+
+            JsonElement releasedHover = await session.Request("sourceInspection/hover", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            releasedHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeFalse();
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static (int Line, int Character) GetGeneratedPosition(string text, string value)
+    {
+        int offset = text.IndexOf(value, StringComparison.Ordinal);
+        offset
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        int line = text[..offset].Count(character => character == '\n');
+        int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+        return (line, character);
     }
 
     [TestCase(TestName = "Initialized LSP Reuses A Caller Representation Without Replacing Its Compilation Snapshot")]

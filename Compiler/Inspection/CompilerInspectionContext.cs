@@ -31,14 +31,22 @@ public sealed class CompilerInspectionContext
     public IReadOnlyDictionary<string, SourceSpan> Functions { get; }
 
     /// <summary>
+    /// Gets immutable source-level callable signatures keyed by their identities in this context.
+    /// </summary>
+    public IReadOnlyDictionary<string, InspectionCallableSignature> Callables { get; }
+
+    /// <summary>
     /// Freezes the collections describing the completed analysis context.
     /// </summary>
     internal CompilerInspectionContext(string projectPath, SourceSnapshot projectSnapshot,
-        IReadOnlyList<SourceSnapshot> sources, IDictionary<string, SourceSpan> functions)
+        IReadOnlyList<SourceSnapshot> sources, IDictionary<string, SourceSpan> functions,
+        IDictionary<string, InspectionCallableSignature> callables)
     {
         this.ProjectPath = projectPath;
         this.ProjectSnapshot = projectSnapshot;
         this.Sources = Array.AsReadOnly<SourceSnapshot>([.. sources]);
         this.Functions = new ReadOnlyDictionary<string, SourceSpan>(new Dictionary<string, SourceSpan>(functions, StringComparer.Ordinal));
+        this.Callables = new ReadOnlyDictionary<string, InspectionCallableSignature>(
+            new Dictionary<string, InspectionCallableSignature>(callables, StringComparer.Ordinal));
     }
 }

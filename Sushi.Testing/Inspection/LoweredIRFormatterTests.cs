@@ -54,6 +54,15 @@ public class LoweredIRFormatterTests
         AssertSymbol(document, InspectionSymbolKind.Local, function.Name, 7, false, 3);
         AssertSymbol(document, InspectionSymbolKind.Temporary, function.Name, 3, true, 1);
         AssertSymbol(document, InspectionSymbolKind.Temporary, function.Name, 3, false, 1);
+        document.SymbolMetadata[new InspectionSymbolIdentity(InspectionSymbolKind.Local, function.Name, 7)]
+            .Should()
+            .Be(new InspectionValueMetadata(IRType.Int32, "%local7"));
+        document.SymbolMetadata[new InspectionSymbolIdentity(InspectionSymbolKind.Temporary, function.Name, 3)]
+            .Should()
+            .Be(new InspectionValueMetadata(IRType.Int32, "%temp3"));
+        document.SymbolMetadata[new InspectionSymbolIdentity(InspectionSymbolKind.BasicBlock, function.Name, 0)]
+            .Should()
+            .Be(new InspectionBasicBlockMetadata("entry😀"));
         AssertRanges(document, function);
     }
 

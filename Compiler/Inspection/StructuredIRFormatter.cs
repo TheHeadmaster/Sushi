@@ -39,6 +39,7 @@ public static class StructuredIRFormatter
         private readonly CancellationToken cancellationToken = cancellationToken;
         private readonly StringBuilder text = new();
         private readonly List<InspectionSymbolOccurrence> occurrences = [];
+        private readonly Dictionary<InspectionSymbolIdentity, InspectionSymbolMetadata> symbolMetadata = [];
 
         private int indentation;
 
@@ -70,7 +71,7 @@ public static class StructuredIRFormatter
             this.text.Append(")\n");
             this.WriteBlock(this.function.Body);
 
-            return new InspectionDocument(InspectionStage.StructuredIR, this.function.Name, this.text.ToString(), this.occurrences);
+            return new InspectionDocument(InspectionStage.StructuredIR, this.function.Name, this.text.ToString(), this.occurrences, this.symbolMetadata);
         }
 
         private void WriteBlock(IRBlock block)
@@ -110,7 +111,7 @@ public static class StructuredIRFormatter
 
                 case IRLocalDeclarationStatement declaration:
                     this.text.Append("local ").Append(GetTypeName(declaration.Type)).Append(' ');
-                    this.WriteLocal(declaration.Index, true);
+                    this.WriteLocal(declaration.Index, true, declaration.Type);
                     this.text.Append(" = ");
                     this.WriteExpression(declaration.Initializer);
                     this.text.Append(";\n");
@@ -118,7 +119,7 @@ public static class StructuredIRFormatter
 
                 case IRLocalAssignmentStatement assignment:
                     this.text.Append("store ").Append(GetTypeName(assignment.Type)).Append(' ');
-                    this.WriteLocal(assignment.Index, false);
+                    this.WriteLocal(assignment.Index, false, assignment.Type);
                     this.text.Append(" = ");
                     this.WriteExpression(assignment.Value);
                     this.text.Append(";\n");
@@ -229,7 +230,7 @@ public static class StructuredIRFormatter
                     break;
 
                 case IRLocalReferenceExpression local:
-                    this.WriteLocal(local.Index, false);
+                    this.WriteLocal(local.Index, false, local.Type);
                     break;
 
                 case IRIntegerUpdateExpression update:
@@ -293,7 +294,7 @@ public static class StructuredIRFormatter
                 this.text.Append(operation);
             }
 
-            this.WriteLocal(update.Index, false);
+            this.WriteLocal(update.Index, false, IRType.Int32);
 
             if (!update.IsPrefix)
             {
@@ -318,10 +319,22 @@ public static class StructuredIRFormatter
             this.WriteSymbol(parameter.Name, InspectionSymbolKind.Parameter, this.function.Name, reference.Index, false);
         }
 
-        private void WriteLocal(int index, bool isDefinition)
+        private void WriteLocal(int index, bool isDefinition, IRType type)
         {
             string name = "%local" + index.ToString(CultureInfo.InvariantCulture);
+            this.AddMetadata(new InspectionSymbolIdentity(InspectionSymbolKind.Local, this.function.Name, index),
+                new InspectionValueMetadata(type, name));
             this.WriteSymbol(name, InspectionSymbolKind.Local, this.function.Name, index, isDefinition);
+        }
+
+        private void AddMetadata(InspectionSymbolIdentity identity, InspectionSymbolMetadata metadata)
+        {
+            if (this.symbolMetadata.TryGetValue(identity, out InspectionSymbolMetadata? existing) && existing != metadata)
+            {
+                throw new InvalidOperationException("A structured IR symbol has inconsistent typed metadata.");
+            }
+
+            this.symbolMetadata[identity] = metadata;
         }
 
         private void WriteCall(string symbol, IRType returnType, IReadOnlyList<IRType> parameterTypes, IReadOnlyList<IRCallArgument> arguments)

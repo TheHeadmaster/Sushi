@@ -91,6 +91,7 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
             .WithHandler<SushiSemanticTokensHandler>()
             .WithHandler<InspectFunctionHandler>()
             .WithHandler<InspectionDefinitionHandler>()
+            .WithHandler<InspectionHoverHandler>()
             .WithHandler<ReleaseInspectionHandler>()
         );
 

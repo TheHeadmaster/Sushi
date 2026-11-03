@@ -38,6 +38,7 @@ public static class LoweredIRFormatter
         private readonly CancellationToken cancellationToken = cancellationToken;
         private readonly StringBuilder text = new();
         private readonly List<InspectionSymbolOccurrence> occurrences = [];
+        private readonly Dictionary<InspectionSymbolIdentity, InspectionSymbolMetadata> symbolMetadata = [];
         private readonly Dictionary<string, int> blocks = new(StringComparer.Ordinal);
         private readonly Dictionary<int, IRType> temporaries = [];
         private readonly SortedDictionary<int, IRType> locals = [];
@@ -77,6 +78,8 @@ public static class LoweredIRFormatter
                 this.cancellationToken.ThrowIfCancellationRequested();
                 LoweredBasicBlock block = this.function.Blocks[i];
                 this.text.Append("    ");
+                this.AddMetadata(new InspectionSymbolIdentity(InspectionSymbolKind.BasicBlock, this.function.Name, i),
+                    new InspectionBasicBlockMetadata(block.Name));
                 this.WriteSymbol(block.Name, InspectionSymbolKind.BasicBlock, this.function.Name, i, true);
                 this.text.Append(":\n");
                 foreach (LoweredInstruction instruction in block.Instructions)
@@ -89,7 +92,7 @@ public static class LoweredIRFormatter
 
             this.text.Append("}\n");
             this.cancellationToken.ThrowIfCancellationRequested();
-            return new InspectionDocument(InspectionStage.LoweredIR, this.function.Name, this.text.ToString(), this.occurrences);
+            return new InspectionDocument(InspectionStage.LoweredIR, this.function.Name, this.text.ToString(), this.occurrences, this.symbolMetadata);
         }
 
         private void BuildCatalogs()
@@ -302,12 +305,25 @@ public static class LoweredIRFormatter
                 throw new InvalidOperationException($"Temporary index {value.Index} has no matching typed definition.");
             }
 
-            this.WriteSymbol("%temp" + value.Index.ToString(CultureInfo.InvariantCulture), InspectionSymbolKind.Temporary,
+            string name = "%temp" + value.Index.ToString(CultureInfo.InvariantCulture);
+            this.AddMetadata(new InspectionSymbolIdentity(InspectionSymbolKind.Temporary, this.function.Name, value.Index),
+                new InspectionValueMetadata(value.Type, name));
+            this.WriteSymbol(name, InspectionSymbolKind.Temporary,
                 this.function.Name, value.Index, isDefinition);
         }
 
-        private void WriteLocal(int index, bool isDefinition) => this.WriteSymbol(
-            "%local" + index.ToString(CultureInfo.InvariantCulture), InspectionSymbolKind.Local, this.function.Name, index, isDefinition);
+        private void WriteLocal(int index, bool isDefinition)
+        {
+            if (!this.locals.TryGetValue(index, out IRType type))
+            {
+                throw new InvalidOperationException($"Local slot {index} has no typed definition.");
+            }
+
+            string name = "%local" + index.ToString(CultureInfo.InvariantCulture);
+            this.AddMetadata(new InspectionSymbolIdentity(InspectionSymbolKind.Local, this.function.Name, index),
+                new InspectionValueMetadata(type, name));
+            this.WriteSymbol(name, InspectionSymbolKind.Local, this.function.Name, index, isDefinition);
+        }
 
         private void WriteBlockReference(string name)
         {
@@ -316,7 +332,19 @@ public static class LoweredIRFormatter
                 throw new InvalidOperationException($"Basic-block target \"{name}\" is not in the inspected function.");
             }
 
+            this.AddMetadata(new InspectionSymbolIdentity(InspectionSymbolKind.BasicBlock, this.function.Name, index),
+                new InspectionBasicBlockMetadata(name));
             this.WriteSymbol(name, InspectionSymbolKind.BasicBlock, this.function.Name, index, false);
+        }
+
+        private void AddMetadata(InspectionSymbolIdentity identity, InspectionSymbolMetadata metadata)
+        {
+            if (this.symbolMetadata.TryGetValue(identity, out InspectionSymbolMetadata? existing) && existing != metadata)
+            {
+                throw new InvalidOperationException("A lowered IR symbol has inconsistent typed metadata.");
+            }
+
+            this.symbolMetadata[identity] = metadata;
         }
 
         private void WriteCall(string symbol, IRType returnType, IReadOnlyList<IRType> parameterTypes, IReadOnlyList<LoweredCallArgument> arguments)

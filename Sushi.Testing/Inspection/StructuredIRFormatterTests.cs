@@ -56,6 +56,9 @@ public class StructuredIRFormatterTests
         document.Occurrences
             .Should()
             .HaveCount(7);
+        document.SymbolMetadata[new InspectionSymbolIdentity(InspectionSymbolKind.Local, function.Name, 0)]
+            .Should()
+            .Be(new InspectionValueMetadata(IRType.Int32, "%local0"));
 
         foreach (InspectionSymbolOccurrence occurrence in document.Occurrences)
         {

@@ -14,6 +14,7 @@ function harness(options = {}) {
 	const messages = [];
 	const errorProgressStates = [];
 	const definitions = [];
+	const hovers = [];
 	let close;
 	let provider;
 	let progressSettled = false;
@@ -41,8 +42,15 @@ function harness(options = {}) {
 		},
 		Position: class Position { constructor(line, character) { this.line = line; this.character = character; } },
 		Range: class Range { constructor(startLine, startCharacter, endLine, endCharacter) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
+		MarkdownString: class MarkdownString {
+			value = [];
+			appendCodeblock(value, language) { this.value.push({ kind: 'code', value, language }); return this; }
+			appendText(value) { this.value.push({ kind: 'text', value }); return this; }
+		},
+		Hover: class Hover { constructor(contents, range) { this.contents = contents; this.range = range; } },
 		languages: {
 			registerDefinitionProvider(selector, providerDefinition) { definitions.push({ selector, provider: providerDefinition }); return disposable; },
+			registerHoverProvider(selector, providerHover) { hovers.push({ selector, provider: providerHover }); return disposable; },
 			async setTextDocumentLanguage(document, language) { close(document); const updated = { ...document, languageId: language }; openDocuments.splice(openDocuments.indexOf(document), 1, updated); return updated; }
 		},
 		window: {
@@ -66,6 +74,9 @@ function harness(options = {}) {
 			if (method === 'sourceInspection/definition') {
 				return options.definitionReply;
 			}
+			if (method === 'sourceInspection/hover') {
+				return options.hoverReply;
+			}
 			if (options.throwRequest) { throw new Error('Unexpected inspection request failure'); }
 			if (options.ambiguous && !params.projectUri) {
 				return { succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] };
@@ -85,7 +96,7 @@ function harness(options = {}) {
 	} finally {
 		Module._load = originalLoad;
 	}
-	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, openDocuments, source, reply, close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); }, changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'), read: value => provider.provideTextDocumentContent(uri(value ?? reply.documentUri)) };
+	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, openDocuments, source, reply, close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); }, changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'), read: value => provider.provideTextDocumentContent(uri(value ?? reply.documentUri)) };
 }
 
 test('command sends URI version position stage without source text and opens frozen content beside source', async () => {
@@ -186,6 +197,46 @@ test('native IR definition providers register lazy target content before returni
 	assert.equal(h.definitions.length, 2);
 	assert.equal(h.requests[1].params.documentUri, h.reply.documentUri);
 	assert.equal(target.languageId, 'sushi-structured-ir');
+});
+
+test('native IR hover providers request semantic metadata and return safe Markdown over the symbol range', async () => {
+	const h = harness({ hoverReply: {
+		found: true, signature: 'public int32 Helper(int32 input)', details: 'Parameter 0: input\nType: int32',
+		range: { start: { line: 2, character: 4 }, end: { line: 2, character: 8 } }
+	} });
+	assert.deepEqual(h.hovers.map(item => item.selector), [
+		{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
+		{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' }
+	]);
+	await h.commands.get('sushi.showStructuredIR')();
+	const document = h.shown[0];
+	const hover = await h.hovers[0].provider.provideHover(document, { line: 2, character: 6 }, { isCancellationRequested: false });
+	assert.equal(h.requests[1].method, 'sourceInspection/hover');
+	assert.deepEqual(h.requests[1].params, {
+		documentUri: h.reply.documentUri, artifactId: 'one', position: { line: 2, character: 6 }
+	});
+	assert.deepEqual(hover.range.start, { line: 2, character: 4 });
+	assert.deepEqual(hover.contents.value, [
+		{ kind: 'code', value: 'public int32 Helper(int32 input)', language: 'sushi' },
+		{ kind: 'text', value: 'Parameter 0: input\nType: int32' }
+	]);
+	assert.equal(hover.contents.isTrusted, false);
+	assert.equal(hover.contents.supportHtml, false);
+});
+
+test('native hover providers stay quiet for missing symbols, cancellation, and server disconnection', async () => {
+	const missing = harness({ hoverReply: { found: false } });
+	await missing.commands.get('sushi.showStructuredIR')();
+	assert.equal(await missing.hovers[0].provider.provideHover(missing.shown[0], { line: 0, character: 0 }, { isCancellationRequested: false }), undefined);
+	const cancelled = harness({ hoverReply: { found: true, details: 'should not show', range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } } });
+	await cancelled.commands.get('sushi.showLoweredIR')();
+	assert.equal(await cancelled.hovers[1].provider.provideHover(cancelled.shown[0], { line: 0, character: 0 }, { isCancellationRequested: true }), undefined);
+	assert.equal(cancelled.requests.length, 1, 'a canceled hover must not make a server request');
+	const disconnectedOptions = {};
+	const disconnected = harness(disconnectedOptions);
+	await disconnected.commands.get('sushi.showStructuredIR')();
+	disconnectedOptions.disconnected = true;
+	assert.equal(await disconnected.hovers[0].provider.provideHover(disconnected.shown[0], { line: 0, character: 0 }, { isCancellationRequested: false }), undefined);
 });
 
 for (const [command, providerIndex, stage, suffix] of [

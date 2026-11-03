@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
-import { InspectionDefinitionResponse, InspectionDocuments, InspectionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
+import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
 
 /** Registers commands and a content provider; generated text is never inserted into source or an untitled editor. */
 export function registerInspection(context: vscode.ExtensionContext, client: LanguageClient): void {
@@ -29,6 +29,14 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		vscode.languages.registerDefinitionProvider(
 			{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' },
 			{ provideDefinition: (document, position, token) => provideDefinition(document, position, token) }
+		),
+		vscode.languages.registerHoverProvider(
+			{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
+			{ provideHover: (document, position, token) => provideHover(document, position, token) }
+		),
+		vscode.languages.registerHoverProvider(
+			{ language: 'sushi-lowered-ir', scheme: 'sushi-inspect' },
+			{ provideHover: (document, position, token) => provideHover(document, position, token) }
 		),
 		vscode.workspace.onDidCloseTextDocument(document => {
 			if (document.uri.scheme === 'sushi-inspect' && !changingLanguage.has(document.uri.toString())) {
@@ -127,6 +135,39 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 			if (!token.isCancellationRequested) {
 				output.appendLine(`Definition navigation failed: ${String(error)}`);
 			}
+			return undefined;
+		}
+	}
+
+	async function provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.Hover | undefined> {
+		if (document.uri.scheme !== 'sushi-inspect' || !client.isRunning() || token.isCancellationRequested) {
+			return undefined;
+		}
+		const artifact = documents.get(document.uri.toString());
+		if (!artifact) {
+			return undefined;
+		}
+
+		try {
+			const response = await client.sendRequest<InspectionHoverResponse>('sourceInspection/hover', {
+				documentUri: document.uri.toString(), artifactId: artifact.artifactId,
+				position: { line: position.line, character: position.character }
+			}, token);
+			if (token.isCancellationRequested || !response.found || !response.range) {
+				return undefined;
+			}
+
+			const markdown = new vscode.MarkdownString();
+			markdown.isTrusted = false;
+			markdown.supportHtml = false;
+			if (response.signature) {
+				markdown.appendCodeblock(response.signature, 'sushi');
+			}
+			if (response.details) {
+				markdown.appendText(response.details);
+			}
+			return new vscode.Hover(markdown, toRange(response.range));
+		} catch {
 			return undefined;
 		}
 	}

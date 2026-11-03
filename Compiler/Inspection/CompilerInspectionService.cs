@@ -73,6 +73,7 @@ public sealed class CompilerInspectionService : IDisposable
         string? functionName = null;
         List<SourceSnapshot> snapshots = [];
         Dictionary<string, SourceSpan> definitions = new(StringComparer.Ordinal);
+        Dictionary<string, InspectionCallableSignature> signatures = new(StringComparer.Ordinal);
         if (diagnostics.HasErrors())
         {
             return Complete(null, null);
@@ -125,6 +126,7 @@ public sealed class CompilerInspectionService : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             SourceSpan span = item.Declaration.Span;
             definitions.Add(item.Callable.Symbol, span);
+            signatures.Add(item.Callable.Symbol, new InspectionCallableSignature(item.Callable.Symbol, item.Callable.Function));
             if (ReferenceEquals(item.Source, selectedSource) && request.ByteOffset >= span.Start && request.ByteOffset < span.End)
             {
                 selected = item;
@@ -151,7 +153,7 @@ public sealed class CompilerInspectionService : IDisposable
         CompilerInspectionResult Complete(SourceSpan? declaration, InspectionDocument? document)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions);
+            CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions, signatures);
             CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document, functionName);
             cancellationToken.ThrowIfCancellationRequested();
             return result;
