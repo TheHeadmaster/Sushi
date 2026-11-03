@@ -54,7 +54,7 @@ public sealed class InspectionHoverHandler(InspectionArtifactStore artifacts)
             return new InspectionHoverResponse { Error = "The inspection document identity or cursor position is invalid." };
         }
 
-        InspectionArtifact? artifact = this.artifacts.Find(request.ArtifactId, request.DocumentUri.ToUri().AbsoluteUri);
+        InspectionArtifact? artifact = artifacts.Find(request.ArtifactId, request.DocumentUri.ToUri().AbsoluteUri);
         if (artifact?.Result.Document is not InspectionDocument document)
         {
             return new InspectionHoverResponse { Error = "This inspection document is no longer available. Reopen the representation and try again." };
