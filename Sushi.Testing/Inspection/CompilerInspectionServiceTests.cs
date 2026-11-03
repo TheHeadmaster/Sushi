@@ -333,10 +333,10 @@ public class CompilerInspectionServiceTests
         changed.Context.Sources[1].Text
             .Should()
             .Be(changedDependency);
-        service.Cache.TryGet(CacheKey(changed), out CompilerInspectionCacheEntry changedEntry)
+        service.Cache.TryGet(CacheKey(changedAgainResult), out CompilerInspectionCacheEntry latestEntry)
             .Should()
             .BeTrue();
-        changedEntry.StructuredIR
+        latestEntry.StructuredIR
             .Should()
             .BeSameAs(originalEntry.StructuredIR);
 
