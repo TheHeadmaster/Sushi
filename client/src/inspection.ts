@@ -1,11 +1,13 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
-import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
+import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionResponse, InspectionSourceDefinitionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
+import { SourceSnapshotDocuments } from './sourceSnapshotDocuments';
 
 /** Registers commands and a content provider; generated text is never inserted into source or an untitled editor. */
 export function registerInspection(context: vscode.ExtensionContext, client: LanguageClient): void {
 	const documents = new InspectionDocuments();
+	const sourceSnapshots = new SourceSnapshotDocuments();
 	const changingLanguage = new Set<string>();
 	const output = vscode.window.createOutputChannel('Sushi Inspection');
 	const release = async (artifactId: string): Promise<void> => {
@@ -19,8 +21,12 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 	context.subscriptions.push(
 		output,
 		{ dispose: () => documents.clear() },
+		{ dispose: () => sourceSnapshots.clear() },
 		vscode.workspace.registerTextDocumentContentProvider('sushi-inspect', {
 			provideTextDocumentContent: uri => documents.read(uri.toString())
+		}),
+		vscode.workspace.registerTextDocumentContentProvider('sushi-source-snapshot', {
+			provideTextDocumentContent: uri => sourceSnapshots.read(uri.toString())
 		}),
 		vscode.languages.registerDefinitionProvider(
 			{ language: 'sushi-structured-ir', scheme: 'sushi-inspect' },
@@ -39,22 +45,137 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 			{ provideHover: (document, position, token) => provideHover(document, position, token) }
 		),
 		vscode.workspace.onDidCloseTextDocument(document => {
-			if (document.uri.scheme === 'sushi-inspect' && !changingLanguage.has(document.uri.toString())) {
+			if ((document.uri.scheme === 'sushi-inspect' || document.uri.scheme === 'sushi-source-snapshot')
+				&& !changingLanguage.has(document.uri.toString())) {
 				// Language changes also emit close/open pairs. Check the settled document set before releasing ownership.
 				queueMicrotask(() => {
 					const stillOpen = vscode.workspace.textDocuments.some(item => item.uri.toString() === document.uri.toString());
 					if (!stillOpen) {
-						const id = documents.remove(document.uri.toString());
-						if (id) {
-							void release(id);
+						if (document.uri.scheme === 'sushi-inspect') {
+							const id = documents.remove(document.uri.toString());
+							if (id) {
+								void release(id);
+							}
+						} else {
+							sourceSnapshots.remove(document.uri.toString());
 						}
 					}
 				});
 			}
 		}),
 		vscode.commands.registerCommand('sushi.showStructuredIR', () => inspect('structuredIR')),
-		vscode.commands.registerCommand('sushi.showLoweredIR', () => inspect('loweredIR'))
+		vscode.commands.registerCommand('sushi.showLoweredIR', () => inspect('loweredIR')),
+		vscode.commands.registerCommand('sushi.goToSourceDefinition', () => goToSourceDefinition())
 	);
+
+	async function goToSourceDefinition(): Promise<void> {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor || editor.document.uri.scheme !== 'sushi-inspect'
+			|| (editor.document.languageId !== 'sushi-structured-ir' && editor.document.languageId !== 'sushi-lowered-ir')) {
+			await vscode.window.showInformationMessage('Open a generated Structured IR or Lowered IR document and place the cursor on a function or parameter.');
+			return;
+		}
+		if (!client.isRunning()) {
+			await vscode.window.showErrorMessage('The Sushi language server is not connected. Start or reconnect the server and retry.');
+			return;
+		}
+
+		const artifact = documents.get(editor.document.uri.toString());
+		if (!artifact) {
+			await vscode.window.showInformationMessage('This inspection document is no longer available. Reopen the representation and try again.');
+			return;
+		}
+
+		try {
+			const response = await client.sendRequest<InspectionSourceDefinitionResponse>('sourceInspection/sourceDefinition', {
+				documentUri: editor.document.uri.toString(), artifactId: artifact.artifactId,
+				position: { line: editor.selection.active.line, character: editor.selection.active.character }
+			});
+			if (!response.found || !response.sourceUri || response.text === undefined || !response.sourceRange) {
+				if (response.error) {
+					output.appendLine(`Source definition navigation failed: ${response.error}`);
+					await vscode.window.showErrorMessage(response.error);
+				} else {
+					await vscode.window.showInformationMessage('No source declaration is available at this generated symbol.');
+				}
+				return;
+			}
+
+			const sourceUri = vscode.Uri.parse(response.sourceUri);
+			let sourceAvailable = true;
+			try {
+				await vscode.workspace.fs.stat(sourceUri);
+			} catch {
+				sourceAvailable = false;
+			}
+			let sourceDocument: vscode.TextDocument | undefined = sourceAvailable
+				? vscode.workspace.textDocuments.find(document => document.uri.toString() === sourceUri.toString())
+				: undefined;
+			if (sourceAvailable && !sourceDocument) {
+				try {
+					sourceDocument = await vscode.workspace.openTextDocument(sourceUri);
+				} catch {
+					// A deleted or unavailable source is presented from the retained inspection snapshot below.
+				}
+			}
+
+			if (sourceDocument && hasCapturedContent(sourceDocument, response.text)) {
+				const sourceEditor = await vscode.window.showTextDocument(sourceDocument, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+				if (hasCapturedContent(sourceEditor.document, response.text) && await sourceFileExists(sourceUri)) {
+					selectSourceRange(sourceEditor, response.sourceRange);
+					return;
+				}
+			}
+
+			const previewUri = sourceSnapshots.add({
+				sourceUri: sourceUri.toString(), sourceVersion: response.sourceVersion ?? null, text: response.text
+			});
+			try {
+				let preview = await vscode.workspace.openTextDocument(vscode.Uri.parse(previewUri));
+				if (preview.languageId !== 'sushi') {
+					changingLanguage.add(preview.uri.toString());
+					try {
+						preview = await vscode.languages.setTextDocumentLanguage(preview, 'sushi');
+					} finally {
+						changingLanguage.delete(preview.uri.toString());
+					}
+				}
+				const previewEditor = await vscode.window.showTextDocument(preview, { viewColumn: vscode.ViewColumn.Beside, preview: false });
+				if (previewEditor.document.getText() !== response.text) {
+					throw new Error('The historical source preview did not retain the captured inspection text.');
+				}
+				selectSourceRange(previewEditor, response.sourceRange);
+			} catch (error) {
+				if (!vscode.workspace.textDocuments.some(document => document.uri.toString() === previewUri)) {
+					sourceSnapshots.remove(previewUri);
+				}
+				throw error;
+			}
+		} catch (error) {
+			output.appendLine(`Source definition navigation failed: ${String(error)}`);
+			await vscode.window.showErrorMessage('Sushi could not open the source definition. Check the Sushi Inspection output.');
+		}
+	}
+
+	function hasCapturedContent(document: vscode.TextDocument, capturedText: string): boolean {
+		const text = document.getText();
+		return (text.startsWith('\uFEFF') ? text.slice(1) : text) === capturedText;
+	}
+
+	async function sourceFileExists(uri: vscode.Uri): Promise<boolean> {
+		try {
+			await vscode.workspace.fs.stat(uri);
+			return true;
+		} catch {
+			return false;
+		}
+	}
+
+	function selectSourceRange(editor: vscode.TextEditor, range: NonNullable<InspectionSourceDefinitionResponse['sourceRange']>): void {
+		const selection = new vscode.Selection(range.start.line, range.start.character, range.end.line, range.end.character);
+		editor.selection = selection;
+		editor.revealRange(selection, vscode.TextEditorRevealType.InCenter);
+	}
 
 	async function provideDefinition(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): Promise<vscode.DefinitionLink[] | undefined> {
 		if (document.uri.scheme !== 'sushi-inspect' || !client.isRunning()) {

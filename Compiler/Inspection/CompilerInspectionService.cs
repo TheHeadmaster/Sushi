@@ -74,6 +74,7 @@ public sealed class CompilerInspectionService : IDisposable
         List<SourceSnapshot> snapshots = [];
         Dictionary<string, SourceSpan> definitions = new(StringComparer.Ordinal);
         Dictionary<string, InspectionCallableSignature> signatures = new(StringComparer.Ordinal);
+        Dictionary<InspectionSymbolIdentity, SourceSpan> sourceDefinitions = [];
         if (diagnostics.HasErrors())
         {
             return Complete(null, null);
@@ -127,6 +128,22 @@ public sealed class CompilerInspectionService : IDisposable
             SourceSpan span = item.Declaration.Span;
             definitions.Add(item.Callable.Symbol, span);
             signatures.Add(item.Callable.Symbol, new InspectionCallableSignature(item.Callable.Symbol, item.Callable.Function));
+            AddSourceDefinition(sourceDefinitions,
+                new InspectionSymbolIdentity(InspectionSymbolKind.Function, item.Callable.Symbol), item.Declaration.Name.Span,
+                span, item.Declaration.Name.IsSourceBacked);
+            if (item.Declaration.Parameters.Count != item.Callable.Function.Parameters.Count)
+            {
+                throw new InvalidOperationException("The retained function declaration and validated parameter signature have different arity.");
+            }
+
+            for (int index = 0; index < item.Declaration.Parameters.Count; index++)
+            {
+                ParameterSyntax parameter = item.Declaration.Parameters[index];
+                AddSourceDefinition(sourceDefinitions,
+                    new InspectionSymbolIdentity(InspectionSymbolKind.Parameter, item.Callable.Symbol, index), parameter.NameToken.Span,
+                    span, parameter.NameToken.IsSourceBacked);
+            }
+
             if (ReferenceEquals(item.Source, selectedSource) && request.ByteOffset >= span.Start && request.ByteOffset < span.End)
             {
                 selected = item;
@@ -153,7 +170,7 @@ public sealed class CompilerInspectionService : IDisposable
         CompilerInspectionResult Complete(SourceSpan? declaration, InspectionDocument? document)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions, signatures);
+            CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions, signatures, sourceDefinitions);
             CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document, functionName);
             cancellationToken.ThrowIfCancellationRequested();
             return result;
@@ -342,6 +359,21 @@ public sealed class CompilerInspectionService : IDisposable
             diagnostic.Span.Start,
             diagnostic.Span.End))];
         return Array.AsReadOnly(cached);
+    }
+
+    private static void AddSourceDefinition(IDictionary<InspectionSymbolIdentity, SourceSpan> definitions,
+        InspectionSymbolIdentity identity, SourceSpan span, SourceSpan functionSpan, bool isSourceBacked)
+    {
+        if (!isSourceBacked || !ReferenceEquals(span.Snapshot, functionSpan.Snapshot)
+            || span.Start < functionSpan.Start || span.Start >= span.End || span.End > functionSpan.End)
+        {
+            throw new InvalidOperationException("A source definition must be a nonempty token in its captured function declaration.");
+        }
+
+        if (!definitions.TryAdd(identity, span))
+        {
+            throw new InvalidOperationException("The callable catalog produced a duplicate source-definition identity.");
+        }
     }
 
     private static void ReplayBindingDiagnostics(IReadOnlyList<CachedInspectionDiagnostic> cachedDiagnostics,

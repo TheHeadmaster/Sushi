@@ -15,32 +15,45 @@ function harness(options = {}) {
 	const errorProgressStates = [];
 	const definitions = [];
 	const hovers = [];
+	const providers = new Map();
 	let close;
-	let provider;
 	let progressSettled = false;
 	let resolveErrorShown;
 	const errorShown = new Promise(resolve => { resolveErrorShown = resolve; });
 	const uri = value => ({ scheme: new URL(value).protocol.slice(0, -1), fsPath: new URL(value).pathname, toString: () => value });
 	const disposable = { dispose() {} };
-	const source = { document: { languageId: 'sushi', uri: uri('file:///Source.sus'), version: 7 }, selection: { active: { line: 1, character: 9 } } };
+	const sourceDocument = { languageId: 'sushi', uri: uri('file:///Source.sus'), version: 7,
+		text: options.sourceText ?? 'public int32 Value() { return 1; }', getText() { return this.text; } };
+	const source = { document: sourceDocument, selection: { active: { line: 1, character: 9 } } };
+	let activeTextEditor = source;
 	const reply = { succeeded: true, artifactId: 'one', documentUri: 'sushi-inspect://session/one/Value.structuredIR',
 		stage: 'structuredIR', text: 'exact compiler text\n', functionLabel: 'Value', sourceUri: 'file:///Source.sus', sourceVersion: 7 };
 	const vscode = {
-		Uri: { parse: uri },
+		Uri: { parse: uri, from({ scheme, path }) { return uri(`${scheme}:${path}`); } },
 		ProgressLocation: { Notification: 1 }, ViewColumn: { Beside: 2 },
 		commands: { registerCommand(id, action) { commands.set(id, action); return disposable; } },
 		workspace: {
 			textDocuments: openDocuments,
-			registerTextDocumentContentProvider(scheme, content) { assert.equal(scheme, 'sushi-inspect'); provider = content; return disposable; },
+			fs: { async stat() { if (options.sourceUnavailable) { throw new Error('File is unavailable'); } return {}; } },
+			registerTextDocumentContentProvider(scheme, content) { providers.set(scheme, content); return disposable; },
 			onDidCloseTextDocument(listener) { close = listener; return disposable; },
 			async openTextDocument(documentUri) {
 				if (options.openFailure) { throw new Error('Failed to open virtual document'); }
-				const document = { uri: documentUri, languageId: 'plaintext', text: provider.provideTextDocumentContent(documentUri) };
+				if (documentUri.scheme === 'file') {
+					const document = { uri: documentUri, languageId: 'sushi', text: options.sourceText ?? sourceDocument.text, version: options.sourceVersion ?? 7,
+						getText() { return this.text; } };
+					openDocuments.push(document);
+					return document;
+				}
+				const document = { uri: documentUri, languageId: 'plaintext', text: providers.get(documentUri.scheme).provideTextDocumentContent(documentUri),
+					getText() { return this.text; } };
 				openDocuments.push(document);
 				return document;
 			}
 		},
 		Position: class Position { constructor(line, character) { this.line = line; this.character = character; } },
+		Selection: class Selection { constructor(startLine, startCharacter, endLine, endCharacter) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
+		TextEditorRevealType: { InCenter: 1 },
 		Range: class Range { constructor(startLine, startCharacter, endLine, endCharacter) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
 		MarkdownString: class MarkdownString {
 			value = [];
@@ -54,7 +67,7 @@ function harness(options = {}) {
 			async setTextDocumentLanguage(document, language) { close(document); const updated = { ...document, languageId: language }; openDocuments.splice(openDocuments.indexOf(document), 1, updated); return updated; }
 		},
 		window: {
-			activeTextEditor: options.noEditor ? undefined : source,
+			get activeTextEditor() { return options.noEditor ? undefined : activeTextEditor; },
 			createOutputChannel() { return { appendLine() {}, dispose() {} }; },
 			async showInformationMessage(message) { messages.push(message); },
 			showErrorMessage(message) { messages.push(message); errorProgressStates.push(progressSettled); resolveErrorShown(); return options.errorPromise ?? Promise.resolve(); },
@@ -63,7 +76,11 @@ function harness(options = {}) {
 				finally { progressSettled = true; }
 			},
 			async showQuickPick(items) { return items[1]; },
-			async showTextDocument(document, settings) { assert.equal(settings.viewColumn, 2); assert.equal(settings.preview, false); shown.push(document); }
+			async showTextDocument(document, settings) {
+				assert.equal(settings.viewColumn, 2); assert.equal(settings.preview, false); shown.push(document);
+				activeTextEditor = { document, selection: { active: { line: 0, character: 0 } }, revealRange() {} };
+				return activeTextEditor;
+			}
 		}
 	};
 	const client = {
@@ -73,6 +90,9 @@ function harness(options = {}) {
 			requests.push({ method, params });
 			if (method === 'sourceInspection/definition') {
 				return options.definitionReply;
+			}
+			if (method === 'sourceInspection/sourceDefinition') {
+				return options.sourceDefinitionReply;
 			}
 			if (method === 'sourceInspection/hover') {
 				return options.hoverReply;
@@ -96,7 +116,11 @@ function harness(options = {}) {
 	} finally {
 		Module._load = originalLoad;
 	}
-	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, openDocuments, source, reply, close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); }, changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'), read: value => provider.provideTextDocumentContent(uri(value ?? reply.documentUri)) };
+	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, openDocuments, source, sourceDocument, reply,
+		get activeEditor() { return activeTextEditor; },
+		close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); },
+		changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'),
+		read: value => { const documentUri = uri(value ?? reply.documentUri); return providers.get(documentUri.scheme).provideTextDocumentContent(documentUri); } };
 }
 
 test('command sends URI version position stage without source text and opens frozen content beside source', async () => {
@@ -222,6 +246,70 @@ test('native IR hover providers request semantic metadata and return safe Markdo
 	]);
 	assert.equal(hover.contents.isTrusted, false);
 	assert.equal(hover.contents.supportHtml, false);
+});
+
+test('source definition command opens matching live Sushi content and selects the exact declaration token', async () => {
+	const sourceText = 'package Example; namespace Example;\npublic int32 Helper(int32 input) { return input; }';
+	const sourceStart = sourceText.indexOf('Helper');
+	const h = harness({ sourceText, sourceDefinitionReply: {
+		found: true, sourceUri: 'file:///Source.sus', text: sourceText, sourceVersion: 7,
+		sourceRange: { start: { line: 1, character: sourceStart }, end: { line: 1, character: sourceStart + 6 } }
+	} });
+	await h.commands.get('sushi.showStructuredIR')();
+	await h.commands.get('sushi.goToSourceDefinition')();
+	assert.deepEqual(h.requests[1], {
+		method: 'sourceInspection/sourceDefinition', params: {
+			documentUri: h.reply.documentUri, artifactId: 'one', position: { line: 0, character: 0 }
+		}
+	});
+	assert.equal(h.shown[1].uri.scheme, 'file');
+	assert.equal(h.shown[1].languageId, 'sushi');
+	assert.deepEqual(h.activeEditor.selection.start, { line: 1, character: sourceStart });
+	assert.deepEqual(h.activeEditor.selection.end, { line: 1, character: sourceStart + 6 });
+});
+
+test('diverged source opens a distinct frozen Sushi historical preview and releases it only on close', async () => {
+	const captured = 'package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }';
+	const sourceStart = captured.indexOf('Helper');
+	const h = harness({ sourceText: captured.replace('+ 1', '+ 9'), sourceDefinitionReply: {
+		found: true, sourceUri: 'file:///Source.sus', text: captured, sourceVersion: 7,
+		sourceRange: { start: { line: 1, character: sourceStart }, end: { line: 1, character: sourceStart + 6 } }
+	} });
+	await h.commands.get('sushi.showLoweredIR')();
+	await h.commands.get('sushi.goToSourceDefinition')();
+	const preview = h.shown[1];
+	assert.equal(preview.uri.scheme, 'sushi-source-snapshot');
+	assert.match(preview.uri.toString(), /Source\.sus \(Historical\)/);
+	assert.equal(preview.languageId, 'sushi');
+	assert.equal(preview.getText(), captured);
+	assert.deepEqual(h.activeEditor.selection.start, { line: 1, character: sourceStart });
+	assert.equal(h.read(preview.uri.toString()), captured);
+	assert.equal(h.notifications.length, 0, 'the source preview does not release the originating inspection artifact');
+	h.close(preview);
+	await Promise.resolve();
+	assert.throws(() => h.read(preview.uri.toString()), /historical source snapshot is no longer available/);
+	assert.equal(h.notifications.length, 0);
+});
+
+test('unavailable source files use the captured historical snapshot', async () => {
+	const captured = 'package Example; namespace Example;\npublic int32 Helper() { return 1; }';
+	const start = captured.indexOf('Helper');
+	const h = harness({ sourceUnavailable: true, sourceDefinitionReply: {
+		found: true, sourceUri: 'file:///Deleted.sus', text: captured, sourceVersion: null,
+		sourceRange: { start: { line: 1, character: start }, end: { line: 1, character: start + 6 } }
+	} });
+	await h.commands.get('sushi.showStructuredIR')();
+	await h.commands.get('sushi.goToSourceDefinition')();
+	assert.equal(h.shown[1].uri.scheme, 'sushi-source-snapshot');
+	assert.equal(h.shown[1].getText(), captured);
+});
+
+test('unsupported source symbols and forged responses open no source document', async () => {
+	const h = harness({ sourceDefinitionReply: { found: false } });
+	await h.commands.get('sushi.showStructuredIR')();
+	await h.commands.get('sushi.goToSourceDefinition')();
+	assert.equal(h.shown.length, 1);
+	assert.match(h.messages[0], /No source declaration/);
 });
 
 test('native hover providers stay quiet for missing symbols, cancellation, and server disconnection', async () => {

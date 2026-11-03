@@ -349,6 +349,50 @@ public class InspectionDocumentLookupTests
                 .Should()
                 .Be(functionLine);
 
+            JsonElement functionSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            functionSource.GetProperty("found").GetBoolean()
+                .Should()
+                .BeTrue(functionSource.ToString());
+            functionSource.GetProperty("sourceUri").GetString()
+                .Should()
+                .Be(DocumentUri.FromFileSystemPath(calleePath).ToString());
+            functionSource.GetProperty("text").GetString()
+                .Should()
+                .Be(unsavedCallee);
+            functionSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
+                .Should()
+                .Be(unsavedCallee.IndexOf("Helper", StringComparison.Ordinal));
+            functionSource.GetProperty("sourceRange").GetProperty("end").GetProperty("character").GetInt32()
+                .Should()
+                .Be(unsavedCallee.IndexOf("Helper", StringComparison.Ordinal) + "Helper".Length);
+
+            (int structuredFunctionLine, int structuredFunctionCharacter) = GetGeneratedPosition(structuredText, "__sushi_package_function_0");
+            JsonElement structuredDeclarationSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = structuredFunctionLine, character = structuredFunctionCharacter }
+            });
+            structuredDeclarationSource.GetProperty("sourceUri").GetString()
+                .Should()
+                .Be(DocumentUri.FromFileSystemPath(callerPath).ToString());
+
+            (int callerParameterLine, int callerParameterCharacter) = GetGeneratedPosition(structuredText, "value");
+            JsonElement callerParameterSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = callerParameterLine, character = callerParameterCharacter }
+            });
+            callerParameterSource.GetProperty("sourceUri").GetString()
+                .Should()
+                .Be(DocumentUri.FromFileSystemPath(callerPath).ToString());
+
             (int parameterLine, int parameterCharacter) = GetGeneratedPosition(structuredText, "arg0");
             JsonElement parameterHover = await session.Request("sourceInspection/hover", new
             {
@@ -364,6 +408,43 @@ public class InspectionDocumentLookupTests
                 .Contain("Parameter 0: input")
                 .And
                 .Contain("Function: Helper");
+
+            JsonElement parameterSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = parameterLine, character = parameterCharacter }
+            });
+            parameterSource.GetProperty("found").GetBoolean()
+                .Should()
+                .BeTrue(parameterSource.ToString());
+            parameterSource.GetProperty("sourceUri").GetString()
+                .Should()
+                .Be(DocumentUri.FromFileSystemPath(calleePath).ToString());
+            parameterSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
+                .Should()
+                .Be(unsavedCallee.IndexOf("input", StringComparison.Ordinal));
+
+            (int loweredFunctionLine, int loweredFunctionCharacter) = GetGeneratedPosition(inspected.GetProperty("text").GetString()!, "__sushi_package_function_0");
+            JsonElement loweredFunctionSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = inspected.GetProperty("documentUri").GetString(),
+                artifactId = inspected.GetProperty("artifactId").GetString(),
+                position = new { line = loweredFunctionLine, character = loweredFunctionCharacter }
+            });
+            loweredFunctionSource.GetProperty("sourceUri").GetString()
+                .Should()
+                .Be(DocumentUri.FromFileSystemPath(callerPath).ToString());
+
+            JsonElement forgedSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = "sushi-inspect://other/forged/Caller.structuredIR",
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            forgedSource.GetProperty("found").GetBoolean()
+                .Should()
+                .BeFalse();
 
             string loweredText = inspected.GetProperty("text").GetString()!;
             foreach ((string symbolText, string expectedDetail) in new[]
@@ -383,6 +464,20 @@ public class InspectionDocumentLookupTests
                 hover.GetProperty("details").GetString()
                     .Should()
                     .Contain(expectedDetail);
+            }
+
+            foreach (string symbolText in new[] { "%local0", "%temp0", "entry" })
+            {
+                (int unsupportedLine, int unsupportedCharacter) = GetGeneratedPosition(loweredText, symbolText);
+                JsonElement sourceResult = await session.Request("sourceInspection/sourceDefinition", new
+                {
+                    documentUri = inspected.GetProperty("documentUri").GetString(),
+                    artifactId = inspected.GetProperty("artifactId").GetString(),
+                    position = new { line = unsupportedLine, character = unsupportedCharacter }
+                });
+                sourceResult.GetProperty("found").GetBoolean()
+                    .Should()
+                    .BeFalse();
             }
 
             JsonElement noHover = await session.Request("sourceInspection/hover", new
@@ -451,6 +546,59 @@ public class InspectionDocumentLookupTests
                 .Should()
                 .Contain("Parameter 0: renamed");
 
+            JsonElement historicalParameter = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = parameterLine, character = parameterCharacter }
+            });
+            historicalParameter.GetProperty("text").GetString()
+                .Should()
+                .Be(unsavedCallee);
+            historicalParameter.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
+                .Should()
+                .Be(unsavedCallee.IndexOf("input", StringComparison.Ordinal));
+
+            JsonElement currentParameter = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = currentInspection.GetProperty("documentUri").GetString(),
+                artifactId = currentInspection.GetProperty("artifactId").GetString(),
+                position = new { line = currentArgumentLine, character = currentArgumentCharacter }
+            });
+            currentParameter.GetProperty("text").GetString()
+                .Should()
+                .Be(changedCallee);
+            currentParameter.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
+                .Should()
+                .Be(changedCallee.IndexOf("renamed", StringComparison.Ordinal));
+
+            string shiftedCaller = "// prefix\n" + changedCaller;
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 9 }, contentChanges = new[] { new { text = shiftedCaller } }
+            });
+            JsonElement shiftedInspection = await session.Request("sourceInspection/inspectFunction", new
+            {
+                sourceUri = callerUri, sourceVersion = 9,
+                position = new { line = 2, character = shiftedCaller.Split('\n')[2].IndexOf("Caller", StringComparison.Ordinal) + 10 }, stage = "structuredIR"
+            });
+            (int shiftedFunctionLine, int shiftedFunctionCharacter) = GetGeneratedPosition(shiftedInspection.GetProperty("text").GetString()!, "__sushi_package_function_0");
+            JsonElement shiftedSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = shiftedInspection.GetProperty("documentUri").GetString(),
+                artifactId = shiftedInspection.GetProperty("artifactId").GetString(),
+                position = new { line = shiftedFunctionLine, character = shiftedFunctionCharacter }
+            });
+            shiftedSource.GetProperty("text").GetString()
+                .Should()
+                .Be(shiftedCaller);
+            shiftedSource.GetProperty("sourceRange").GetProperty("start").GetProperty("line").GetInt32()
+                .Should()
+                .Be(2);
+            shiftedSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
+                .Should()
+                .Be(shiftedCaller.Split('\n')[2].IndexOf("Caller", StringComparison.Ordinal));
+
             await File.WriteAllTextAsync(projectPath, "name = false");
             JsonElement definition = await session.Request("sourceInspection/definition", new
             {
@@ -498,6 +646,7 @@ public class InspectionDocumentLookupTests
             await session.Notify("sourceInspection/release", new { artifactId = structuredAgain.GetProperty("artifactId").GetString() });
             await session.Notify("sourceInspection/release", new { artifactId = changedInspection.GetProperty("artifactId").GetString() });
             await session.Notify("sourceInspection/release", new { artifactId = currentInspection.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = shiftedInspection.GetProperty("artifactId").GetString() });
 
             JsonElement releasedHover = await session.Request("sourceInspection/hover", new
             {
@@ -506,6 +655,15 @@ public class InspectionDocumentLookupTests
                 position = new { line = functionLine, character = functionCharacter }
             });
             releasedHover.GetProperty("found").GetBoolean()
+                .Should()
+                .BeFalse();
+            JsonElement releasedSource = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = functionLine, character = functionCharacter }
+            });
+            releasedSource.GetProperty("found").GetBoolean()
                 .Should()
                 .BeFalse();
         }

@@ -40,4 +40,11 @@ test('contributions restrict inspection actions to ordinary Sushi source editors
 		assert.equal(manifest.contributes.menus['editor/context'].find(item => item.command === command).when, when);
 		assert.equal(manifest.contributes.menus.commandPalette.find(item => item.command === command).when, when);
 	}
+	const sourceCommand = manifest.contributes.commands.find(item => item.command === 'sushi.goToSourceDefinition');
+	assert.ok(sourceCommand);
+	assert.match(sourceCommand.enablement, /editorLangId == sushi-structured-ir/);
+	assert.match(sourceCommand.enablement, /editorLangId == sushi-lowered-ir/);
+	assert.match(sourceCommand.enablement, /resourceScheme == sushi-inspect/);
+	assert.equal(manifest.contributes.menus['editor/context'].find(item => item.command === sourceCommand.command).when, sourceCommand.enablement);
+	assert.equal(manifest.contributes.menus.commandPalette.find(item => item.command === sourceCommand.command).when, sourceCommand.enablement);
 });

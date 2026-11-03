@@ -52,6 +52,25 @@ Use a real Sushi project with an `InspectMe()` function and, for the snapshot ch
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.
 
+# Generated IR to Source Navigation
+
+Use a configured Sushi project with package functions in at least two source files. This procedure requires a graphical VS Code Extension Development Host; protocol and client tests do not replace it.
+
+1. Inspect a caller as Structured IR, place the cursor on the generated callee function symbol, and invoke **Sushi: Go to Source Definition**. Verify the exact source name token is selected.
+2. Repeat from Lowered IR and verify the command opens the same source declaration.
+3. Invoke the command on the caller's generated function declaration and verify it selects the caller's source name.
+4. Place the cursor on a generated call argument label such as `arg0`. Verify it selects the matching parameter in the callee, including when the callee is in another file.
+5. Verify Ctrl+click and F12 still navigate to same-stage generated IR, not to Sushi source.
+6. Change the callee source without saving, then navigate from the older IR document. Verify a distinct read-only `sushi-source-snapshot:` document opens with the original text and declaration range.
+7. Inspect the changed caller again and navigate to the callee. Verify this newer navigation uses the newer source snapshot.
+8. Restore the original source content and verify navigation can use the editable source document when its actual text matches the inspection snapshot.
+9. Invoke the source command on a local, SSA temporary, basic block, whitespace, or punctuation. Verify no invented source location appears.
+10. Close a historical preview and verify its retained client content is released. Closing the originating IR document must not close an already-open historical preview.
+11. Confirm earlier generated IR documents remain read-only and unchanged, and that hover behavior still works.
+12. Confirm source navigation generated no native executable or object output.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless exercised in an actual VS Code Extension Development Host.
+
 # Generated IR semantic hovers
 
 Use a configured Sushi project with a caller and callee, local storage, and a function that lowers to multiple basic blocks and SSA temporaries. Hover information comes from captured compiler identities and formatter metadata; this procedure requires a graphical VS Code session.

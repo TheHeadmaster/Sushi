@@ -130,6 +130,11 @@
                 "command": "sushi.showLoweredIR",
                 "title": "Sushi: Show Lowered IR",
                 "enablement": "editorLangId == sushi && resourceScheme == file && resourceExtname == .sus"
+            },
+            {
+                "command": "sushi.goToSourceDefinition",
+                "title": "Sushi: Go to Source Definition",
+                "enablement": "(editorLangId == sushi-structured-ir || editorLangId == sushi-lowered-ir) && resourceScheme == sushi-inspect"
             }
         ],
         "menus": {
@@ -143,6 +148,11 @@
                     "command": "sushi.showLoweredIR",
                     "when": "editorLangId == sushi && resourceScheme == file && resourceExtname == .sus",
                     "group": "sushi.inspection"
+                },
+                {
+                    "command": "sushi.goToSourceDefinition",
+                    "when": "(editorLangId == sushi-structured-ir || editorLangId == sushi-lowered-ir) && resourceScheme == sushi-inspect",
+                    "group": "sushi.inspection"
                 }
             ],
             "commandPalette": [
@@ -153,6 +163,10 @@
                 {
                     "command": "sushi.showLoweredIR",
                     "when": "editorLangId == sushi && resourceScheme == file && resourceExtname == .sus"
+                },
+                {
+                    "command": "sushi.goToSourceDefinition",
+                    "when": "(editorLangId == sushi-structured-ir || editorLangId == sushi-lowered-ir) && resourceScheme == sushi-inspect"
                 }
             ]
         }
