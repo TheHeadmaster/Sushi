@@ -5,6 +5,51 @@ import { URL } from 'node:url';
 
 const load = createRequire(import.meta.url);
 
+async function withManualTimers(action) {
+	const originalSetTimeout = globalThis.setTimeout;
+	const originalClearTimeout = globalThis.clearTimeout;
+	let now = 0;
+	let nextId = 0;
+	const timers = new Map();
+	const history = [];
+	globalThis.setTimeout = (callback, delay, ...args) => {
+		const id = ++nextId;
+		const timer = { id, callback: () => callback(...args), due: now + delay };
+		timers.set(id, timer);
+		history.push({ id, delay, cleared: false });
+		return id;
+	};
+	globalThis.clearTimeout = id => {
+		timers.delete(id);
+		const timer = history.find(item => item.id === id);
+		if (timer) { timer.cleared = true; }
+	};
+	const clock = {
+		advanceBy(milliseconds) {
+			now += milliseconds;
+			for (const timer of [...timers.values()].filter(item => item.due <= now).sort((left, right) => left.due - right.due)) {
+				timers.delete(timer.id);
+				timer.callback();
+			}
+		},
+		get pendingCount() { return timers.size; },
+		history
+	};
+	try {
+		return await action(clock);
+	} finally {
+		globalThis.setTimeout = originalSetTimeout;
+		globalThis.clearTimeout = originalClearTimeout;
+	}
+}
+
+function deferred() {
+	let resolve;
+	let reject;
+	const promise = new Promise((resolvePromise, rejectPromise) => { resolve = resolvePromise; reject = rejectPromise; });
+	return { promise, resolve, reject };
+}
+
 function harness(options = {}) {
 	const commands = new Map();
 	const notifications = [];
@@ -16,13 +61,40 @@ function harness(options = {}) {
 	const editors = new Map();
 	const messages = [];
 	const errorProgressStates = [];
+	const progressCalls = [];
+	const cancellationSources = [];
+	const quickPicks = [];
 	const definitions = [];
 	const hovers = [];
 	const providers = new Map();
 	let close;
-	let progressSettled = false;
 	let resolveErrorShown;
 	const errorShown = new Promise(resolve => { resolveErrorShown = resolve; });
+	let activeProgress = 0;
+	let requestHandler = options.requestHandler;
+	class CancellationTokenSource {
+		constructor() {
+			let cancelled = false;
+			const listeners = new Set();
+			this.disposed = false;
+			this.token = {
+				get isCancellationRequested() { return cancelled; },
+				onCancellationRequested(listener) {
+					if (cancelled) { Promise.resolve().then(listener); }
+					listeners.add(listener);
+					return { dispose() { listeners.delete(listener); } };
+				}
+			};
+			this.listenerCount = () => listeners.size;
+			this.cancel = () => {
+				if (cancelled) { return; }
+				cancelled = true;
+				for (const listener of [...listeners]) { listener(); }
+			};
+			cancellationSources.push(this);
+		}
+		dispose() { this.disposed = true; }
+	}
 	const uri = value => ({ scheme: new URL(value).protocol.slice(0, -1), fsPath: new URL(value).pathname, toString: () => value });
 	class TabInputText { constructor(documentUri) { this.uri = documentUri; } }
 	const disposable = { dispose() {} };
@@ -41,6 +113,7 @@ function harness(options = {}) {
 	const vscode = {
 		Uri: { parse: uri, from({ scheme, path }) { return uri(`${scheme}:${path}`); } },
 		TabInputText,
+		CancellationTokenSource,
 		ProgressLocation: { Notification: 1 }, ViewColumn: { Beside: 2 },
 		commands: { registerCommand(id, action) { commands.set(id, action); return disposable; } },
 		workspace: {
@@ -92,12 +165,18 @@ function harness(options = {}) {
 			tabGroups: { get all() { return tabGroups; } },
 			createOutputChannel() { return { appendLine() {}, dispose() {} }; },
 			async showInformationMessage(message) { messages.push(message); },
-			showErrorMessage(message) { messages.push(message); errorProgressStates.push(progressSettled); resolveErrorShown(); return options.errorPromise ?? Promise.resolve(); },
-			async withProgress(_settings, action) {
-				try { return await action({}, { isCancellationRequested: options.cancelled ?? false }); }
-				finally { progressSettled = true; }
+			showErrorMessage(message) { messages.push(message); errorProgressStates.push(activeProgress === 0); resolveErrorShown(); return options.errorPromise ?? Promise.resolve(); },
+			withProgress(settings, action) {
+				const source = new CancellationTokenSource();
+				const call = { settings, source, settled: false };
+				progressCalls.push(call);
+				activeProgress++;
+				return Promise.resolve().then(() => action({}, source.token)).finally(() => {
+					call.settled = true;
+					activeProgress--;
+				});
 			},
-			async showQuickPick(items) { return items[1]; },
+			async showQuickPick(items) { quickPicks.push(items); return options.cancelQuickPick ? undefined : items[options.quickPickIndex ?? 1]; },
 			async showTextDocument(document, settings) {
 				assert.ok(settings.viewColumn); assert.equal(settings.preview, false); shown.push(document);
 				const key = document.uri.toString();
@@ -121,22 +200,23 @@ function harness(options = {}) {
 	const client = {
 		isRunning: () => !options.disconnected,
 		async sendNotification(method, params) { notifications.push({ method, params }); },
-		async sendRequest(method, params) {
-			requests.push({ method, params });
+		sendRequest(method, params, token) {
+			requests.push(token === undefined ? { method, params } : { method, params, token });
+			if (requestHandler) { return requestHandler(method, params, token); }
 			if (method === 'sourceInspection/definition') {
-				return options.definitionReply;
+				return Promise.resolve(options.definitionReply);
 			}
 			if (method === 'sourceInspection/sourceDefinition') {
-				return options.sourceDefinitionReply;
+				return Promise.resolve(options.sourceDefinitionReply);
 			}
 			if (method === 'sourceInspection/hover') {
-				return options.hoverReply;
+				return Promise.resolve(options.hoverReply);
 			}
-			if (options.throwRequest) { throw new Error('Unexpected inspection request failure'); }
+			if (options.throwRequest) { return Promise.reject(new Error('Unexpected inspection request failure')); }
 			if (options.ambiguous && !params.projectUri) {
-				return { succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] };
+				return Promise.resolve({ succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] });
 			}
-			return options.failure ? { succeeded: false, error: options.failureText ?? 'Select a package function', projects: [], diagnostics: [] } : reply;
+			return Promise.resolve(options.failure ? { succeeded: false, error: options.failureText ?? 'Select a package function', projects: [], diagnostics: [] } : reply);
 		}
 	};
 	const originalLoad = Module._load;
@@ -152,6 +232,7 @@ function harness(options = {}) {
 		Module._load = originalLoad;
 	}
 	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, hovers, openDocuments, source, sourceDocument, reply,
+		progressCalls, cancellationSources, quickPicks,
 		tabGroups, visibleEditors,
 		get activeEditor() { return activeTextEditor; },
 		close: document => {
@@ -164,6 +245,8 @@ function harness(options = {}) {
 		},
 		activate: document => { activeTextEditor = editors.get(document.uri.toString()); },
 		setSourceDefinitionReply: value => { options.sourceDefinitionReply = value; },
+		setRequestHandler: value => { requestHandler = value; },
+		cancelProgress: index => progressCalls[index].source.cancel(),
 		tabCount: () => tabGroups.reduce((count, group) => count + group.tabs.length, 0),
 		changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'),
 		read: value => { const documentUri = uri(value ?? reply.documentUri); return providers.get(documentUri.scheme).provideTextDocumentContent(documentUri); } };
@@ -179,10 +262,62 @@ test('command sends URI version position stage without source text and opens fro
 	assert.equal(h.source.document.languageId, 'sushi');
 	assert.equal(h.read(), h.reply.text);
 	assert.equal(h.notifications.length, 0, 'language-change close must not release metadata');
+	assert.equal(h.progressCalls.length, 0, 'a fast inspection must not flash progress');
 	h.close(h.shown[0]);
 	await Promise.resolve();
 	assert.deepEqual(h.notifications[0], { method: 'sourceInspection/release', params: { artifactId: 'one' } });
 	assert.throws(h.read, /no longer available/);
+});
+
+test('fast inspection opens immediately and clears its delayed progress timer', async () => {
+	await withManualTimers(async clock => {
+		const h = harness();
+		await h.commands.get('sushi.showStructuredIR')();
+		assert.equal(h.requests.length, 1);
+		assert.equal(h.progressCalls.length, 0);
+		assert.equal(h.shown.length, 1);
+		assert.equal(clock.pendingCount, 0);
+		assert.deepEqual(clock.history.map(timer => ({ delay: timer.delay, cleared: timer.cleared })), [{ delay: 500, cleared: true }]);
+	});
+});
+
+test('slow inspection starts immediately and displays cancellable progress at 500 ms', async () => {
+	await withManualTimers(async clock => {
+		const operation = deferred();
+		const h = harness({ requestHandler: () => operation.promise });
+		const running = h.commands.get('sushi.showLoweredIR')();
+		assert.equal(h.requests.length, 1, 'the language-server request starts before progress');
+		assert.equal(h.progressCalls.length, 0);
+		clock.advanceBy(499);
+		assert.equal(h.progressCalls.length, 0);
+		clock.advanceBy(1);
+		assert.equal(h.progressCalls.length, 1);
+		assert.equal(h.progressCalls[0].settings.cancellable, true);
+		assert.match(h.progressCalls[0].settings.title, /Lowered IR/);
+		operation.resolve({ ...h.reply, stage: 'loweredIR', documentUri: 'sushi-inspect://session/one/Value.loweredIR' });
+		await running;
+		assert.equal(h.shown[0].languageId, 'sushi-lowered-ir');
+		assert.equal(h.progressCalls[0].settled, true);
+		assert.equal(clock.pendingCount, 0);
+	});
+});
+
+test('completion observed at the 500 ms boundary prevents progress and runs once', async () => {
+	await withManualTimers(async clock => {
+		const operation = deferred();
+		let requestCount = 0;
+		const h = harness({ requestHandler: () => { requestCount++; return operation.promise; } });
+		const running = h.commands.get('sushi.showStructuredIR')();
+		operation.resolve(h.reply);
+		await Promise.resolve();
+		await Promise.resolve();
+		clock.advanceBy(500);
+		await running;
+		assert.equal(requestCount, 1);
+		assert.equal(h.progressCalls.length, 0);
+		assert.equal(h.shown.length, 1);
+		assert.equal(clock.pendingCount, 0);
+	});
 });
 
 test('repeated inspection focuses the existing exact-snapshot IR tab without allocating another tab', async () => {
@@ -195,6 +330,7 @@ test('repeated inspection focuses the existing exact-snapshot IR tab without all
 	assert.equal(h.shown[0], h.shown[1]);
 	assert.equal(h.requests.length, 2);
 	assert.deepEqual(h.notifications, []);
+	assert.equal(h.progressCalls.length, 0, 'exact-snapshot artifact reuse stays on the fast path');
 });
 
 test('lowered command uses the separate stage and language', async () => {
@@ -211,6 +347,41 @@ test('ambiguous project response requires explicit user choice', async () => {
 	await h.commands.get('sushi.showStructuredIR')();
 	assert.equal(h.requests[1].params.projectUri, 'file:///Second.susproj');
 	assert.equal(h.shown.length, 1);
+	assert.equal(h.quickPicks.length, 1);
+	assert.equal(h.progressCalls.length, 0, 'fast requests and project selection stay free of progress overlays');
+});
+
+test('project selection is outside progress and each selected-project request gets its own delay', async () => {
+	await withManualTimers(async clock => {
+		const secondRequest = deferred();
+		const h = harness({ requestHandler: (_method, params) => params.projectUri
+			? secondRequest.promise
+			: Promise.resolve({ succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] }) });
+		const running = h.commands.get('sushi.showStructuredIR')();
+		for (let attempt = 0; attempt < 12 && h.requests.length < 2; attempt++) {
+			await Promise.resolve();
+		}
+		assert.equal(h.quickPicks.length, 1);
+		assert.equal(h.requests.length, 2);
+		assert.equal(h.progressCalls.length, 0);
+		clock.advanceBy(499);
+		assert.equal(h.progressCalls.length, 0);
+		clock.advanceBy(1);
+		assert.equal(h.progressCalls.length, 1);
+		secondRequest.resolve(h.reply);
+		await running;
+		assert.equal(h.shown.length, 1);
+	});
+});
+
+test('canceling project selection exits without another request or progress notification', async () => {
+	const h = harness({ ambiguous: true, cancelQuickPick: true });
+	await h.commands.get('sushi.showStructuredIR')();
+	assert.equal(h.requests.length, 1);
+	assert.equal(h.quickPicks.length, 1);
+	assert.equal(h.progressCalls.length, 0);
+	assert.equal(h.messages.length, 0);
+	assert.equal(h.shown.length, 0);
 });
 
 for (const options of [{ noEditor: true }, { disconnected: true }, { failure: true }]) {
@@ -222,12 +393,69 @@ for (const options of [{ noEditor: true }, { disconnected: true }, { failure: tr
 	});
 }
 
-test('cancellation after a completed reply releases the artifact without opening a document', async () => {
-	const h = harness({ cancelled: true });
-	await h.commands.get('sushi.showStructuredIR')();
-	assert.equal(h.shown.length, 0);
-	assert.equal(h.messages.length, 0);
-	assert.equal(h.notifications[0].params.artifactId, 'one');
+test('canceling visible progress cancels the request and releases a late new artifact', async () => {
+	await withManualTimers(async clock => {
+		const operation = deferred();
+		const h = harness({ requestHandler: () => operation.promise });
+		const running = h.commands.get('sushi.showStructuredIR')();
+		const requestToken = h.requests[0].token;
+		clock.advanceBy(500);
+		assert.equal(h.progressCalls.length, 1);
+		h.cancelProgress(0);
+		await Promise.resolve();
+		assert.equal(requestToken.isCancellationRequested, true);
+		operation.resolve(h.reply);
+		await running;
+		assert.equal(h.shown.length, 0);
+		assert.equal(h.messages.length, 0);
+		assert.deepEqual(h.notifications, [{ method: 'sourceInspection/release', params: { artifactId: 'one' } }]);
+		const requestSource = h.cancellationSources.find(source => source.token === requestToken);
+		assert.equal(requestSource.disposed, true);
+		assert.equal(requestSource.listenerCount(), 0);
+		assert.equal(clock.pendingCount, 0);
+	});
+});
+
+test('canceling a repeated request does not release its already-open reused artifact', async () => {
+	await withManualTimers(async clock => {
+		const secondRequest = deferred();
+		let requestCount = 0;
+		const h = harness({ requestHandler: () => ++requestCount === 1 ? Promise.resolve(h.reply) : secondRequest.promise });
+		await h.commands.get('sushi.showStructuredIR')();
+		h.activate(h.sourceDocument);
+		const running = h.commands.get('sushi.showStructuredIR')();
+		clock.advanceBy(500);
+		assert.equal(h.progressCalls.length, 1);
+		h.cancelProgress(0);
+		secondRequest.resolve(h.reply);
+		await running;
+		assert.equal(h.shown.length, 1);
+		assert.equal(h.tabCount(), 2);
+		assert.equal(h.notifications.length, 0);
+	});
+});
+
+test('independent inspections keep their timers and cancellation tokens separate', async () => {
+	await withManualTimers(async clock => {
+		const firstRequest = deferred();
+		const secondRequest = deferred();
+		let requestCount = 0;
+		const h = harness({ requestHandler: () => ++requestCount === 1 ? firstRequest.promise : secondRequest.promise });
+		const first = h.commands.get('sushi.showStructuredIR')();
+		const second = h.commands.get('sushi.showLoweredIR')();
+		assert.equal(h.requests.length, 2);
+		clock.advanceBy(500);
+		assert.equal(h.progressCalls.length, 2);
+		h.cancelProgress(0);
+		await Promise.resolve();
+		assert.equal(h.requests[0].token.isCancellationRequested, true);
+		assert.equal(h.requests[1].token.isCancellationRequested, false);
+		firstRequest.resolve(h.reply);
+		secondRequest.resolve({ ...h.reply, artifactId: 'two', documentUri: 'sushi-inspect://session/two/Value.loweredIR', stage: 'loweredIR' });
+		await Promise.all([first, second]);
+		assert.equal(h.shown.length, 1);
+		assert.deepEqual(h.notifications, [{ method: 'sourceInspection/release', params: { artifactId: 'one' } }]);
+	});
 });
 
 for (const language of ['sushi-structured-ir', 'susproj', 'typescript']) {
@@ -238,6 +466,7 @@ for (const language of ['sushi-structured-ir', 'susproj', 'typescript']) {
 		assert.equal(h.requests.length, 0);
 		assert.equal(h.shown.length, 0);
 		assert.equal(h.messages.length, 1);
+		assert.equal(h.progressCalls.length, 0, 'a fast failure should show its error without progress');
 	});
 }
 
@@ -476,7 +705,7 @@ for (const [command, stage, failureText] of [
 	['sushi.showStructuredIR', 'Structured IR', 'The selected activity entry cannot be inspected'],
 	['sushi.showLoweredIR', 'Lowered IR', 'The selected activity entry cannot be inspected']
 ]) {
-	test(`${stage} failure completes progress before an unresolved error notification`, async () => {
+	test(`${stage} fast failure shows its error without a progress notification`, async () => {
 		let dismissError;
 		const errorPromise = new Promise(resolve => { dismissError = resolve; });
 		const h = harness({ failure: true, failureText, errorPromise });
@@ -484,6 +713,7 @@ for (const [command, stage, failureText] of [
 		const running = h.commands.get(command)().finally(() => { commandSettled = true; });
 		await h.errorShown;
 		assert.deepEqual(h.errorProgressStates, [true]);
+		assert.equal(h.progressCalls.length, 0);
 		assert.equal(h.shown.length, 0);
 		assert.equal(commandSettled, false, 'the command may wait for the message UI, but progress has already settled');
 		dismissError();
@@ -492,17 +722,37 @@ for (const [command, stage, failureText] of [
 	});
 }
 
-test('an unexpected request exception completes progress before its error notification', async () => {
+test('a fast unexpected request exception shows its error without progress', async () => {
 	let dismissError;
 	const errorPromise = new Promise(resolve => { dismissError = resolve; });
 	const h = harness({ throwRequest: true, errorPromise });
 	const running = h.commands.get('sushi.showLoweredIR')();
 	await h.errorShown;
 	assert.deepEqual(h.errorProgressStates, [true]);
+	assert.equal(h.progressCalls.length, 0);
 	assert.equal(h.shown.length, 0);
 	dismissError();
 	await running;
 	assert.equal(h.messages[0], 'Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.');
+});
+
+test('slow semantic failure dismisses progress before presenting its diagnostic', async () => {
+	await withManualTimers(async clock => {
+		const operation = deferred();
+		const h = harness({ requestHandler: () => operation.promise });
+		const running = h.commands.get('sushi.showStructuredIR')();
+		clock.advanceBy(500);
+		assert.equal(h.progressCalls.length, 1);
+		operation.resolve({ succeeded: false, error: 'Inspection failed', projects: [], diagnostics: [
+			{ code: 'InvalidSignature', message: 'The return type is invalid', line: 2, character: 4 }
+		] });
+		await h.errorShown;
+		assert.equal(h.progressCalls[0].settled, true);
+		assert.deepEqual(h.errorProgressStates, [true]);
+		assert.match(h.messages[0], /InvalidSignature: The return type is invalid \(3:5\)/);
+		assert.equal(h.shown.length, 0);
+		await running;
+	});
 });
 
 test('failure after registering the result releases its artifact and removes virtual content', async () => {
@@ -512,12 +762,21 @@ test('failure after registering the result releases its artifact and removes vir
 	assert.deepEqual(h.notifications[0], { method: 'sourceInspection/release', params: { artifactId: 'one' } });
 	assert.throws(h.read, /no longer available/);
 	assert.deepEqual(h.errorProgressStates, [true]);
+	assert.equal(h.progressCalls.length, 0, 'document presentation occurs after the completed request progress scope');
 });
 
-test('cancellation of a failed inspection does not show an error notification', async () => {
-	const h = harness({ cancelled: true, failure: true, failureText: 'Inspection was cancelled' });
-	await h.commands.get('sushi.showLoweredIR')();
-	assert.equal(h.messages.length, 0);
-	assert.equal(h.shown.length, 0);
-	assert.equal(h.errorProgressStates.length, 0);
+test('cancellation rejection after visible progress is quiet and dismisses progress before returning', async () => {
+	await withManualTimers(async clock => {
+		const operation = deferred();
+		const h = harness({ requestHandler: () => operation.promise });
+		const running = h.commands.get('sushi.showLoweredIR')();
+		clock.advanceBy(500);
+		h.cancelProgress(0);
+		operation.reject(new Error('Request cancelled'));
+		await running;
+		assert.equal(h.messages.length, 0);
+		assert.equal(h.shown.length, 0);
+		assert.equal(h.progressCalls[0].settled, true);
+		assert.equal(h.errorProgressStates.length, 0);
+	});
 });

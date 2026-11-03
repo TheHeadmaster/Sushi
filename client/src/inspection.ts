@@ -4,6 +4,84 @@ import { LanguageClient } from 'vscode-languageclient/node';
 import { InspectionDefinitionResponse, InspectionDocuments, InspectionHoverResponse, InspectionResponse, InspectionSourceDefinitionResponse, InspectionStage, InspectionSuccess } from './inspectionDocuments';
 import { SourceSnapshotDocuments } from './sourceSnapshotDocuments';
 
+const inspectionProgressDelayMs = 500;
+
+type DelayedInspectionResult<T> =
+	| { readonly cancelled: true; readonly value?: T }
+	| { readonly cancelled: false; readonly value: T };
+
+async function withDelayedInspectionProgress<T>(
+	title: string,
+	operation: (token: vscode.CancellationToken) => Promise<T>
+): Promise<DelayedInspectionResult<T>> {
+	const cancellation = new vscode.CancellationTokenSource();
+	let operationSettled = false;
+	let progressPromise: Promise<void> | undefined;
+	let operationPromise: Promise<T>;
+	try {
+		operationPromise = operation(cancellation.token);
+	} catch (error) {
+		operationPromise = Promise.reject(error);
+	}
+
+	const outcome = operationPromise.then(
+		value => {
+			operationSettled = true;
+			return { succeeded: true as const, value };
+		},
+		error => {
+			operationSettled = true;
+			return { succeeded: false as const, error };
+		}
+	);
+	const timer = setTimeout(() => {
+		if (operationSettled) {
+			return;
+		}
+
+		try {
+			progressPromise = Promise.resolve(vscode.window.withProgress({
+				location: vscode.ProgressLocation.Notification,
+				title,
+				cancellable: true
+			}, async (_progress, token) => {
+				const subscription = token.onCancellationRequested(() => cancellation.cancel());
+				if (token.isCancellationRequested) {
+					cancellation.cancel();
+				}
+				try {
+					await outcome;
+				} finally {
+					subscription.dispose();
+				}
+			})).then(() => undefined, () => undefined);
+		} catch {
+			progressPromise = Promise.resolve();
+		}
+	}, inspectionProgressDelayMs);
+
+	try {
+		const result = await outcome;
+		clearTimeout(timer);
+		if (progressPromise) {
+			await progressPromise;
+		}
+
+		if (!result.succeeded) {
+			if (cancellation.token.isCancellationRequested) {
+				return { cancelled: true };
+			}
+			throw result.error;
+		}
+		return cancellation.token.isCancellationRequested
+			? { cancelled: true, value: result.value }
+			: { cancelled: false, value: result.value };
+	} finally {
+		clearTimeout(timer);
+		cancellation.dispose();
+	}
+}
+
 /** Registers commands and a content provider; generated text is never inserted into source or an untitled editor. */
 export function registerInspection(context: vscode.ExtensionContext, client: LanguageClient): void {
 	const documents = new InspectionDocuments();
@@ -326,83 +404,86 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		const sourceVersion = editor.document.version;
 		const position = { line: editor.selection.active.line, character: editor.selection.active.character };
 		let errorMessage: string | undefined;
-		await vscode.window.withProgress({
-			location: vscode.ProgressLocation.Notification,
-			title: stage === 'structuredIR' ? 'Sushi: Show Structured IR' : 'Sushi: Show Lowered IR',
-			cancellable: true
-		}, async (_progress, token) => {
-			let artifact: InspectionSuccess | undefined;
-			let registeredHere = false;
-			try {
-				let projectUri: string | undefined;
-				let response: InspectionResponse;
-				while (true) {
-					response = await client.sendRequest<InspectionResponse>('sourceInspection/inspectFunction', {
-						sourceUri, sourceVersion, position, stage, projectUri
-					}, token);
-					if (response.succeeded || !response.projects?.length) {
-						break;
-					}
-					const selected = await vscode.window.showQuickPick(response.projects.map(uri => ({
-						label: path.basename(vscode.Uri.parse(uri).fsPath),
-						description: vscode.Uri.parse(uri).fsPath,
-						uri
-					})), { placeHolder: 'Choose the Sushi project for this source file' }, token);
-					if (!selected || token.isCancellationRequested) {
-						return;
-					}
-					projectUri = selected.uri;
-				}
-
-				if (!response.succeeded) {
-					if (!token.isCancellationRequested) {
-						const diagnostic = response.diagnostics?.[0];
-						const detail = diagnostic ? ` ${diagnostic.code}: ${diagnostic.message} (${diagnostic.line + 1}:${diagnostic.character + 1})` : '';
-						errorMessage = response.error + detail;
+		try {
+			let projectUri: string | undefined;
+			let response: InspectionResponse;
+			const progressTitle = stage === 'structuredIR' ? 'Sushi: Show Structured IR' : 'Sushi: Show Lowered IR';
+			while (true) {
+				const request = await withDelayedInspectionProgress(progressTitle, token => client.sendRequest<InspectionResponse>(
+					'sourceInspection/inspectFunction', { sourceUri, sourceVersion, position, stage, projectUri }, token));
+				if (request.cancelled) {
+					if (request.value?.succeeded) {
+						await releaseIfUnowned(request.value);
 					}
 					return;
 				}
-				artifact = response;
-				if (token.isCancellationRequested) {
-					await release(artifact.artifactId);
+				response = request.value;
+				if (response.succeeded || !response.projects?.length) {
+					break;
+				}
+				const selected = await vscode.window.showQuickPick(response.projects.map(uri => ({
+					label: path.basename(vscode.Uri.parse(uri).fsPath),
+					description: vscode.Uri.parse(uri).fsPath,
+					uri
+				})), { placeHolder: 'Choose the Sushi project for this source file' });
+				if (!selected) {
 					return;
 				}
+				projectUri = selected.uri;
+			}
 
-				const uri = vscode.Uri.parse(artifact.documentUri);
-				const existing = documents.get(uri.toString());
-				if (existing && (existing.artifactId !== artifact.artifactId || existing.stage !== artifact.stage || existing.text !== artifact.text)) {
-					await release(artifact.artifactId);
-					throw new Error('The language server reused a virtual URI for a different inspection snapshot.');
-				}
-				registeredHere = !existing;
-				if (registeredHere) {
-					documents.add({ ...artifact, documentUri: uri.toString() });
-				}
-				let document = await vscode.workspace.openTextDocument(uri);
-				const language = artifact.stage === 'structuredIR' ? 'sushi-structured-ir' : 'sushi-lowered-ir';
-				if (document.languageId !== language) {
-					// VS Code emits close/open events during language changes; this is not a document disposal.
-					changingLanguage.add(uri.toString());
-					try {
-						document = await vscode.languages.setTextDocumentLanguage(document, language);
-					} finally {
-						changingLanguage.delete(uri.toString());
+			if (!response.succeeded) {
+				const diagnostic = response.diagnostics?.[0];
+				const detail = diagnostic ? ` ${diagnostic.code}: ${diagnostic.message} (${diagnostic.line + 1}:${diagnostic.character + 1})` : '';
+				errorMessage = response.error + detail;
+			} else {
+				let artifact: InspectionSuccess | undefined = response;
+				let registeredHere = false;
+				try {
+					const uri = vscode.Uri.parse(artifact.documentUri);
+					const existing = documents.get(uri.toString());
+					if (existing && (existing.artifactId !== artifact.artifactId || existing.stage !== artifact.stage || existing.text !== artifact.text)) {
+						await release(artifact.artifactId);
+						artifact = undefined;
+						throw new Error('The language server reused a virtual URI for a different inspection snapshot.');
 					}
-				}
-				await showDestinationDocument(document, uri);
-			} catch (error) {
-				if (artifact && registeredHere) {
-					documents.remove(vscode.Uri.parse(artifact.documentUri).toString());
-					await release(artifact.artifactId);
-				}
-				if (!token.isCancellationRequested) {
+					registeredHere = !existing;
+					if (registeredHere) {
+						documents.add({ ...artifact, documentUri: uri.toString() });
+					}
+					let document = await vscode.workspace.openTextDocument(uri);
+					const language = artifact.stage === 'structuredIR' ? 'sushi-structured-ir' : 'sushi-lowered-ir';
+					if (document.languageId !== language) {
+						// VS Code emits close/open pairs during language changes; this is not a document disposal.
+						changingLanguage.add(uri.toString());
+						try {
+							document = await vscode.languages.setTextDocumentLanguage(document, language);
+						} finally {
+							changingLanguage.delete(uri.toString());
+						}
+					}
+					await showDestinationDocument(document, uri);
+				} catch (error) {
+					if (artifact && registeredHere) {
+						documents.remove(vscode.Uri.parse(artifact.documentUri).toString());
+						await release(artifact.artifactId);
+					}
 					output.appendLine(`Inspection failed: ${String(error)}`);
 					errorMessage = 'Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.';
 				}
 			}
-		});
+		} catch (error) {
+			output.appendLine(`Inspection failed: ${String(error)}`);
+			errorMessage = 'Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.';
+		}
 		if (errorMessage) {
 			await vscode.window.showErrorMessage(errorMessage);
+		}
+	}
+
+	async function releaseIfUnowned(artifact: InspectionSuccess): Promise<void> {
+		if (documents.get(artifact.documentUri)?.artifactId !== artifact.artifactId) {
+			await release(artifact.artifactId);
 		}
 	}
 }

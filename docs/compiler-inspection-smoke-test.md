@@ -52,6 +52,19 @@ Use a real Sushi project with an `InspectMe()` function and, for the snapshot ch
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.
 
+# Delayed Inspection Progress Notifications
+
+Use the VS Code Extension Development Host with a valid Sushi project. Automated tests verify the exact 500 ms threshold; this procedure checks the visual behavior.
+
+1. Invoke **Sushi: Show Structured IR** for a valid function. Verify a fast inspection opens without a flashing progress notification.
+2. Repeat with **Sushi: Show Lowered IR**, then reinspect an unchanged function. Verify fast requests and exact-snapshot cache hits do not flash progress or create duplicate tabs.
+3. If a naturally slow inspection is available, verify the cancellable progress notification appears only after the brief delay and closes when the request finishes. Do not artificially slow production code.
+4. Cancel a visible progress notification. Verify the request stops, no unwanted document opens, and no ordinary error appears.
+5. Open a source file belonging to multiple projects. Verify the project-selection Quick Pick appears without inspection progress; after selecting a project, verify progress timing starts over for that request.
+6. Verify source navigation, historical previews, hover behavior, and editor-tab reuse remain unchanged.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. This smoke test was not run as part of the delayed-progress implementation unless explicitly recorded by the tester in the Extension Development Host.
+
 # Generated IR to Source Navigation
 
 Use a configured Sushi project with package functions in at least two source files. This procedure requires a graphical VS Code Extension Development Host; protocol and client tests do not replace it.
