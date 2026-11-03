@@ -51,3 +51,18 @@ Use a real Sushi project with an `InspectMe()` function and, for the snapshot ch
 8. Confirm inspection and navigation did not generate a native executable or object file.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.
+
+# Dependency-aware cache reuse
+
+Use a configured project containing `Calculate()` calling `Double()` and an unrelated function. This manual procedure checks visible results and historical navigation; automated tests establish whether compiler artifacts were actually reused.
+
+1. Inspect `Calculate()` as Structured IR, then as Lowered IR.
+2. Change only the unrelated function body without saving, inspect `Calculate()` again, and verify the representation remains correct.
+3. Change `Double()`'s implementation without changing its signature. Inspect `Calculate()` again and verify it remains correct.
+4. Navigate from the new inspection to `Double()` and verify the target contains the current implementation. Navigate from the original inspection and verify its target still contains the original implementation.
+5. Change `Double()`'s signature and verify a new `Calculate()` inspection does not reuse an incompatible binding.
+6. Restore the signature and verify inspection succeeds again.
+7. Confirm earlier generated documents remain read-only and unchanged, then close them and inspect again.
+8. Confirm no executable or native object file was generated.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless it was exercised in a graphical VS Code session.

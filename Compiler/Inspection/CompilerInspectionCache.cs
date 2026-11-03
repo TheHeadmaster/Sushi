@@ -1,9 +1,11 @@
 ﻿using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
+using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
+using Sushi.Semantics;
 using Sushi.Source;
 
 namespace Sushi.Inspection;
@@ -101,10 +103,60 @@ internal sealed class CompilerInspectionCache : IDisposable
     }
 
     /// <summary>
+    /// Reuses one compatible entry after exact source-content lookup has failed.
+    /// </summary>
+    internal bool TryGetCompatible(CompilerInspectionCacheKey key, string projectPath, SourceSnapshot projectSnapshot,
+        IReadOnlyList<SourceSnapshot> sources, ProjectCallable selected, IReadOnlyList<PackageCallable> visibleCallables,
+        out CompilerInspectionCacheEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(projectSnapshot);
+        ArgumentNullException.ThrowIfNull(sources);
+        ArgumentNullException.ThrowIfNull(selected);
+        ArgumentNullException.ThrowIfNull(visibleCallables);
+        lock (this.syncRoot)
+        {
+            if (this.disposed)
+            {
+                entry = null!;
+                return false;
+            }
+
+            if (this.entries.TryGetValue(key, out LinkedListNode<CacheEntry>? exact))
+            {
+                this.Promote(exact);
+                entry = exact.Value.Products;
+                return true;
+            }
+
+            for (LinkedListNode<CacheEntry>? node = this.leastRecentlyUsed.First; node is not null; node = node.Next)
+            {
+                CompilerInspectionCacheEntry products = node.Value.Products;
+                if (products.Dependencies is null || products.BindingDiagnostics.Count != 0
+                    || !products.Dependencies.IsCompatibleWith(projectPath, projectSnapshot, sources, selected, visibleCallables))
+                {
+                    continue;
+                }
+
+                CacheEntry promoted = node.Value with { Key = key };
+                this.entries.Remove(node.Value.Key);
+                node.Value = promoted;
+                this.entries.Add(key, node);
+                this.Promote(node);
+                entry = products;
+                return true;
+            }
+        }
+
+        entry = null!;
+        return false;
+    }
+
+    /// <summary>
     /// Retains the successfully converted Structured IR and its formatted document atomically.
     /// </summary>
     internal void StoreStructured(CompilerInspectionCacheKey key, IRFunction structuredIR, InspectionDocument document,
-        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics)
+        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies)
     {
         ArgumentNullException.ThrowIfNull(structuredIR);
         ArgumentNullException.ThrowIfNull(document);
@@ -113,7 +165,8 @@ internal sealed class CompilerInspectionCache : IDisposable
         {
             StructuredIR = structuredIR,
             StructuredDocument = document,
-            BindingDiagnostics = Freeze(bindingDiagnostics)
+            BindingDiagnostics = Freeze(bindingDiagnostics),
+            Dependencies = dependencies
         });
     }
 
@@ -121,7 +174,7 @@ internal sealed class CompilerInspectionCache : IDisposable
     /// Retains completed Structured and Lowered IR products after lowering and formatting both succeeded.
     /// </summary>
     internal void StoreLowered(CompilerInspectionCacheKey key, IRFunction structuredIR, LoweredFunction loweredIR, InspectionDocument document,
-        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics)
+        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies)
     {
         ArgumentNullException.ThrowIfNull(structuredIR);
         ArgumentNullException.ThrowIfNull(loweredIR);
@@ -132,7 +185,8 @@ internal sealed class CompilerInspectionCache : IDisposable
             StructuredIR = products.StructuredIR ?? structuredIR,
             LoweredIR = loweredIR,
             LoweredDocument = document,
-            BindingDiagnostics = products.BindingDiagnostics.Count == 0 ? Freeze(bindingDiagnostics) : products.BindingDiagnostics
+            BindingDiagnostics = products.BindingDiagnostics.Count == 0 ? Freeze(bindingDiagnostics) : products.BindingDiagnostics,
+            Dependencies = products.Dependencies ?? dependencies
         });
     }
 
@@ -183,8 +237,7 @@ internal sealed class CompilerInspectionCache : IDisposable
             if (this.entries.TryGetValue(key, out LinkedListNode<CacheEntry>? existing))
             {
                 existing.Value = existing.Value with { Products = update(existing.Value.Products) };
-                this.leastRecentlyUsed.Remove(existing);
-                this.leastRecentlyUsed.AddFirst(existing);
+                this.Promote(existing);
             }
             else
             {
@@ -200,6 +253,12 @@ internal sealed class CompilerInspectionCache : IDisposable
                 this.leastRecentlyUsed.RemoveLast();
             }
         }
+    }
+
+    private void Promote(LinkedListNode<CacheEntry> entry)
+    {
+        this.leastRecentlyUsed.Remove(entry);
+        this.leastRecentlyUsed.AddFirst(entry);
     }
 
     private sealed record CacheEntry(CompilerInspectionCacheKey Key, CompilerInspectionCacheEntry Products);
@@ -304,7 +363,7 @@ internal sealed class CompilerInspectionCacheKey : IEquatable<CompilerInspection
         hash.AppendData(value);
     }
 
-    private static string NormalizePath(string path)
+    internal static string NormalizePath(string path)
     {
         string fullPath = Path.GetFullPath(path);
         return OperatingSystem.IsWindows() ? fullPath.ToUpperInvariant() : fullPath;
@@ -319,9 +378,10 @@ internal sealed record CompilerInspectionCacheEntry(
     LoweredFunction? LoweredIR,
     InspectionDocument? StructuredDocument,
     InspectionDocument? LoweredDocument,
-    IReadOnlyList<CachedInspectionDiagnostic> BindingDiagnostics)
+    IReadOnlyList<CachedInspectionDiagnostic> BindingDiagnostics,
+    CompilerInspectionDependencies? Dependencies)
 {
-    internal static CompilerInspectionCacheEntry Empty { get; } = new(null, null, null, null, Array.Empty<CachedInspectionDiagnostic>());
+    internal static CompilerInspectionCacheEntry Empty { get; } = new(null, null, null, null, Array.Empty<CachedInspectionDiagnostic>(), null);
 }
 
 /// <summary>

@@ -411,6 +411,87 @@ public class InspectionDocumentLookupTests
         }
     }
 
+    [TestCase(TestName = "Initialized LSP Reuses A Caller Representation Without Replacing Its Compilation Snapshot")]
+    public async Task InitializedServerShouldKeepDependencyCompatibleCallerSnapshotsIndependent()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Cache Navigation " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            string configuration = """
+                name = "CacheNavigation"
+                assembly = "CacheNavigation"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { return Helper(value); }";
+            string callee = "package Example; namespace Example;\npublic int32 Helper(int32 input) { return input + 1; }";
+            string projectPath = Path.Combine(directory, "CacheNavigation.susproj");
+            string callerPath = Path.Combine(sourcesDirectory, "A.sus");
+            string calleePath = Path.Combine(sourcesDirectory, "B.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+            await using ServerSession session = new(directory);
+            await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "CacheNavigation" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 1, text = caller } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 1, text = callee } });
+
+            JsonElement original = await InspectFunction(session, callerUri, caller, "Caller", "structuredIR");
+            string changedCallee = callee.Replace("input + 1", "input + 10", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 2 }, contentChanges = new[] { new { text = changedCallee } }
+            });
+            JsonElement current = await InspectFunction(session, callerUri, caller, "Caller", "structuredIR");
+
+            original.GetProperty("succeeded").GetBoolean()
+                .Should()
+                .BeTrue(original.ToString());
+            current.GetProperty("succeeded").GetBoolean()
+                .Should()
+                .BeTrue(current.ToString());
+            current.GetProperty("text").GetString()
+                .Should()
+                .Be(original.GetProperty("text").GetString());
+            current.GetProperty("documentUri").GetString()
+                .Should()
+                .NotBe(original.GetProperty("documentUri").GetString());
+
+            JsonElement historicalTarget = await NavigateToCallee(session, original);
+            JsonElement currentTarget = await NavigateToCallee(session, current);
+            historicalTarget.GetProperty("text").GetString()
+                .Should()
+                .Contain("input + 1")
+                .And
+                .NotContain("input + 10");
+            currentTarget.GetProperty("text").GetString()
+                .Should()
+                .Contain("input + 10");
+            await session.Notify("sourceInspection/release", new { artifactId = historicalTarget.GetProperty("targetArtifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = currentTarget.GetProperty("targetArtifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = original.GetProperty("artifactId").GetString() });
+            await session.Notify("sourceInspection/release", new { artifactId = current.GetProperty("artifactId").GetString() });
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [TestCase(TestName = "Initialized LSP Binds Cross File Calls And Invalidates Caller Diagnostics From Unsaved Signatures")]
     public async Task InitializedServerShouldBindProjectFunctionsAndRefreshAffectedCallers()
     {
@@ -622,6 +703,31 @@ public class InspectionDocumentLookupTests
 
     private static Task<JsonElement> Inspect(ServerSession session, string uri, int version) => session.Request("sourceInspection/inspectFunction",
         new { sourceUri = uri, sourceVersion = version, position = new { line = 1, character = 25 }, stage = "structuredIR" });
+
+    private static Task<JsonElement> InspectFunction(ServerSession session, string uri, string source, string functionName, string stage)
+    {
+        string sourceLine = source.Split('\n')[1];
+        int character = sourceLine.IndexOf(functionName, StringComparison.Ordinal) + 1;
+        return session.Request("sourceInspection/inspectFunction",
+            new { sourceUri = uri, sourceVersion = 1, position = new { line = 1, character }, stage });
+    }
+
+    private static Task<JsonElement> NavigateToCallee(ServerSession session, JsonElement inspection)
+    {
+        string text = inspection.GetProperty("text").GetString()!;
+        int offset = text.IndexOf("__sushi_package_function_1", StringComparison.Ordinal);
+        offset
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        int line = text[..offset].Count(character => character == '\n');
+        int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+        return session.Request("sourceInspection/definition", new
+        {
+            documentUri = inspection.GetProperty("documentUri").GetString(),
+            artifactId = inspection.GetProperty("artifactId").GetString(),
+            position = new { line, character }
+        });
+    }
 
     private static string ExtensionUri(Uri uri)
         => "file://" + uri.AbsoluteUri["file://".Length..].Replace(":", "%3A", StringComparison.Ordinal);

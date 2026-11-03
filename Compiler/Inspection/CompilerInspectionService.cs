@@ -139,8 +139,8 @@ public sealed class CompilerInspectionService : IDisposable
         functionName = selected.Callable.Name;
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
         CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(projectPath, projectSnapshot, snapshots, selected.Callable.Symbol, selected.Declaration.Span);
-        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, selected.Callable.Symbol, selected.Declaration, visible,
-            snapshots, request.Stage, diagnostics, cancellationToken);
+        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, projectPath, projectSnapshot, snapshots, selected,
+            selected.Callable.Symbol, visible, request.Stage, diagnostics, cancellationToken);
         if (diagnostics.HasErrors() || document is null)
         {
             return Complete(selected.Declaration.Span, null);
@@ -237,8 +237,8 @@ public sealed class CompilerInspectionService : IDisposable
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
         CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(context.ProjectPath, context.ProjectSnapshot, context.Sources,
             selected.Callable.Symbol, selected.Declaration.Span);
-        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, selected.Callable.Symbol, selected.Declaration, visible,
-            context.Sources, stage, diagnostics, cancellationToken);
+        InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, context.ProjectPath, context.ProjectSnapshot, context.Sources,
+            selected, selected.Callable.Symbol, visible, stage, diagnostics, cancellationToken);
         if (diagnostics.HasErrors() || document is null)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -252,12 +252,14 @@ public sealed class CompilerInspectionService : IDisposable
     /// <summary>
     /// Reuses a complete stage product or performs only the missing conversion and formatting work.
     /// </summary>
-    private InspectionDocument? GetOrGenerateDocument(CompilerInspectionCacheKey cacheKey, string functionSymbol, FunctionDeclarationSyntax declaration,
-        IReadOnlyList<PackageCallable> visibleCallables, IReadOnlyList<SourceSnapshot> sources, InspectionStage stage,
+    private InspectionDocument? GetOrGenerateDocument(CompilerInspectionCacheKey cacheKey, string projectPath, SourceSnapshot projectSnapshot,
+        IReadOnlyList<SourceSnapshot> sources, ProjectCallable selected, string functionSymbol, IReadOnlyList<PackageCallable> visibleCallables,
+        InspectionStage stage,
         IDiagnosticReporter diagnostics, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (this.cache.TryGet(cacheKey, out CompilerInspectionCacheEntry cached))
+        if (this.cache.TryGet(cacheKey, out CompilerInspectionCacheEntry cached)
+            || this.cache.TryGetCompatible(cacheKey, projectPath, projectSnapshot, sources, selected, visibleCallables, out cached))
         {
             ReplayBindingDiagnostics(cached.BindingDiagnostics, sources, diagnostics);
             InspectionDocument? cachedDocument = stage == InspectionStage.StructuredIR ? cached.StructuredDocument : cached.LoweredDocument;
@@ -287,16 +289,16 @@ public sealed class CompilerInspectionService : IDisposable
                 LoweredFunction lowered = IRFunctionLowerer.Lower(cached.StructuredIR, cancellationToken);
                 InspectionDocument document = LoweredIRFormatter.Format(lowered, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
-                this.cache.StoreLowered(cacheKey, cached.StructuredIR, lowered, document, cached.BindingDiagnostics);
+                this.cache.StoreLowered(cacheKey, cached.StructuredIR, lowered, document, cached.BindingDiagnostics, cached.Dependencies);
                 return document;
             }
         }
 
         DiagnosticReporter bindingDiagnostics = new();
-        FunctionBindResult bound = FunctionDeclarationBinder.Bind(declaration, bindingDiagnostics, visibleCallables, cancellationToken);
+        FunctionBindResult bound = FunctionDeclarationBinder.Bind(selected.Declaration, bindingDiagnostics, visibleCallables, cancellationToken);
         if (bound.Function is null && !bindingDiagnostics.HasErrors())
         {
-            bindingDiagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, declaration.Span);
+            bindingDiagnostics.GenerateError(ErrorType.UnsupportedMVPExpression, selected.Declaration.Span);
         }
 
         if (bindingDiagnostics.HasErrors() || bound.Function is null)
@@ -308,12 +310,14 @@ public sealed class CompilerInspectionService : IDisposable
         BoundFunction function = bound.Function;
         BoundFunction identified = new(function.Accessibility, functionSymbol, function.ReturnType, function.Parameters, function.Body);
         IRFunction structured = BoundFunctionIRConverter.Convert(identified, cancellationToken);
+        CompilerInspectionDependencies? dependencies = CompilerInspectionDependencies.TryCreate(projectPath, projectSnapshot, sources,
+            selected, visibleCallables, function, cancellationToken);
         IReadOnlyList<CachedInspectionDiagnostic> retainedDiagnostics = CacheDiagnostics(bindingDiagnostics.ReportDiagnostics());
         if (stage is InspectionStage.StructuredIR)
         {
             InspectionDocument document = StructuredIRFormatter.Format(structured, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            this.cache.StoreStructured(cacheKey, structured, document, retainedDiagnostics);
+            this.cache.StoreStructured(cacheKey, structured, document, retainedDiagnostics, dependencies);
             diagnostics.CommitReporter(bindingDiagnostics);
             return document;
         }
@@ -321,7 +325,7 @@ public sealed class CompilerInspectionService : IDisposable
         LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structured, cancellationToken);
         InspectionDocument loweredDocument = LoweredIRFormatter.Format(loweredFunction, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        this.cache.StoreLowered(cacheKey, structured, loweredFunction, loweredDocument, retainedDiagnostics);
+        this.cache.StoreLowered(cacheKey, structured, loweredFunction, loweredDocument, retainedDiagnostics, dependencies);
         diagnostics.CommitReporter(bindingDiagnostics);
         return loweredDocument;
     }

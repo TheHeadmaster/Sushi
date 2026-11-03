@@ -284,6 +284,157 @@ public class CompilerInspectionServiceTests
             .BeSameAs(original.Document);
     }
 
+    [TestCase(TestName = "Inspection Cache Reuses Callers Across Unrelated And Called Function Body Changes")]
+    public async Task InspectionCacheShouldReuseCallerWhenCallableContractsRemainEquivalent()
+    {
+        const string caller = Header + "public int32 Calculate(int32 value) { return Double(value) + 1; }";
+        const string dependency = Header + "public int32 Double(int32 value) { return value * 2; } public int32 Unrelated(int32 value) { return value + 100; }";
+        const string changedDependency = Header + "public int32 Double(int32 value) { return value * 3; } public int32 Unrelated(bool value) { return 100; }";
+        const string changedAgain = Header + "public int32 Double(int32 value) { return value * 4; } public int32 Unrelated(bool value) { return 101; }";
+        using TestProject project = await TestProject.Create(caller, dependency);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult original = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 3, "A.sus"), marker: "Calculate", additional: [project.Snapshot(dependency, 3, "B.sus")]),
+            CancellationToken.None);
+        service.Cache.TryGet(CacheKey(original), out CompilerInspectionCacheEntry originalEntry)
+            .Should()
+            .BeTrue();
+        CompilerInspectionResult originalLowered = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 3, "A.sus"), InspectionStage.LoweredIR, "Calculate",
+                [project.Snapshot(dependency, 3, "B.sus")]), CancellationToken.None);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 4, "A.sus"), marker: "Calculate", additional: [project.Snapshot(changedDependency, 4, "B.sus")]),
+            CancellationToken.None);
+        CompilerInspectionResult changedLowered = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 4, "A.sus"), InspectionStage.LoweredIR, "Calculate",
+                [project.Snapshot(changedDependency, 4, "B.sus")]), CancellationToken.None);
+        CompilerInspectionResult changedAgainResult = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 5, "A.sus"), marker: "Calculate", additional: [project.Snapshot(changedAgain, 5, "B.sus")]),
+            CancellationToken.None);
+
+        original.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Document
+            .Should()
+            .BeSameAs(original.Document);
+        changedAgainResult.Document
+            .Should()
+            .BeSameAs(original.Document);
+        changedLowered.Document
+            .Should()
+            .BeSameAs(originalLowered.Document);
+        changed.Context.Sources[1]
+            .Should()
+            .NotBeSameAs(original.Context.Sources[1]);
+        changed.Context.Sources[1].Text
+            .Should()
+            .Be(changedDependency);
+        service.Cache.TryGet(CacheKey(changed), out CompilerInspectionCacheEntry changedEntry)
+            .Should()
+            .BeTrue();
+        changedEntry.StructuredIR
+            .Should()
+            .BeSameAs(originalEntry.StructuredIR);
+
+        CompilerInspectionResult oldCallee = await service.InspectFunctionAsync(original.Context, "__sushi_package_function_1",
+            InspectionStage.StructuredIR, CancellationToken.None);
+        CompilerInspectionResult currentCallee = await service.InspectFunctionAsync(changed.Context, "__sushi_package_function_1",
+            InspectionStage.StructuredIR, CancellationToken.None);
+        oldCallee.Document!.Text
+            .Should()
+            .Contain("value * 2");
+        currentCallee.Document!.Text
+            .Should()
+            .Contain("value * 3");
+    }
+
+    [TestCase(TestName = "Inspection Cache Reuses A Function After A Same-File Sibling Moves Its Declaration")]
+    public async Task InspectionCacheShouldRebaseSelectedDeclarationOwnershipAcrossSameFileEdits()
+    {
+        const string firstSource = Header + "public int32 Unrelated() { return 1; } public int32 Calculate(int32 value) { return value + 1; }";
+        const string changedSource = Header + "public int32 Unrelated() { return 123456789; } public int32 Calculate(int32 value) { return value + 1; }";
+        using TestProject project = await TestProject.Create(firstSource);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult first = await service.InspectAsync(
+            project.Request(project.Snapshot(firstSource, 1), marker: "Calculate"), CancellationToken.None);
+        SourceSnapshot changedSnapshot = project.Snapshot(changedSource, 1);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(changedSnapshot, marker: "Calculate"), CancellationToken.None);
+
+        changed.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Document
+            .Should()
+            .BeSameAs(first.Document);
+        changed.Declaration!.Value.Start
+            .Should()
+            .NotBe(first.Declaration!.Value.Start);
+        changed.Declaration.Value.Snapshot
+            .Should()
+            .BeSameAs(changedSnapshot);
+        changed.Context.Functions[changed.FunctionSymbol!].Snapshot
+            .Should()
+            .BeSameAs(changedSnapshot);
+    }
+
+    [TestCase("public int32 Helper(int32 input) { return input; }")]
+    [TestCase("private int32 Helper(int32 value) { return value; }")]
+    [TestCase("public int32 Other(int32 value) { return value; }")]
+    public async Task InspectionCacheShouldRebindWhenNamedCallableResolutionChanges(string changedCallee)
+    {
+        const string caller = Header + "public int32 Caller() { return Helper(value: 1); }";
+        const string callee = Header + "public int32 Helper(int32 value) { return value; }";
+        using TestProject project = await TestProject.Create(caller, callee);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult original = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 1, "A.sus"), marker: "Caller", additional: [project.Snapshot(callee, 1, "B.sus")]),
+            CancellationToken.None);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 2, "A.sus"), marker: "Caller", additional: [project.Snapshot(changedCallee, 2, "B.sus")]),
+            CancellationToken.None);
+
+        original.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Succeeded
+            .Should()
+            .BeFalse();
+        changed.Document
+            .Should()
+            .BeNull();
+        changed.Diagnostics
+            .Should()
+            .NotBeEmpty();
+    }
+
+    [TestCase(TestName = "Inspection Cache Invalidates When Earlier Declarations Shift A Selected Compiler Symbol")]
+    public async Task InspectionCacheShouldInvalidateWhenSelectedSymbolChanges()
+    {
+        const string originalSource = Header + "public int32 Calculate() { return Helper(1); } public int32 Helper(int32 value) { return value; }";
+        const string changedSource = Header + "public int32 Added() { return 0; } public int32 Calculate() { return Helper(1); } public int32 Helper(int32 value) { return value; }";
+        using TestProject project = await TestProject.Create(originalSource);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult original = await service.InspectAsync(
+            project.Request(project.Snapshot(originalSource), marker: "Calculate"), CancellationToken.None);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(project.Snapshot(changedSource), marker: "Calculate"), CancellationToken.None);
+
+        original.FunctionSymbol
+            .Should()
+            .Be("__sushi_package_function_0");
+        changed.FunctionSymbol
+            .Should()
+            .Be("__sushi_package_function_1");
+        changed.Document
+            .Should()
+            .NotBeSameAs(original.Document);
+    }
+
     [TestCase(TestName = "Inspection Cache Does Not Share Equal Generated Symbols Between Projects")]
     public async Task InspectionCacheShouldIsolateDistinctProjectIdentities()
     {
