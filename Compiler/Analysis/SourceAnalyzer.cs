@@ -1,4 +1,5 @@
 using Sushi.Diagnostics;
+using Sushi.Documentation;
 using Sushi.Lexing;
 using Sushi.Parsing;
 using Sushi.Parsing.Syntax;
@@ -70,6 +71,9 @@ public sealed class SourceAnalyzer : Analyzer
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
+        IReadOnlyList<DocumentationBlock> documentationBlocks = DocumentationProcessor.Process(lexerResult, sourceFile, localDiagnostics, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
         SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, signatureOnly, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -77,7 +81,8 @@ public sealed class SourceAnalyzer : Analyzer
 
         SourceAnalysisResult result = new(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions)
         {
-            Activities = bindResult.Activities
+            Activities = bindResult.Activities,
+            DocumentationBlocks = documentationBlocks
         };
 
         return Task.FromResult<AnalysisResult>(result);

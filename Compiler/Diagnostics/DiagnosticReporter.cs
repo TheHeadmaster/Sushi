@@ -54,7 +54,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()
     {
-        [WarningType.TomlSyntaxWarning] = "Syntax warning in Toml source."
+        [WarningType.TomlSyntaxWarning] = "Syntax warning in Toml source.",
+        [WarningType.DetachedDocumentationBlock] = "Documentation block is not attached to an eligible immediately following declaration."
     };
 
     /// <inheritdoc />

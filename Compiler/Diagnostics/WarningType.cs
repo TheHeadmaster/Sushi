@@ -7,5 +7,6 @@
 public enum WarningType
 #pragma warning restore CA1008 // Enums should have zero value
 {
-    TomlSyntaxWarning = 1
+    TomlSyntaxWarning = 1,
+    DetachedDocumentationBlock = 3
 }

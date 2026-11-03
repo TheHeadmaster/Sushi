@@ -1,4 +1,5 @@
 
+using Sushi.Documentation;
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -29,4 +30,9 @@ public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree S
     /// Gets the successfully bound activity declarations in this source file.
     /// </summary>
     public IReadOnlyList<BoundActivity> Activities { get; init; } = [];
+
+    /// <summary>
+    /// Gets the source-backed documentation blocks associated with the analyzed syntax tree.
+    /// </summary>
+    public IReadOnlyList<DocumentationBlock> DocumentationBlocks { get; init; } = [];
 }
