@@ -20,6 +20,11 @@ public static class InspectionDefinitionResolver
             return null;
         }
 
+        if (occurrence.IsDefinition)
+        {
+            return null;
+        }
+
         InspectionSymbolOccurrence? definition = document.Occurrences.FirstOrDefault(item => item.IsDefinition && item.Identity == occurrence.Identity);
         return definition is InspectionSymbolOccurrence target && target.IsDefinition ? (occurrence, target) : null;
     }

@@ -12,9 +12,13 @@ function harness(options = {}) {
 	const shown = [];
 	const openDocuments = [];
 	const messages = [];
+	const errorProgressStates = [];
 	const definitions = [];
 	let close;
 	let provider;
+	let progressSettled = false;
+	let resolveErrorShown;
+	const errorShown = new Promise(resolve => { resolveErrorShown = resolve; });
 	const uri = value => ({ scheme: new URL(value).protocol.slice(0, -1), fsPath: new URL(value).pathname, toString: () => value });
 	const disposable = { dispose() {} };
 	const source = { document: { languageId: 'sushi', uri: uri('file:///Source.sus'), version: 7 }, selection: { active: { line: 1, character: 9 } } };
@@ -28,7 +32,12 @@ function harness(options = {}) {
 			textDocuments: openDocuments,
 			registerTextDocumentContentProvider(scheme, content) { assert.equal(scheme, 'sushi-inspect'); provider = content; return disposable; },
 			onDidCloseTextDocument(listener) { close = listener; return disposable; },
-			async openTextDocument(documentUri) { const document = { uri: documentUri, languageId: 'plaintext', text: provider.provideTextDocumentContent(documentUri) }; openDocuments.push(document); return document; }
+			async openTextDocument(documentUri) {
+				if (options.openFailure) { throw new Error('Failed to open virtual document'); }
+				const document = { uri: documentUri, languageId: 'plaintext', text: provider.provideTextDocumentContent(documentUri) };
+				openDocuments.push(document);
+				return document;
+			}
 		},
 		Position: class Position { constructor(line, character) { this.line = line; this.character = character; } },
 		Range: class Range { constructor(startLine, startCharacter, endLine, endCharacter) { this.start = { line: startLine, character: startCharacter }; this.end = { line: endLine, character: endCharacter }; } },
@@ -40,8 +49,11 @@ function harness(options = {}) {
 			activeTextEditor: options.noEditor ? undefined : source,
 			createOutputChannel() { return { appendLine() {}, dispose() {} }; },
 			async showInformationMessage(message) { messages.push(message); },
-			async showErrorMessage(message) { messages.push(message); },
-			async withProgress(_settings, action) { return action({}, { isCancellationRequested: options.cancelled ?? false }); },
+			showErrorMessage(message) { messages.push(message); errorProgressStates.push(progressSettled); resolveErrorShown(); return options.errorPromise ?? Promise.resolve(); },
+			async withProgress(_settings, action) {
+				try { return await action({}, { isCancellationRequested: options.cancelled ?? false }); }
+				finally { progressSettled = true; }
+			},
 			async showQuickPick(items) { return items[1]; },
 			async showTextDocument(document, settings) { assert.equal(settings.viewColumn, 2); assert.equal(settings.preview, false); shown.push(document); }
 		}
@@ -54,10 +66,11 @@ function harness(options = {}) {
 			if (method === 'sourceInspection/definition') {
 				return options.definitionReply;
 			}
+			if (options.throwRequest) { throw new Error('Unexpected inspection request failure'); }
 			if (options.ambiguous && !params.projectUri) {
 				return { succeeded: false, error: 'Choose project', projects: ['file:///First.susproj', 'file:///Second.susproj'] };
 			}
-			return options.failure ? { succeeded: false, error: 'Select a package function', projects: [], diagnostics: [] } : reply;
+			return options.failure ? { succeeded: false, error: options.failureText ?? 'Select a package function', projects: [], diagnostics: [] } : reply;
 		}
 	};
 	const originalLoad = Module._load;
@@ -72,7 +85,7 @@ function harness(options = {}) {
 	} finally {
 		Module._load = originalLoad;
 	}
-	return { commands, notifications, requests, shown, messages, definitions, openDocuments, source, reply, close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); }, changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'), read: value => provider.provideTextDocumentContent(uri(value ?? reply.documentUri)) };
+	return { commands, notifications, requests, shown, messages, errorProgressStates, errorShown, definitions, openDocuments, source, reply, close: document => { openDocuments.splice(openDocuments.indexOf(document), 1); close(document); }, changeLanguage: document => vscode.languages.setTextDocumentLanguage(document, 'plaintext'), read: value => provider.provideTextDocumentContent(uri(value ?? reply.documentUri)) };
 }
 
 test('command sends URI version position stage without source text and opens frozen content beside source', async () => {
@@ -173,4 +186,71 @@ test('native IR definition providers register lazy target content before returni
 	assert.equal(h.definitions.length, 2);
 	assert.equal(h.requests[1].params.documentUri, h.reply.documentUri);
 	assert.equal(target.languageId, 'sushi-structured-ir');
+});
+
+for (const [command, providerIndex, stage, suffix] of [
+	['sushi.showStructuredIR', 0, 'structuredIR', 'structuredIR'],
+	['sushi.showLoweredIR', 1, 'loweredIR', 'loweredIR']
+]) {
+	test(`the native ${stage} definition provider returns no target for an already-defined symbol`, async () => {
+		const h = harness({ definitionReply: { found: false } });
+		h.reply.stage = stage;
+		h.reply.documentUri = `sushi-inspect://session/one/Value.${suffix}`;
+		await h.commands.get(command)();
+		const sourceDocument = h.shown[0];
+		const location = await h.definitions[providerIndex].provider.provideDefinition(sourceDocument, { line: 0, character: 10 }, { isCancellationRequested: false });
+		assert.equal(location, undefined);
+		assert.equal(h.requests[1].method, 'sourceInspection/definition');
+		assert.equal(h.shown.length, 1, 'the provider should keep the original document and create no self-target');
+	});
+}
+
+for (const [command, stage, failureText] of [
+	['sushi.showStructuredIR', 'Structured IR', 'The selected activity entry cannot be inspected'],
+	['sushi.showLoweredIR', 'Lowered IR', 'The selected activity entry cannot be inspected']
+]) {
+	test(`${stage} failure completes progress before an unresolved error notification`, async () => {
+		let dismissError;
+		const errorPromise = new Promise(resolve => { dismissError = resolve; });
+		const h = harness({ failure: true, failureText, errorPromise });
+		let commandSettled = false;
+		const running = h.commands.get(command)().finally(() => { commandSettled = true; });
+		await h.errorShown;
+		assert.deepEqual(h.errorProgressStates, [true]);
+		assert.equal(h.shown.length, 0);
+		assert.equal(commandSettled, false, 'the command may wait for the message UI, but progress has already settled');
+		dismissError();
+		await running;
+		assert.match(h.messages[0], /selected activity entry/);
+	});
+}
+
+test('an unexpected request exception completes progress before its error notification', async () => {
+	let dismissError;
+	const errorPromise = new Promise(resolve => { dismissError = resolve; });
+	const h = harness({ throwRequest: true, errorPromise });
+	const running = h.commands.get('sushi.showLoweredIR')();
+	await h.errorShown;
+	assert.deepEqual(h.errorProgressStates, [true]);
+	assert.equal(h.shown.length, 0);
+	dismissError();
+	await running;
+	assert.equal(h.messages[0], 'Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.');
+});
+
+test('failure after registering the result releases its artifact and removes virtual content', async () => {
+	const h = harness({ openFailure: true });
+	await h.commands.get('sushi.showStructuredIR')();
+	assert.equal(h.shown.length, 0);
+	assert.deepEqual(h.notifications[0], { method: 'sourceInspection/release', params: { artifactId: 'one' } });
+	assert.throws(h.read, /no longer available/);
+	assert.deepEqual(h.errorProgressStates, [true]);
+});
+
+test('cancellation of a failed inspection does not show an error notification', async () => {
+	const h = harness({ cancelled: true, failure: true, failureText: 'Inspection was cancelled' });
+	await h.commands.get('sushi.showLoweredIR')();
+	assert.equal(h.messages.length, 0);
+	assert.equal(h.shown.length, 0);
+	assert.equal(h.errorProgressStates.length, 0);
 });

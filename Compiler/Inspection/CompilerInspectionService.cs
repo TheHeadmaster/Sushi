@@ -28,7 +28,9 @@ public sealed class CompilerInspectionService : IDisposable
     /// <summary>
     /// Creates an inspection service with a bounded cache for deterministic capacity tests.
     /// </summary>
-    /// <param name="cacheCapacity">The maximum number of exact function input identities to retain.</param>
+    /// <param name="cacheCapacity">
+    /// The maximum number of distinct compiler input identities the service retains.
+    /// </param>
     internal static CompilerInspectionService CreateForTesting(int cacheCapacity)
     {
         return new CompilerInspectionService(new CompilerInspectionCache(cacheCapacity));
@@ -159,12 +161,24 @@ public sealed class CompilerInspectionService : IDisposable
     /// <summary>
     /// Generates one function representation from an already captured compilation context.
     /// </summary>
-    /// <param name="context">The immutable project configuration and source snapshots to use.</param>
-    /// <param name="functionSymbol">The compiler-generated identity assigned in that context.</param>
-    /// <param name="stage">The representation stage retained by the originating artifact.</param>
-    /// <param name="cancellationToken">Cancels parsing, signature reconstruction, binding, and formatting.</param>
-    /// <returns>A representation or diagnostics for the requested function, retaining the original context.</returns>
-    /// <exception cref="InvalidOperationException">The retained context cannot reproduce its callable catalog.</exception>
+    /// <param name="context">
+    /// The immutable project configuration and source snapshots captured by the originating inspection.
+    /// </param>
+    /// <param name="functionSymbol">
+    /// The callable identity assigned within that retained compilation context.
+    /// </param>
+    /// <param name="stage">
+    /// The representation stage requested by the originating inspection document.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels retained-source analysis, selected-function binding, and representation generation.
+    /// </param>
+    /// <returns>
+    /// The requested representation or its diagnostics, associated with the unchanged captured context.
+    /// </returns>
+    /// <exception cref="InvalidOperationException">
+    /// The retained snapshots cannot reproduce the original callable catalog or selected declaration.
+    /// </exception>
     public async Task<CompilerInspectionResult> InspectFunctionAsync(CompilerInspectionContext context, string functionSymbol,
         InspectionStage stage, CancellationToken cancellationToken)
     {

@@ -494,12 +494,102 @@ public class CompilerInspectionServiceTests
         InspectionDefinitionResolver.Resolve(document, reference.End)
             .Should()
             .BeNull();
+        InspectionDefinitionResolver.Resolve(document, document.Text.IndexOf(' '))
+            .Should()
+            .BeNull("whitespace is not a semantic occurrence");
+        InspectionDefinitionResolver.Resolve(document, document.Text.IndexOf(';'))
+            .Should()
+            .BeNull("punctuation is not a semantic occurrence");
         InspectionDefinitionResolver.Resolve(document, -1)
             .Should()
             .BeNull();
         InspectionDefinitionResolver.Resolve(document, document.Text.Length)
             .Should()
             .BeNull();
+
+        InspectionSymbolOccurrence definition = document.Occurrences.Single(item => item.IsDefinition && item.Identity == reference.Identity);
+        InspectionDefinitionResolver.Resolve(document, definition.Start)
+            .Should()
+            .BeNull("a definition is already at its destination and must not create a self-targeting link");
+    }
+
+    [TestCase(TestName = "Recursive Function References Navigate To Their Own Declaration")]
+    public async Task RecursiveFunctionReferenceShouldResolveToItsDefinition()
+    {
+        const string recursive = Header + "public int32 Recurse(int32 value) { if (value <= 0) { return 0; } return Recurse(value - 1); }";
+        using TestProject project = await TestProject.Create(recursive);
+        SourceSnapshot snapshot = project.Snapshot(recursive);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot, marker: "Recurse(value"), CancellationToken.None);
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+        InspectionDocument document = result.Document!;
+        InspectionSymbolIdentity identity = new(InspectionSymbolKind.Function, result.FunctionSymbol!);
+        InspectionSymbolOccurrence definition = document.Occurrences.Single(item => item.IsDefinition && item.Identity == identity);
+        InspectionSymbolOccurrence recursiveCall = document.Occurrences.Single(item => !item.IsDefinition && item.Identity == identity);
+
+        InspectionDefinitionResolver.Resolve(document, definition.Start)
+            .Should()
+            .BeNull();
+        (InspectionSymbolOccurrence Origin, InspectionSymbolOccurrence Definition)? resolved =
+            InspectionDefinitionResolver.Resolve(document, recursiveCall.Start);
+        resolved
+            .Should()
+            .NotBeNull();
+        resolved!.Value.Origin
+            .Should()
+            .Be(recursiveCall);
+        resolved.Value.Definition
+            .Should()
+            .Be(definition);
+    }
+
+    [TestCase(TestName = "Local Parameters Slots Blocks And Temporaries Resolve By Semantic Identity")]
+    public async Task LocalGeneratedReferencesShouldResolveToTheirDefinitions()
+    {
+        const string source = Header + "public int32 Select(int32 value) { int32 doubled = value + value; if (doubled > 10) { return doubled; } return doubled + 1; }";
+        using TestProject project = await TestProject.Create(source);
+        SourceSnapshot snapshot = project.Snapshot(source);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(snapshot, InspectionStage.LoweredIR, "Select"), CancellationToken.None);
+
+        result.Succeeded
+            .Should()
+            .BeTrue();
+        InspectionDocument document = result.Document!;
+        foreach (InspectionSymbolKind kind in new[]
+        {
+            InspectionSymbolKind.Parameter,
+            InspectionSymbolKind.Local,
+            InspectionSymbolKind.BasicBlock,
+            InspectionSymbolKind.Temporary
+        })
+        {
+            InspectionSymbolOccurrence[] references = [.. document.Occurrences.Where(item => !item.IsDefinition && item.Identity.Kind == kind)];
+            references
+                .Should()
+                .NotBeEmpty($"the Lowered IR records {kind} references");
+
+            foreach (InspectionSymbolOccurrence reference in references)
+            {
+                (InspectionSymbolOccurrence Origin, InspectionSymbolOccurrence Definition)? resolved =
+                    InspectionDefinitionResolver.Resolve(document, reference.Start);
+                resolved
+                    .Should()
+                    .NotBeNull();
+                resolved!.Value.Origin
+                    .Should()
+                    .Be(reference);
+                resolved.Value.Definition.IsDefinition
+                    .Should()
+                    .BeTrue();
+                resolved.Value.Definition.Identity
+                    .Should()
+                    .Be(reference.Identity);
+            }
+        }
     }
 
     [TestCase("a😀b\r\n\r\nc", 0, 3, 3, TestName = "UTF16 Coordinates Count Supplementary Characters As Two Code Units")]

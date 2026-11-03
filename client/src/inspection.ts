@@ -151,6 +151,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		const sourceUri = editor.document.uri.toString();
 		const sourceVersion = editor.document.version;
 		const position = { line: editor.selection.active.line, character: editor.selection.active.character };
+		let errorMessage: string | undefined;
 		await vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
 			title: stage === 'structuredIR' ? 'Sushi: Show Structured IR' : 'Sushi: Show Lowered IR',
@@ -182,7 +183,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 					if (!token.isCancellationRequested) {
 						const diagnostic = response.diagnostics?.[0];
 						const detail = diagnostic ? ` ${diagnostic.code}: ${diagnostic.message} (${diagnostic.line + 1}:${diagnostic.character + 1})` : '';
-						await vscode.window.showErrorMessage(response.error + detail);
+						errorMessage = response.error + detail;
 					}
 					return;
 				}
@@ -213,9 +214,12 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 				}
 				if (!token.isCancellationRequested) {
 					output.appendLine(`Inspection failed: ${String(error)}`);
-					await vscode.window.showErrorMessage('Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.');
+					errorMessage = 'Sushi inspection failed. Check the language-server connection and the Sushi Inspection output.';
 				}
 			}
 		});
+		if (errorMessage) {
+			await vscode.window.showErrorMessage(errorMessage);
+		}
 	}
 }

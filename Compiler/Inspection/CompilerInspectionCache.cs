@@ -24,7 +24,9 @@ internal sealed class CompilerInspectionCache : IDisposable
     /// <summary>
     /// Creates a bounded cache, with a smaller capacity available to deterministic tests.
     /// </summary>
-    /// <param name="capacity">The maximum number of function input identities to retain.</param>
+    /// <param name="capacity">
+    /// The maximum number of exact compiler input identities retained by this service cache.
+    /// </param>
     internal CompilerInspectionCache(int capacity = DefaultCapacity)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
@@ -48,12 +50,24 @@ internal sealed class CompilerInspectionCache : IDisposable
     /// <summary>
     /// Builds an exact identity from the configuration, ordered project sources, and selected declaration.
     /// </summary>
-    /// <param name="projectPath">The resolved project file identity.</param>
-    /// <param name="projectSnapshot">The authoritative configuration bytes.</param>
-    /// <param name="sources">The authoritative source snapshots in project discovery order.</param>
-    /// <param name="functionSymbol">The selected compiler-generated callable identity.</param>
-    /// <param name="declaration">The selected declaration span within its source.</param>
-    /// <returns>A collision-safe key whose equality compares all captured input content.</returns>
+    /// <param name="projectPath">
+    /// The normalized identity of the project configuration used for compilation.
+    /// </param>
+    /// <param name="projectSnapshot">
+    /// The exact project configuration snapshot captured for this inspection.
+    /// </param>
+    /// <param name="sources">
+    /// The authoritative source snapshots in deterministic project discovery order.
+    /// </param>
+    /// <param name="functionSymbol">
+    /// The compiler-generated symbol assigned to the selected callable in this context.
+    /// </param>
+    /// <param name="declaration">
+    /// The selected declaration span, including its owning source snapshot.
+    /// </param>
+    /// <returns>
+    /// A cache key that compares exact captured content after hash-based lookup.
+    /// </returns>
     internal static CompilerInspectionCacheKey CreateKey(string projectPath, SourceSnapshot projectSnapshot, IReadOnlyList<SourceSnapshot> sources,
         string functionSymbol, SourceSpan declaration)
     {

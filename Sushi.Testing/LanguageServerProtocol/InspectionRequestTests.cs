@@ -494,6 +494,41 @@ public class InspectionRequestTests
             .Be("Helper");
     }
 
+    [TestCase("structuredIR", TestName = "Structured Definition Occurrence Does Not Return A Redundant Self Target")]
+    [TestCase("loweredIR", TestName = "Lowered Definition Occurrence Does Not Return A Redundant Self Target")]
+    public async Task DefinitionOccurrenceShouldNotReturnSelfNavigationTarget(string stage)
+    {
+        using Project project = await Project.Create(Source);
+        InspectFunctionResponse response = await project.Inspect(stage);
+        InspectionArtifact artifact = project.Artifacts.Find(response.ArtifactId!)!;
+        InspectionDocument document = artifact.Result.Document!;
+        InspectionSymbolOccurrence definition = document.Occurrences.Single(item =>
+            item.IsDefinition && item.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Function, artifact.Result.FunctionSymbol!));
+        (int line, int character) = InspectionTextCoordinates.GetPosition(document.Text, definition.Start)!.Value;
+        using CompilerInspectionService inspection = new();
+
+        InspectionDefinitionResponse result = await new InspectionDefinitionHandler(inspection, project.Artifacts).Handle(
+            new InspectionDefinitionParams
+            {
+                DocumentUri = DocumentUri.Parse(response.DocumentUri!),
+                ArtifactId = response.ArtifactId!,
+                Position = new Position(line, character)
+            }, CancellationToken.None);
+
+        result.Found
+            .Should()
+            .BeFalse();
+        result.Error
+            .Should()
+            .BeNull();
+        result.TargetDocumentUri
+            .Should()
+            .BeNull();
+        project.Artifacts.Count
+            .Should()
+            .Be(1);
+    }
+
     [TestCase(TestName = "Forged And Released Inspection Document URIs Do Not Resolve")]
     public async Task DefinitionNavigationShouldRejectMismatchedAndReleasedArtifacts()
     {
