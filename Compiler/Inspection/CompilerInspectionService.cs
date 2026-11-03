@@ -158,20 +158,23 @@ public sealed class CompilerInspectionService : IDisposable
         functionName = selected.Callable.Name;
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
         CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(projectPath, projectSnapshot, snapshots, selected.Callable.Symbol, selected.Declaration.Span);
+        IReadOnlyDictionary<int, SourceSpan> localDefinitions = InspectionLocalDefinitions.Empty;
         InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, projectPath, projectSnapshot, snapshots, selected,
-            selected.Callable.Symbol, visible, request.Stage, diagnostics, cancellationToken);
+            selected.Callable.Symbol, visible, request.Stage, diagnostics, cancellationToken, out localDefinitions);
         if (diagnostics.HasErrors() || document is null)
         {
             return Complete(selected.Declaration.Span, null);
         }
 
-        return Complete(selected.Declaration.Span, document);
+        return Complete(selected.Declaration.Span, document, localDefinitions);
 
-        CompilerInspectionResult Complete(SourceSpan? declaration, InspectionDocument? document)
+        CompilerInspectionResult Complete(SourceSpan? declaration, InspectionDocument? document,
+            IReadOnlyDictionary<int, SourceSpan>? localDefinitions = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             CompilerInspectionContext context = new(projectPath, projectSnapshot, snapshots, definitions, signatures, sourceDefinitions);
-            CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document, functionName);
+            CompilerInspectionResult result = new(request.Stage, context, diagnostics.ReportDiagnostics(), declaration, document,
+                functionName, localDefinitions);
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
@@ -256,8 +259,9 @@ public sealed class CompilerInspectionService : IDisposable
         IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(selected.Source, catalog, cancellationToken);
         CompilerInspectionCacheKey cacheKey = CompilerInspectionCache.CreateKey(context.ProjectPath, context.ProjectSnapshot, context.Sources,
             selected.Callable.Symbol, selected.Declaration.Span);
+        IReadOnlyDictionary<int, SourceSpan> localDefinitions = InspectionLocalDefinitions.Empty;
         InspectionDocument? document = this.GetOrGenerateDocument(cacheKey, context.ProjectPath, context.ProjectSnapshot, context.Sources,
-            selected, selected.Callable.Symbol, visible, stage, diagnostics, cancellationToken);
+            selected, selected.Callable.Symbol, visible, stage, diagnostics, cancellationToken, out localDefinitions);
         if (diagnostics.HasErrors() || document is null)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -265,7 +269,8 @@ public sealed class CompilerInspectionService : IDisposable
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span, document, selected.Callable.Name);
+        return new CompilerInspectionResult(stage, context, diagnostics.ReportDiagnostics(), selected.Declaration.Span,
+            document, selected.Callable.Name, localDefinitions);
     }
 
     /// <summary>
@@ -273,43 +278,58 @@ public sealed class CompilerInspectionService : IDisposable
     /// </summary>
     private InspectionDocument? GetOrGenerateDocument(CompilerInspectionCacheKey cacheKey, string projectPath, SourceSnapshot projectSnapshot,
         IReadOnlyList<SourceSnapshot> sources, ProjectCallable selected, string functionSymbol, IReadOnlyList<PackageCallable> visibleCallables,
-        InspectionStage stage,
-        IDiagnosticReporter diagnostics, CancellationToken cancellationToken)
+        InspectionStage stage, IDiagnosticReporter diagnostics, CancellationToken cancellationToken,
+        out IReadOnlyDictionary<int, SourceSpan> localDefinitions)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        localDefinitions = InspectionLocalDefinitions.Empty;
         if (this.cache.TryGet(cacheKey, out CompilerInspectionCacheEntry cached)
             || this.cache.TryGetCompatible(cacheKey, projectPath, projectSnapshot, sources, selected, visibleCallables, out cached))
         {
-            ReplayBindingDiagnostics(cached.BindingDiagnostics, sources, diagnostics);
             InspectionDocument? cachedDocument = stage == InspectionStage.StructuredIR ? cached.StructuredDocument : cached.LoweredDocument;
-            if (cachedDocument is not null)
+            bool cacheDocumentNeedsStoring = false;
+            LoweredFunction? generatedLowered = null;
+            if (cachedDocument is null && stage is InspectionStage.StructuredIR && cached.StructuredIR is not null)
             {
+                cachedDocument = StructuredIRFormatter.Format(cached.StructuredIR, cancellationToken);
+                cacheDocumentNeedsStoring = true;
+            }
+            else if (cachedDocument is null && stage is InspectionStage.LoweredIR && cached.LoweredIR is not null)
+            {
+                cachedDocument = LoweredIRFormatter.Format(cached.LoweredIR, cancellationToken);
+                cacheDocumentNeedsStoring = true;
+            }
+            else if (cachedDocument is null && stage is InspectionStage.LoweredIR && cached.StructuredIR is not null)
+            {
+                generatedLowered = IRFunctionLowerer.Lower(cached.StructuredIR, cancellationToken);
+                cachedDocument = LoweredIRFormatter.Format(generatedLowered, cancellationToken);
+                cacheDocumentNeedsStoring = true;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if (cachedDocument is not null && InspectionLocalDefinitions.TryRebase(cached.LocalDefinitions,
+                selected.Declaration.Span, cachedDocument, functionSymbol, out IReadOnlyDictionary<int, SourceSpan> rebasedDefinitions))
+            {
+                ReplayBindingDiagnostics(cached.BindingDiagnostics, sources, diagnostics);
+                if (generatedLowered is not null && cached.StructuredIR is not null && cached.LocalDefinitions is not null)
+                {
+                    this.cache.StoreLowered(cacheKey, cached.StructuredIR, generatedLowered, cachedDocument,
+                        cached.BindingDiagnostics, cached.Dependencies, cached.LocalDefinitions);
+                }
+                else if (cacheDocumentNeedsStoring)
+                {
+                    if (stage is InspectionStage.StructuredIR)
+                    {
+                        this.cache.StoreStructuredDocument(cacheKey, cachedDocument);
+                    }
+                    else
+                    {
+                        this.cache.StoreLoweredDocument(cacheKey, cachedDocument);
+                    }
+                }
+
+                localDefinitions = rebasedDefinitions;
                 return cachedDocument;
-            }
-
-            if (stage is InspectionStage.StructuredIR && cached.StructuredIR is not null)
-            {
-                InspectionDocument document = StructuredIRFormatter.Format(cached.StructuredIR, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                this.cache.StoreStructuredDocument(cacheKey, document);
-                return document;
-            }
-
-            if (stage is InspectionStage.LoweredIR && cached.LoweredIR is not null)
-            {
-                InspectionDocument document = LoweredIRFormatter.Format(cached.LoweredIR, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                this.cache.StoreLoweredDocument(cacheKey, document);
-                return document;
-            }
-
-            if (stage is InspectionStage.LoweredIR && cached.StructuredIR is not null)
-            {
-                LoweredFunction lowered = IRFunctionLowerer.Lower(cached.StructuredIR, cancellationToken);
-                InspectionDocument document = LoweredIRFormatter.Format(lowered, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                this.cache.StoreLowered(cacheKey, cached.StructuredIR, lowered, document, cached.BindingDiagnostics, cached.Dependencies);
-                return document;
             }
         }
 
@@ -336,16 +356,30 @@ public sealed class CompilerInspectionService : IDisposable
         {
             InspectionDocument document = StructuredIRFormatter.Format(structured, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            this.cache.StoreStructured(cacheKey, structured, document, retainedDiagnostics, dependencies);
+            if (!InspectionLocalDefinitions.TryCapture(bound.LocalDefinitions, selected.Declaration.Span, document, functionSymbol,
+                out IReadOnlyList<CachedLocalDefinition> cachedDefinitions))
+            {
+                throw new InvalidOperationException("Bound local declarations do not match the generated Structured IR identities.");
+            }
+
+            this.cache.StoreStructured(cacheKey, structured, document, retainedDiagnostics, dependencies, cachedDefinitions);
             diagnostics.CommitReporter(bindingDiagnostics);
+            localDefinitions = bound.LocalDefinitions;
             return document;
         }
 
         LoweredFunction loweredFunction = IRFunctionLowerer.Lower(structured, cancellationToken);
         InspectionDocument loweredDocument = LoweredIRFormatter.Format(loweredFunction, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        this.cache.StoreLowered(cacheKey, structured, loweredFunction, loweredDocument, retainedDiagnostics, dependencies);
+        if (!InspectionLocalDefinitions.TryCapture(bound.LocalDefinitions, selected.Declaration.Span, loweredDocument, functionSymbol,
+            out IReadOnlyList<CachedLocalDefinition> loweredDefinitions))
+        {
+            throw new InvalidOperationException("Bound local declarations do not match the generated Lowered IR identities.");
+        }
+
+        this.cache.StoreLowered(cacheKey, structured, loweredFunction, loweredDocument, retainedDiagnostics, dependencies, loweredDefinitions);
         diagnostics.CommitReporter(bindingDiagnostics);
+        localDefinitions = bound.LocalDefinitions;
         return loweredDocument;
     }
 

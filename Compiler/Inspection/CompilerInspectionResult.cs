@@ -1,4 +1,5 @@
-﻿using Sushi.Diagnostics;
+﻿using System.Collections.ObjectModel;
+using Sushi.Diagnostics;
 using Sushi.Source;
 
 namespace Sushi.Inspection;
@@ -49,10 +50,16 @@ public sealed class CompilerInspectionResult
     public IReadOnlyList<SushiDiagnostic> Diagnostics { get; }
 
     /// <summary>
+    /// Gets the selected function's local declaration tokens from the source snapshot owned by this result.
+    /// </summary>
+    public IReadOnlyDictionary<int, SourceSpan> LocalDefinitions { get; }
+
+    /// <summary>
     /// Creates a result after analysis, retaining no partial generated document.
     /// </summary>
     internal CompilerInspectionResult(InspectionStage stage, CompilerInspectionContext context,
-        IReadOnlyList<SushiDiagnostic> diagnostics, SourceSpan? declaration, InspectionDocument? document, string? functionName = null)
+        IReadOnlyList<SushiDiagnostic> diagnostics, SourceSpan? declaration, InspectionDocument? document, string? functionName = null,
+        IReadOnlyDictionary<int, SourceSpan>? localDefinitions = null)
     {
         this.Stage = stage;
         this.Context = context;
@@ -60,5 +67,18 @@ public sealed class CompilerInspectionResult
         this.Declaration = declaration;
         this.Document = document;
         this.FunctionName = functionName;
+        Dictionary<int, SourceSpan> definitions = document is null || localDefinitions is null
+            ? []
+            : localDefinitions.ToDictionary(item => item.Key, item => item.Value);
+        if (document is not null && (declaration is not SourceSpan selectedDeclaration
+            || !context.Functions.TryGetValue(document.FunctionSymbol, out SourceSpan retainedDeclaration)
+            || !ReferenceEquals(retainedDeclaration.Snapshot, selectedDeclaration.Snapshot)
+            || retainedDeclaration.Start != selectedDeclaration.Start || retainedDeclaration.End != selectedDeclaration.End
+            || !InspectionLocalDefinitions.TryCapture(definitions, selectedDeclaration, document, document.FunctionSymbol, out _)))
+        {
+            throw new ArgumentException("Local source definitions must match the selected function's generated local identities.", nameof(localDefinitions));
+        }
+
+        this.LocalDefinitions = new ReadOnlyDictionary<int, SourceSpan>(definitions);
     }
 }

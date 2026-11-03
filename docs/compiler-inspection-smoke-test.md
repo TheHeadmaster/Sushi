@@ -77,7 +77,7 @@ Use a configured Sushi project with package functions in at least two source fil
 6. Change the callee source without saving, then navigate from the older IR document. Verify a distinct read-only `sushi-source-snapshot:` document opens with the original text and declaration range.
 7. Inspect the changed caller again and navigate to the callee. Verify this newer navigation uses the newer source snapshot.
 8. Restore the original source content and verify navigation can use the editable source document when its actual text matches the inspection snapshot.
-9. Invoke the source command on a local, SSA temporary, basic block, whitespace, or punctuation. Verify no invented source location appears.
+9. Verify local occurrences navigate to their source declaration as described below. Invoke the source command on an SSA temporary, basic block, whitespace, or punctuation and verify no invented source location appears.
 10. Close a historical preview and verify its retained client content is released. Closing the originating IR document must not close an already-open historical preview.
 11. Confirm earlier generated IR documents remain read-only and unchanged, and that hover behavior still works.
 12. Confirm source navigation generated no native executable or object output.
@@ -86,6 +86,21 @@ Use a configured Sushi project with package functions in at least two source fil
 15. Modify Helper without saving and navigate from the older IR. Verify a separate historical preview opens; repeat navigation and verify the same preview is focused. Inspect a different source snapshot and confirm it remains separate.
 
 Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not mark this procedure passed unless exercised in an actual VS Code Extension Development Host.
+
+# Local Variable Source Provenance
+
+Use a valid Sushi project with a function that declares multiple locals, including one nested-scope local and one local in a supported `for` initializer. This procedure requires the VS Code Extension Development Host.
+
+1. Open Structured IR for the function. Place the cursor on `%local0` and invoke **Sushi: Go to Source Definition**. Verify the original source declaration name is selected.
+2. Repeat for another local, then navigate from local reads and assignments. Verify every occurrence for a given local selects the same declaration token.
+3. Open Lowered IR. Navigate from a local `slot` declaration, `load`, and `store`. Verify they all select the corresponding original source declaration.
+4. Navigate from a nested-scope local and a local declared in a supported `for` initialization.
+5. Change the source without saving. Navigate from the older IR and verify a historical preview opens with the old declaration and correct selection.
+6. Insert source text before the function without changing its declaration. Inspect it again and verify navigation selects the new source position; return to the older IR and verify its historical selection remains correct.
+7. Verify Ctrl+click and F12 still navigate within the same IR stage. Verify SSA temporaries and basic blocks do not claim direct source declarations, and repeated navigation does not create redundant tabs.
+8. Confirm no native executable or object output was generated.
+
+Record the Sushi project and VS Code version used, and mark each step as passed or failed. Do not claim graphical verification unless this was exercised in the Extension Development Host.
 
 # Generated IR semantic hovers
 

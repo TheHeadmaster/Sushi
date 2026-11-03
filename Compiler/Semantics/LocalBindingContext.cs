@@ -1,4 +1,7 @@
-﻿namespace Sushi.Semantics;
+﻿using System.Collections.ObjectModel;
+using Sushi.Source;
+
+namespace Sushi.Semantics;
 
 /// <summary>
 /// Maintains lexical local scopes, stable declaration identities, and
@@ -8,6 +11,7 @@ internal sealed class LocalBindingContext
 {
     private readonly IReadOnlyList<BoundParameter> parameters;
     private readonly Stack<Dictionary<string, BoundLocal>> scopes = new();
+    private readonly Dictionary<int, SourceSpan> declarations = [];
     private int nextIndex;
 
     /// <summary>
@@ -65,15 +69,24 @@ internal sealed class LocalBindingContext
     /// <param name="type">
     /// The explicitly declared value type.
     /// </param>
+    /// <param name="nameSpan">
+    /// The exact source token that introduced the local.
+    /// </param>
     /// <param name="local">
     /// The new declaration identity when successful.
     /// </param>
     /// <returns>
     /// True if the declaration was introduced without a naming conflict.
     /// </returns>
-    public bool TryDeclare(string name, BoundType type, out BoundLocal? local)
+    public bool TryDeclare(string name, BoundType type, SourceSpan nameSpan, out BoundLocal? local)
     {
         ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (nameSpan.Snapshot is null || nameSpan.Start < 0 || nameSpan.Start >= nameSpan.End
+            || nameSpan.End > nameSpan.Snapshot.SourceLength)
+        {
+            throw new ArgumentException("A local declaration requires its nonempty source-backed name token.", nameof(nameSpan));
+        }
 
         if (this.Resolve(name) is not null)
         {
@@ -82,9 +95,23 @@ internal sealed class LocalBindingContext
         }
 
         local = new BoundLocal(this.nextIndex++, name, type);
+        if (!this.declarations.TryAdd(local.Index, nameSpan))
+        {
+            throw new InvalidOperationException("A function-local index was assigned more than one declaration span.");
+        }
+
         this.scopes.Peek().Add(name, local);
         return true;
     }
+
+    /// <summary>
+    /// Returns immutable source-name spans for every successfully declared function local.
+    /// </summary>
+    /// <returns>
+    /// A read-only map keyed by the local indices assigned by this context.
+    /// </returns>
+    public IReadOnlyDictionary<int, SourceSpan> GetDeclarationSpans()
+        => new ReadOnlyDictionary<int, SourceSpan>(new Dictionary<int, SourceSpan>(this.declarations));
 
     /// <summary>
     /// Resolves a visible local or enclosing function parameter by semantic name.

@@ -8,7 +8,7 @@ using Sushi.Source;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Resolves function and parameter source tokens from the immutable snapshots retained by an inspection.
+/// Resolves function, parameter, and local source tokens from an inspection's retained snapshots.
 /// </summary>
 [Parallel]
 public sealed class InspectionSourceDefinitionHandler(InspectionArtifactStore artifacts)
@@ -69,7 +69,8 @@ public sealed class InspectionSourceDefinitionHandler(InspectionArtifactStore ar
             return new InspectionSourceDefinitionResponse();
         }
 
-        InspectionSourceDefinition? definition = InspectionSourceDefinitionResolver.Resolve(document, offset.Value, artifact.Result.Context);
+        InspectionSourceDefinition? definition = InspectionSourceDefinitionResolver.Resolve(document, offset.Value,
+            artifact.Result.Context, artifact.Result.LocalDefinitions);
         if (definition is null)
         {
             return new InspectionSourceDefinitionResponse();

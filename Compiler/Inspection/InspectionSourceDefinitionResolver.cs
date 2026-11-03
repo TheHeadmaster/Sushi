@@ -3,7 +3,7 @@ using Sushi.Source;
 namespace Sushi.Inspection;
 
 /// <summary>
-/// Resolves function and parameter occurrences to source tokens in their captured compilation context.
+/// Resolves supported generated symbols to source tokens in their owning inspection snapshot.
 /// </summary>
 public static class InspectionSourceDefinitionResolver
 {
@@ -17,20 +17,44 @@ public static class InspectionSourceDefinitionResolver
     /// The zero-based UTF-16 position in generated text.
     /// </param>
     /// <param name="context">
-    /// The compilation context that owns the document's semantic identities and source snapshots.
+    /// The compilation context that owns function and parameter identities and source snapshots.
+    /// </param>
+    /// <param name="localDefinitions">
+    /// The selected function's per-artifact local declaration tokens, captured when its body was bound.
     /// </param>
     /// <returns>
     /// The generated occurrence and its exact source-token span, or null when that symbol has no source mapping.
     /// </returns>
-    public static InspectionSourceDefinition? Resolve(InspectionDocument document, int offset, CompilerInspectionContext context)
+    public static InspectionSourceDefinition? Resolve(InspectionDocument document, int offset, CompilerInspectionContext context,
+        IReadOnlyDictionary<int, SourceSpan>? localDefinitions = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(context);
 
         InspectionSymbolOccurrence? occurrence = InspectionDefinitionResolver.FindOccurrence(document, offset);
-        if (occurrence is not InspectionSymbolOccurrence symbol
-            || symbol.Identity.Kind is not (InspectionSymbolKind.Function or InspectionSymbolKind.Parameter)
-            || !context.SourceDefinitions.TryGetValue(symbol.Identity, out SourceSpan sourceSpan))
+        if (occurrence is not InspectionSymbolOccurrence symbol)
+        {
+            return null;
+        }
+
+        SourceSpan sourceSpan;
+        if (symbol.Identity.Kind is InspectionSymbolKind.Local)
+        {
+            if (!StringComparer.Ordinal.Equals(symbol.Identity.FunctionSymbol, document.FunctionSymbol)
+                || symbol.Identity.Index is not int localIndex || localDefinitions is null
+                || !localDefinitions.TryGetValue(localIndex, out sourceSpan))
+            {
+                return null;
+            }
+        }
+        else if (symbol.Identity.Kind is InspectionSymbolKind.Function or InspectionSymbolKind.Parameter)
+        {
+            if (!context.SourceDefinitions.TryGetValue(symbol.Identity, out sourceSpan))
+            {
+                return null;
+            }
+        }
+        else
         {
             return null;
         }

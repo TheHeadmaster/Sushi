@@ -16,6 +16,24 @@ public class CompilerInspectionServiceTests
 {
     private const string Header = "package Example; namespace Example;\n";
     private const string Simple = Header + "public int32 Calculate(int32 value) { int32 total = value + 1; return total; }";
+    private const string LocalFunction = """
+        public int32 Calculate(int32 value)
+        {
+            // 🍣
+            int32 alpha = value;
+            if (value > 0)
+            {
+                int32 beta = alpha;
+                beta = beta + 1;
+            }
+            for (int32 index = 0; index < 2; index++)
+            {
+                int32 gamma = index;
+                alpha = alpha + gamma;
+            }
+            return alpha;
+        }
+        """;
 
     [TestCase(TestName = "Source Inspection Produces Distinct Stages With Shared Identity And No Native Output Or Root")]
     public async Task InspectionShouldProduceBothStagesWithoutExecutableCompilation()
@@ -380,6 +398,145 @@ public class CompilerInspectionServiceTests
         changed.Context.Functions[changed.FunctionSymbol!].Snapshot
             .Should()
             .BeSameAs(changedSnapshot);
+    }
+
+    [TestCase(TestName = "Local Source Provenance Uses Bound Indices And Rebases Cached IR To Each Snapshot")]
+    public async Task LocalDefinitionsShouldFollowBoundIdentitiesAcrossCompatibleCacheReuse()
+    {
+        const string firstSource = Header + "// 🍣\r\npublic int32 Unrelated() { return 1; }\r\n" + LocalFunction;
+        const string changedSource = Header + "// 🍣 moved text\r\npublic int32 Unrelated() { return 123456789; }\r\n" + LocalFunction;
+        using TestProject project = await TestProject.Create(firstSource);
+        using CompilerInspectionService service = new();
+        SourceSnapshot firstSnapshot = project.Snapshot(firstSource, 1);
+        CompilerInspectionResult first = await service.InspectAsync(project.Request(firstSnapshot, marker: "Calculate"), CancellationToken.None);
+        service.Cache.TryGet(CacheKey(first), out CompilerInspectionCacheEntry firstEntry)
+            .Should()
+            .BeTrue();
+        SourceSnapshot changedSnapshot = project.Snapshot(changedSource, 2);
+        CompilerInspectionResult changed = await service.InspectAsync(
+            project.Request(changedSnapshot, InspectionStage.LoweredIR, "Calculate"), CancellationToken.None);
+
+        first.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Succeeded
+            .Should()
+            .BeTrue();
+        changed.Document
+            .Should()
+            .NotBeSameAs(first.Document);
+        changed.Document!.Stage
+            .Should()
+            .Be(InspectionStage.LoweredIR);
+        service.Cache.TryGet(CacheKey(changed), out CompilerInspectionCacheEntry changedEntry)
+            .Should()
+            .BeTrue();
+        changedEntry.StructuredIR
+            .Should()
+            .BeSameAs(firstEntry.StructuredIR);
+        changed.LocalDefinitions.Keys
+            .Should()
+            .BeEquivalentTo(new[] { 0, 1, 2, 3 });
+        changed.LocalDefinitions[0]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 alpha"));
+        changed.LocalDefinitions[1]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 beta"));
+        changed.LocalDefinitions[2]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 index"));
+        changed.LocalDefinitions[3]
+            .Should()
+            .Be(FindLocalToken(changedSnapshot, "int32 gamma"));
+        changed.LocalDefinitions[0].Snapshot
+            .Should()
+            .BeSameAs(changedSnapshot);
+        first.LocalDefinitions[0].Snapshot
+            .Should()
+            .BeSameAs(firstSnapshot);
+        changed.Document!.Occurrences
+            .Where(occurrence => occurrence.Identity.Kind is InspectionSymbolKind.Local)
+            .Should()
+            .NotBeEmpty()
+            .And
+            .OnlyContain(occurrence => changed.LocalDefinitions.ContainsKey(occurrence.Identity.Index!.Value));
+
+        foreach (InspectionSymbolOccurrence occurrence in changed.Document.Occurrences.Where(item => item.Identity.Kind is InspectionSymbolKind.Local))
+        {
+            InspectionSourceDefinition? source = InspectionSourceDefinitionResolver.Resolve(
+                changed.Document, occurrence.Start, changed.Context, changed.LocalDefinitions);
+            source!.SourceSpan
+                .Should()
+                .Be(changed.LocalDefinitions[occurrence.Identity.Index!.Value]);
+        }
+
+        foreach (InspectionSymbolOccurrence occurrence in first.Document!.Occurrences.Where(item => item.Identity.Kind is InspectionSymbolKind.Local))
+        {
+            InspectionSourceDefinition? source = InspectionSourceDefinitionResolver.Resolve(
+                first.Document, occurrence.Start, first.Context, first.LocalDefinitions);
+            source!.SourceSpan
+                .Should()
+                .Be(first.LocalDefinitions[occurrence.Identity.Index!.Value]);
+        }
+
+        Action mutate = () => ((IDictionary<int, SourceSpan>)changed.LocalDefinitions).Add(10, default);
+        mutate
+            .Should()
+            .Throw<NotSupportedException>();
+
+        CompilerInspectionResult changedStructured = await service.InspectAsync(
+            project.Request(changedSnapshot, marker: "Calculate"), CancellationToken.None);
+        changedStructured.Document
+            .Should()
+            .BeSameAs(first.Document);
+        changedStructured.LocalDefinitions[0]
+            .Should()
+            .Be(changed.LocalDefinitions[0]);
+    }
+
+    [TestCase(TestName = "Lazy Function Inspection Captures Its Own Local Source Definitions")]
+    public async Task LazyFunctionInspectionShouldCaptureLocalDefinitions()
+    {
+        const string caller = Header + "public int32 Caller() { return Helper(); }";
+        const string helper = Header + "public int32 Helper() { int32 answer = 42; return answer; }";
+        using TestProject project = await TestProject.Create(caller, helper);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult callerResult = await service.InspectAsync(
+            project.Request(project.Snapshot(caller, 1, "A.sus"), marker: "Caller", additional: [project.Snapshot(helper, 1, "B.sus")]),
+            CancellationToken.None);
+        string helperSymbol = callerResult.Context.Callables.Values.Single(callable => callable.Name is "Helper").FunctionSymbol;
+        CompilerInspectionResult helperResult = await service.InspectFunctionAsync(callerResult.Context, helperSymbol,
+            InspectionStage.LoweredIR, CancellationToken.None);
+
+        helperResult.Succeeded
+            .Should()
+            .BeTrue();
+        helperResult.LocalDefinitions
+            .Should()
+            .ContainKey(0);
+        helperResult.LocalDefinitions[0].Snapshot.Text
+            .Should()
+            .Be(helper);
+        helperResult.Document!.Occurrences
+            .Should()
+            .Contain(occurrence => occurrence.Identity == new InspectionSymbolIdentity(InspectionSymbolKind.Local, helperSymbol, 0));
+    }
+
+    [TestCase(TestName = "Failed Function Binding Does Not Return Partial Local Source Provenance")]
+    public async Task FailedBindingShouldNotExposeLocalDefinitions()
+    {
+        const string invalid = Header + "public int32 Calculate() { int32 valid = 1; int32 invalid = missing; return valid; }";
+        using TestProject project = await TestProject.Create(invalid);
+        using CompilerInspectionService service = new();
+        CompilerInspectionResult result = await service.InspectAsync(project.Request(project.Snapshot(invalid), marker: "Calculate"), CancellationToken.None);
+
+        result.Succeeded
+            .Should()
+            .BeFalse();
+        result.LocalDefinitions
+            .Should()
+            .BeEmpty();
     }
 
     [TestCase("public int32 Helper(int32 input) { return input; }")]
@@ -1114,6 +1271,19 @@ public class CompilerInspectionServiceTests
     private static CompilerInspectionCacheKey CacheKey(CompilerInspectionResult result)
         => CompilerInspectionCache.CreateKey(result.Context.ProjectPath, result.Context.ProjectSnapshot, result.Context.Sources,
             result.FunctionSymbol!, result.Declaration!.Value);
+
+    private static SourceSpan FindLocalToken(SourceSnapshot snapshot, string declaration)
+    {
+        int declarationStart = snapshot.Text.IndexOf(declaration, StringComparison.Ordinal);
+        declarationStart
+            .Should()
+            .BeGreaterThanOrEqualTo(0);
+        string name = declaration[(declaration.LastIndexOf(' ') + 1)..];
+        int nameStart = declarationStart + declaration.Length - name.Length;
+        int byteStart = Encoding.UTF8.GetByteCount(snapshot.Text.AsSpan(0, nameStart));
+        int byteLength = Encoding.UTF8.GetByteCount(name);
+        return new SourceSpan(snapshot, byteStart, byteStart + byteLength);
+    }
 
     private static async Task<CompilerInspectionResult> InspectWithDisposableService(CompilerInspectionRequest request,
         CancellationToken cancellationToken)

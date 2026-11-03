@@ -63,7 +63,9 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        BoundBlock? body = BindBody(declaration.Body, signature.ReturnType, signature.Parameters, diagnosticReporter, cancellationToken, callables);
+        LocalBindingContext locals = new(signature.Parameters);
+        BoundBlock? body = BindBody(declaration.Body, signature.ReturnType, signature.Parameters, diagnosticReporter,
+            cancellationToken, callables, locals);
 
         if (body is null)
         {
@@ -76,7 +78,8 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType, signature.Parameters, body));
+        return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType,
+            signature.Parameters, body), locals.GetDeclarationSpans());
     }
 
     /// <summary>
@@ -536,7 +539,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        if (!locals.TryDeclare(name, type.Value, out BoundLocal? local))
+        if (!locals.TryDeclare(name, type.Value, nameToken.Span, out BoundLocal? local))
         {
             diagnosticReporter.GenerateError(ErrorType.DuplicateLocal, nameToken.Span);
             return null;

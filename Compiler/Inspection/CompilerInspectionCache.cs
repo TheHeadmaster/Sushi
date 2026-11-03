@@ -156,17 +156,20 @@ internal sealed class CompilerInspectionCache : IDisposable
     /// Retains the successfully converted Structured IR and its formatted document atomically.
     /// </summary>
     internal void StoreStructured(CompilerInspectionCacheKey key, IRFunction structuredIR, InspectionDocument document,
-        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies)
+        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies,
+        IReadOnlyList<CachedLocalDefinition> localDefinitions)
     {
         ArgumentNullException.ThrowIfNull(structuredIR);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(bindingDiagnostics);
+        ArgumentNullException.ThrowIfNull(localDefinitions);
         this.Update(key, products => products with
         {
             StructuredIR = structuredIR,
             StructuredDocument = document,
             BindingDiagnostics = Freeze(bindingDiagnostics),
-            Dependencies = dependencies
+            Dependencies = dependencies,
+            LocalDefinitions = Freeze(localDefinitions)
         });
     }
 
@@ -174,19 +177,22 @@ internal sealed class CompilerInspectionCache : IDisposable
     /// Retains completed Structured and Lowered IR products after lowering and formatting both succeeded.
     /// </summary>
     internal void StoreLowered(CompilerInspectionCacheKey key, IRFunction structuredIR, LoweredFunction loweredIR, InspectionDocument document,
-        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies)
+        IReadOnlyList<CachedInspectionDiagnostic> bindingDiagnostics, CompilerInspectionDependencies? dependencies,
+        IReadOnlyList<CachedLocalDefinition> localDefinitions)
     {
         ArgumentNullException.ThrowIfNull(structuredIR);
         ArgumentNullException.ThrowIfNull(loweredIR);
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(bindingDiagnostics);
+        ArgumentNullException.ThrowIfNull(localDefinitions);
         this.Update(key, products => products with
         {
             StructuredIR = products.StructuredIR ?? structuredIR,
             LoweredIR = loweredIR,
             LoweredDocument = document,
             BindingDiagnostics = products.BindingDiagnostics.Count == 0 ? Freeze(bindingDiagnostics) : products.BindingDiagnostics,
-            Dependencies = products.Dependencies ?? dependencies
+            Dependencies = products.Dependencies ?? dependencies,
+            LocalDefinitions = products.LocalDefinitions ?? Freeze(localDefinitions)
         });
     }
 
@@ -223,6 +229,9 @@ internal sealed class CompilerInspectionCache : IDisposable
 
     private static IReadOnlyList<CachedInspectionDiagnostic> Freeze(IReadOnlyList<CachedInspectionDiagnostic> diagnostics)
         => Array.AsReadOnly<CachedInspectionDiagnostic>([.. diagnostics]);
+
+    private static IReadOnlyList<CachedLocalDefinition> Freeze(IReadOnlyList<CachedLocalDefinition> definitions)
+        => Array.AsReadOnly<CachedLocalDefinition>([.. definitions]);
 
     private void Update(CompilerInspectionCacheKey key, Func<CompilerInspectionCacheEntry, CompilerInspectionCacheEntry> update)
     {
@@ -379,9 +388,10 @@ internal sealed record CompilerInspectionCacheEntry(
     InspectionDocument? StructuredDocument,
     InspectionDocument? LoweredDocument,
     IReadOnlyList<CachedInspectionDiagnostic> BindingDiagnostics,
-    CompilerInspectionDependencies? Dependencies)
+    CompilerInspectionDependencies? Dependencies,
+    IReadOnlyList<CachedLocalDefinition>? LocalDefinitions)
 {
-    internal static CompilerInspectionCacheEntry Empty { get; } = new(null, null, null, null, Array.Empty<CachedInspectionDiagnostic>(), null);
+    internal static CompilerInspectionCacheEntry Empty { get; } = new(null, null, null, null, Array.Empty<CachedInspectionDiagnostic>(), null, null);
 }
 
 /// <summary>

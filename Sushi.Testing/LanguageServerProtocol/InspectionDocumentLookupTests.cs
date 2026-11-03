@@ -448,6 +448,27 @@ public class InspectionDocumentLookupTests
                 .Should()
                 .Be(DocumentUri.FromFileSystemPath(callerPath).ToString());
 
+            IReadOnlyList<(int Line, int Character)> structuredLocalPositions = GetGeneratedPositions(structuredText, "%local0");
+            structuredLocalPositions
+                .Should()
+                .NotBeEmpty();
+            foreach ((int localLine, int localCharacter) in structuredLocalPositions)
+            {
+                JsonElement localSource = await session.Request("sourceInspection/sourceDefinition", new
+                {
+                    documentUri = structured.GetProperty("documentUri").GetString(),
+                    artifactId = structured.GetProperty("artifactId").GetString(),
+                    position = new { line = localLine, character = localCharacter }
+                });
+                localSource.GetProperty("found").GetBoolean()
+                    .Should()
+                    .BeTrue(localSource.ToString());
+                localSource.GetProperty("sourceUri").GetString()
+                    .Should()
+                    .Be(DocumentUri.FromFileSystemPath(callerPath).ToString());
+                AssertSourceTokenRange(localSource, caller, "result");
+            }
+
             (int parameterLine, int parameterCharacter) = GetGeneratedPosition(structuredText, "arg0");
             JsonElement parameterHover = await session.Request("sourceInspection/hover", new
             {
@@ -519,7 +540,25 @@ public class InspectionDocumentLookupTests
                     .Contain(expectedDetail);
             }
 
-            foreach (string symbolText in new[] { "%local0", "%temp0", "entry" })
+            IReadOnlyList<(int Line, int Character)> loweredLocalPositions = GetGeneratedPositions(loweredText, "%local0");
+            loweredLocalPositions
+                .Should()
+                .NotBeEmpty();
+            foreach ((int localLine, int localCharacter) in loweredLocalPositions)
+            {
+                JsonElement localSource = await session.Request("sourceInspection/sourceDefinition", new
+                {
+                    documentUri = inspected.GetProperty("documentUri").GetString(),
+                    artifactId = inspected.GetProperty("artifactId").GetString(),
+                    position = new { line = localLine, character = localCharacter }
+                });
+                localSource.GetProperty("found").GetBoolean()
+                    .Should()
+                    .BeTrue(localSource.ToString());
+                AssertSourceTokenRange(localSource, caller, "result");
+            }
+
+            foreach (string symbolText in new[] { "%temp0", "entry" })
             {
                 (int unsupportedLine, int unsupportedCharacter) = GetGeneratedPosition(loweredText, symbolText);
                 JsonElement sourceResult = await session.Request("sourceInspection/sourceDefinition", new
@@ -568,6 +607,16 @@ public class InspectionDocumentLookupTests
             inspected.GetProperty("text").GetString()
                 .Should()
                 .NotContain("checked +");
+            JsonElement historicalLocal = await session.Request("sourceInspection/sourceDefinition", new
+            {
+                documentUri = structured.GetProperty("documentUri").GetString(),
+                artifactId = structured.GetProperty("artifactId").GetString(),
+                position = new { line = structuredLocalPositions[0].Line, character = structuredLocalPositions[0].Character }
+            });
+            historicalLocal.GetProperty("text").GetString()
+                .Should()
+                .Be(caller);
+            AssertSourceTokenRange(historicalLocal, caller, "result");
             string text = inspected.GetProperty("text").GetString()!;
             int offset = text.IndexOf("arg0", StringComparison.Ordinal);
             offset
@@ -641,12 +690,7 @@ public class InspectionDocumentLookupTests
             shiftedSource.GetProperty("text").GetString()
                 .Should()
                 .Be(shiftedCaller);
-            shiftedSource.GetProperty("sourceRange").GetProperty("start").GetProperty("line").GetInt32()
-                .Should()
-                .Be(2);
-            shiftedSource.GetProperty("sourceRange").GetProperty("start").GetProperty("character").GetInt32()
-                .Should()
-                .Be(shiftedCaller.Split('\n')[2].IndexOf("Caller", StringComparison.Ordinal));
+            AssertSourceTokenRange(shiftedSource, shiftedCaller, "Caller");
 
             await File.WriteAllTextAsync(projectPath, "name = false");
             JsonElement definition = await session.Request("sourceInspection/definition", new
@@ -731,6 +775,27 @@ public class InspectionDocumentLookupTests
         int line = text[..offset].Count(character => character == '\n');
         int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
         return (line, character);
+    }
+
+    private static IReadOnlyList<(int Line, int Character)> GetGeneratedPositions(string text, string value)
+    {
+        List<(int Line, int Character)> positions = [];
+        int searchStart = 0;
+        while (searchStart < text.Length)
+        {
+            int offset = text.IndexOf(value, searchStart, StringComparison.Ordinal);
+            if (offset < 0)
+            {
+                break;
+            }
+
+            int line = text[..offset].Count(character => character == '\n');
+            int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+            positions.Add((line, character));
+            searchStart = offset + value.Length;
+        }
+
+        return positions;
     }
 
     private static (int Line, int Character) GetSourcePosition(string text, string token)

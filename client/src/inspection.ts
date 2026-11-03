@@ -150,7 +150,7 @@ export function registerInspection(context: vscode.ExtensionContext, client: Lan
 		const editor = vscode.window.activeTextEditor;
 		if (!editor || editor.document.uri.scheme !== 'sushi-inspect'
 			|| (editor.document.languageId !== 'sushi-structured-ir' && editor.document.languageId !== 'sushi-lowered-ir')) {
-			await vscode.window.showInformationMessage('Open a generated Structured IR or Lowered IR document and place the cursor on a function or parameter.');
+			await vscode.window.showInformationMessage('Open a generated Structured IR or Lowered IR document and place the cursor on a function, parameter, or local.');
 			return;
 		}
 		if (!client.isRunning()) {
