@@ -384,6 +384,9 @@ public sealed class DocumentationAnalysisTests
     private static Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> Analyze(string source)
         => AnalysisHelper.AnalyzeSource(SourceSnapshot.FromText(testUri, version: null, source));
 
+    private static Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> Analyze(SourceSnapshot snapshot)
+        => AnalysisHelper.AnalyzeSource(snapshot);
+
     private static bool IsDetachedDocumentation(SushiDiagnostic diagnostic)
         => diagnostic.IsType(WarningType.DetachedDocumentationBlock);
 
