@@ -51,6 +51,10 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
     private IReadOnlyDictionary<SourceDocument, SourceAnalysisResult>? cachedHoverAnalyses;
 
+    private long cachedSemanticAnalysisGeneration = -1;
+
+    private IReadOnlyList<SourceAnalysisResult>? cachedSemanticAnalyses;
+
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
     /// </summary>
@@ -372,7 +376,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
 
         IReadOnlyList<ProjectDiagnosticResult> results = await this.projectDiagnosticAnalyzer.AnalyzeAsync(
-            input.Documents.Select(item => item.Snapshot).ToArray(), null, cancellationToken);
+            input.Documents.Select(item => item.Snapshot).ToArray(), [documentUri], cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         SourceAnalysisResult? result = results.Select(item => item.Analysis)
             .OfType<SourceAnalysisResult>()
@@ -408,11 +412,290 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
             this.cachedHoverAnalyses = analyses;
             this.cachedHoverGeneration = input.Generation;
+            this.cachedSemanticAnalyses = Array.AsReadOnly(results.Select(item => item.Analysis)
+                .OfType<SourceAnalysisResult>().ToArray());
+            this.cachedSemanticAnalysisGeneration = input.Generation;
             return result;
         }
         finally
         {
             this.mutationGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Gets one coherent project-aware analysis set for source Find All References.
+    /// </summary>
+    /// <param name="documentUri">
+    /// The Sushi source document containing the selected occurrence.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels snapshot capture, semantic analysis, or final validation.
+    /// </param>
+    /// <returns>
+    /// The selected analysis and current semantic context, or null when no source analysis is available.
+    /// </returns>
+    internal async Task<SourceSemanticAnalysisSet?> GetSourceReferenceAnalysisSet(Uri documentUri, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUri);
+        if (!documentUri.IsFile || !Path.GetExtension(documentUri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        WorkspaceAnalysisInput input;
+        SourceDocument selectedDocument;
+        SourceSnapshot selectedSnapshot;
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+            {
+                return null;
+            }
+
+            selectedDocument = existing;
+            selectedSnapshot = selectedDocument.CurrentSnapshot;
+            input = new WorkspaceAnalysisInput(this.workspaceGeneration,
+                Array.AsReadOnly(this.workspace.Documents.Select(document => new DocumentSnapshot(document, document.CurrentSnapshot)).ToArray()));
+
+            if (this.cachedSemanticAnalysisGeneration == this.workspaceGeneration
+                && this.cachedSemanticAnalyses is not null)
+            {
+                SourceAnalysisResult? cachedSelected = this.cachedSemanticAnalyses.FirstOrDefault(
+                    analysis => ReferenceEquals(analysis.Snapshot, selectedSnapshot));
+                if (cachedSelected is not null)
+                {
+                    return new SourceSemanticAnalysisSet(input.Generation, cachedSelected, this.cachedSemanticAnalyses,
+                        Array.AsReadOnly(input.Documents.Select(item => item.Snapshot).ToArray()),
+                        Array.AsReadOnly(input.Documents.Where(item => item.Document.IsOpen).Select(item => item.Snapshot.Uri).ToArray()));
+                }
+            }
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        IReadOnlyList<ProjectDiagnosticResult> results = await this.projectDiagnosticAnalyzer.AnalyzeAsync(
+            input.Documents.Select(item => item.Snapshot).ToArray(), [documentUri], cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        IReadOnlyList<SourceAnalysisResult> analyses = Array.AsReadOnly(results.Select(item => item.Analysis)
+            .OfType<SourceAnalysisResult>().ToArray());
+        SourceAnalysisResult? selectedAnalysis = analyses.FirstOrDefault(analysis => ReferenceEquals(analysis.Snapshot, selectedSnapshot));
+        if (selectedAnalysis is null)
+        {
+            return null;
+        }
+
+        SourceSemanticAnalysisSet result = new(input.Generation, selectedAnalysis, analyses,
+            Array.AsReadOnly(input.Documents.Select(item => item.Snapshot).ToArray()),
+            Array.AsReadOnly(input.Documents.Where(item => item.Document.IsOpen).Select(item => item.Snapshot.Uri).ToArray()));
+        if (!await this.IsCurrentSourceAnalysisSetAsync(result, cancellationToken))
+        {
+            return null;
+        }
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (this.workspaceGeneration != input.Generation
+                || input.Documents.Any(item => !item.Document.IsCurrent(item.Snapshot)))
+            {
+                return null;
+            }
+
+            this.cachedSemanticAnalyses = analyses;
+            this.cachedSemanticAnalysisGeneration = input.Generation;
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Confirms that every captured workspace snapshot and project member remains current.
+    /// </summary>
+    /// <param name="analysisSet">
+    /// The immutable project-wide analysis captured for a references request.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels disk freshness checks or workspace validation.
+    /// </param>
+    /// <returns>
+    /// True only while the captured source and project inputs are still authoritative.
+    /// </returns>
+    internal async Task<bool> IsCurrentSourceAnalysisSetAsync(SourceSemanticAnalysisSet analysisSet, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(analysisSet);
+        if (!await IsProjectMembershipCurrent(analysisSet, cancellationToken))
+        {
+            return false;
+        }
+
+        foreach (SourceAnalysisResult analysis in GetRelevantAnalyses(analysisSet))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            bool isCapturedWorkspaceDocument = analysisSet.WorkspaceSnapshots.Any(snapshot =>
+                ReferenceEquals(snapshot, analysis.Snapshot));
+            bool isOpenDocument = analysisSet.OpenDocumentUris.Any(uri => uri.IsSamePath(analysis.Snapshot.Uri));
+            if (isCapturedWorkspaceDocument && !isOpenDocument
+                && !await IsDiskSnapshotCurrent(analysis.Snapshot, cancellationToken))
+            {
+                return false;
+            }
+
+            if (!isCapturedWorkspaceDocument && !await IsDiskSnapshotCurrent(analysis.Snapshot, cancellationToken))
+            {
+                return false;
+            }
+        }
+
+        if (analysisSet.Selected.SemanticProjectUri is Uri projectUri)
+        {
+            SourceSnapshot? projectSnapshot = analysisSet.WorkspaceSnapshots.FirstOrDefault(snapshot => snapshot.Uri.IsSamePath(projectUri));
+            bool projectIsOpen = analysisSet.OpenDocumentUris.Any(uri => uri.IsSamePath(projectUri));
+            if (projectSnapshot is null || (!projectIsOpen && !await IsDiskSnapshotCurrent(projectSnapshot, cancellationToken)))
+            {
+                return false;
+            }
+        }
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (this.workspaceGeneration != analysisSet.Generation)
+            {
+                return false;
+            }
+
+            foreach (SourceSnapshot snapshot in analysisSet.WorkspaceSnapshots)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!this.workspace.TryGetDocument(snapshot.Uri, out SourceDocument? document) || !document.IsCurrent(snapshot))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+    }
+
+    private static async Task<bool> IsProjectMembershipCurrent(SourceSemanticAnalysisSet analysisSet, CancellationToken cancellationToken)
+    {
+        if (analysisSet.Selected.SemanticProjectUri is not Uri projectUri)
+        {
+            return await IsStandaloneMembershipCurrent(analysisSet, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        SourceSnapshot? projectSnapshot = analysisSet.WorkspaceSnapshots.FirstOrDefault(snapshot => snapshot.Uri.IsSamePath(projectUri));
+        if (projectSnapshot is null)
+        {
+            return false;
+        }
+
+        DiagnosticReporter reporter = new();
+        ProjectAnalysisResult project = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(projectSnapshot, reporter, cancellationToken);
+        if (project.Project is null)
+        {
+            return false;
+        }
+
+        string projectDirectory = Path.GetDirectoryName(projectUri.LocalPath)!;
+        StringComparer pathComparer = PathComparer;
+        HashSet<string> currentMembers = new(pathComparer);
+        foreach (string path in ProjectSourceLoader.DiscoverSourcePaths(projectDirectory, project.Project, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            currentMembers.Add(Path.GetFullPath(path));
+        }
+
+        HashSet<string> analyzedMembers = new(pathComparer);
+        foreach (SourceAnalysisResult analysis in GetRelevantAnalyses(analysisSet))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            analyzedMembers.Add(Path.GetFullPath(analysis.Snapshot.Uri.LocalPath));
+        }
+
+        return currentMembers.SetEquals(analyzedMembers);
+    }
+
+    private static async Task<bool> IsStandaloneMembershipCurrent(SourceSemanticAnalysisSet analysisSet, CancellationToken cancellationToken)
+    {
+        string selectedPath = Path.GetFullPath(analysisSet.Selected.Snapshot.Uri.LocalPath);
+        foreach (SourceSnapshot candidate in analysisSet.WorkspaceSnapshots.Where(snapshot =>
+            Path.GetExtension(snapshot.Uri.LocalPath).Equals(".susproj", StringComparison.OrdinalIgnoreCase)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string projectDirectory = Path.GetDirectoryName(candidate.Uri.LocalPath)!;
+            if (!IsWithinDirectory(analysisSet.Selected.Snapshot.Uri, projectDirectory))
+            {
+                continue;
+            }
+
+            bool isOpen = analysisSet.OpenDocumentUris.Any(uri => uri.IsSamePath(candidate.Uri));
+            if (!isOpen && !await IsDiskSnapshotCurrent(candidate, cancellationToken))
+            {
+                return false;
+            }
+
+            DiagnosticReporter reporter = new();
+            ProjectAnalysisResult project = (ProjectAnalysisResult)await ProjectAnalyzer.Analyze(candidate, reporter, cancellationToken);
+            if (project.Project is null)
+            {
+                return false;
+            }
+
+            IReadOnlyList<string> members = ProjectSourceLoader.DiscoverSourcePaths(projectDirectory, project.Project, cancellationToken);
+            foreach (string member in members)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (PathComparer.Equals(Path.GetFullPath(member), selectedPath))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private static StringComparer PathComparer
+        => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    private static IEnumerable<SourceAnalysisResult> GetRelevantAnalyses(SourceSemanticAnalysisSet analysisSet)
+        => analysisSet.Selected.SemanticProjectUri is Uri projectUri
+            ? analysisSet.Analyses.Where(analysis => analysis.SemanticProjectUri is Uri candidate && candidate.IsSamePath(projectUri))
+            : new[] { analysisSet.Selected };
+
+    private static async Task<bool> IsDiskSnapshotCurrent(SourceSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        if (!snapshot.Uri.IsFile || !File.Exists(snapshot.Uri.LocalPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            byte[] bytes = await File.ReadAllBytesAsync(snapshot.Uri.LocalPath, cancellationToken);
+            return snapshot.Bytes.Span.SequenceEqual(bytes);
+        }
+        catch (FileNotFoundException)
+        {
+            return false;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return false;
         }
     }
 
@@ -434,6 +717,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
         this.workspaceGeneration++;
         this.cachedHoverGeneration = -1;
         this.cachedHoverAnalyses = null;
+        this.cachedSemanticAnalysisGeneration = -1;
+        this.cachedSemanticAnalyses = null;
     }
 
     /// <summary>
@@ -705,6 +990,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
             }
 
             this.analyzedWorkspaceGeneration = input.Generation;
+            if (effectiveAffectedUris is null)
+            {
+                this.cachedSemanticAnalyses = Array.AsReadOnly(results.Select(item => item.Analysis)
+                    .OfType<SourceAnalysisResult>().ToArray());
+                this.cachedSemanticAnalysisGeneration = input.Generation;
+            }
         }
         finally
         {
@@ -1067,8 +1358,35 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
         this.cachedHoverAnalyses = null;
         this.cachedHoverGeneration = -1;
+        this.cachedSemanticAnalyses = null;
+        this.cachedSemanticAnalysisGeneration = -1;
         this.mutationGate.Dispose();
 
         this.disposed = true;
     }
 }
+
+/// <summary>
+/// Holds project-aware source analyses captured from one workspace generation.
+/// </summary>
+/// <param name="Generation">
+/// The workspace generation used by every analysis in the set.
+/// </param>
+/// <param name="Selected">
+/// The analysis containing the requested cursor position.
+/// </param>
+/// <param name="Analyses">
+/// Source analyses produced from the same project and editor snapshot capture.
+/// </param>
+/// <param name="WorkspaceSnapshots">
+/// All authoritative document snapshots captured before analysis began.
+/// </param>
+/// <param name="OpenDocumentUris">
+/// The paths whose authoritative snapshots came from unsaved editor buffers.
+/// </param>
+internal sealed record SourceSemanticAnalysisSet(
+    long Generation,
+    SourceAnalysisResult Selected,
+    IReadOnlyList<SourceAnalysisResult> Analyses,
+    IReadOnlyList<SourceSnapshot> WorkspaceSnapshots,
+    IReadOnlyList<Uri> OpenDocumentUris);

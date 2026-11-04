@@ -47,4 +47,13 @@ internal sealed record SourceSemanticSymbol(
 /// <summary>
 /// Associates a source-token range with the exact symbol selected during binding.
 /// </summary>
-internal sealed record SourceSemanticOccurrence(SourceSpan Span, SourceSemanticSymbol Symbol);
+/// <param name="Span">
+/// The declaration or reference token in its owning source snapshot.
+/// </param>
+/// <param name="Symbol">
+/// The compiler-resolved semantic symbol.
+/// </param>
+/// <param name="IsDeclaration">
+/// Whether this occurrence is the symbol's declaration token.
+/// </param>
+internal sealed record SourceSemanticOccurrence(SourceSpan Span, SourceSemanticSymbol Symbol, bool IsDeclaration = false);

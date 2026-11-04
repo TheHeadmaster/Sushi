@@ -805,9 +805,28 @@ public class InspectionDocumentLookupTests
     private static (int Line, int Character) GetSourcePositionAtOffset(string text, int offset)
     {
         offset.Should().BeInRange(0, text.Length);
-        int line = text[..offset].Count(character => character == '\n');
-        int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
-        return (line, character);
+        int line = 0;
+        int lineStart = 0;
+        for (int index = 0; index < offset; index++)
+        {
+            if (text[index] == '\r')
+            {
+                line++;
+                if (index + 1 < offset && text[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                lineStart = index + 1;
+            }
+            else if (text[index] == '\n')
+            {
+                line++;
+                lineStart = index + 1;
+            }
+        }
+
+        return (line, offset - lineStart);
     }
 
     private static (int Line, int Character) GetSourcePosition(string text, string token)
@@ -1677,6 +1696,220 @@ public class InspectionDocumentLookupTests
     }
 
     [Test]
+    public async Task InitializedServerShouldFindCompilerResolvedSourceReferencesAcrossProjectFiles()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Source References " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        string unrelatedProjectDirectory = Path.Combine(directory, "OtherProject");
+        Directory.CreateDirectory(sourcesDirectory);
+        Directory.CreateDirectory(unrelatedProjectDirectory);
+        try
+        {
+            const string configuration = """
+                name = "SourceReferences"
+                assembly = "SourceReferences"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            const string unrelatedConfiguration = """
+                name = "Unrelated"
+                assembly = "Unrelated"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string callee = "package Example;\nnamespace Example;\n/*🍣*/ public int32 Double(int32 value) { return value * value; }";
+            string caller = "package Example;\r\nnamespace Example;\r\npublic int32 Calculate(int32 input) { /*🍣*/ int32 result = Double(value: input); result += 1; return Double(value: result); }";
+            string otherCaller = "package Example;\rnamespace Example;\rpublic int32 Reuse(int32 other) { int32 result = other; return Double(value: result); }";
+            string unrelatedCallee = "package Example;\nnamespace Example;\npublic int32 Double(int32 value) { return value + 100; }";
+            string activity = "package Example;\nnamespace Example;\npublic activity Application : task { public entry void Start() { return; } }";
+            string projectPath = Path.Combine(directory, "SourceReferences.susproj");
+            string callerPath = Path.Combine(sourcesDirectory, "Caller.sus");
+            string otherCallerPath = Path.Combine(sourcesDirectory, "Other.sus");
+            string calleePath = Path.Combine(sourcesDirectory, "Math.sus");
+            string unrelatedProjectPath = Path.Combine(unrelatedProjectDirectory, "Unrelated.susproj");
+            string unrelatedCalleePath = Path.Combine(unrelatedProjectDirectory, "Math.sus");
+            string activityPath = Path.Combine(sourcesDirectory, "Application.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(otherCallerPath, otherCaller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            await File.WriteAllTextAsync(unrelatedProjectPath, unrelatedConfiguration);
+            await File.WriteAllTextAsync(unrelatedCalleePath, unrelatedCallee);
+            await File.WriteAllTextAsync(activityPath, activity);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string otherCallerUri = ExtensionUri(new Uri(otherCallerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+            string activityUri = ExtensionUri(new Uri(activityPath));
+            await using ServerSession session = new(directory);
+            JsonElement initialization = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { hover = new { contentFormat = hoverContentFormats } } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "SourceReferences" } }
+            });
+            initialization.GetProperty("capabilities").TryGetProperty("referencesProvider", out _)
+                .Should()
+                .BeTrue("ordinary Sushi source references are registered");
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 1, text = caller } });
+
+            List<(string Uri, string Source, int Offset, string Token)> Expected(string uri, string source, string token, int count)
+            {
+                List<(string Uri, string Source, int Offset, string Token)> locations = [];
+                int offset = 0;
+                for (int index = 0; index < count; index++)
+                {
+                    offset = source.IndexOf(token, offset, StringComparison.Ordinal);
+                    offset.Should().BeGreaterThanOrEqualTo(0);
+                    locations.Add((uri, source, offset, token));
+                    offset += token.Length;
+                }
+
+                return locations;
+            }
+
+            async Task AssertReferences(string requestUri, string source, int selectedOffset,
+                bool includeDeclaration, params (string Uri, string Source, int Offset, string Token)[] expected)
+            {
+                (int line, int character) = GetSourcePositionAtOffset(source, selectedOffset);
+                JsonElement result = await RequestSourceReferences(session, requestUri, line, character, includeDeclaration);
+                result.ValueKind.Should().Be(JsonValueKind.Array);
+                JsonElement[] actual = [.. result.EnumerateArray()];
+                (int Line, int Character, string Uri, string Source, int Offset, string Token)[] orderedExpected = [.. expected
+                    .Select(item => (GetSourcePositionAtOffset(item.Source, item.Offset).Line,
+                        GetSourcePositionAtOffset(item.Source, item.Offset).Character, item.Uri, item.Source, item.Offset, item.Token))
+                    .OrderBy(item => DocumentUri.Parse(item.Uri).ToUri().LocalPath,
+                        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)
+                    .ThenBy(item => item.Offset)];
+                actual.Should().HaveCount(orderedExpected.Length);
+                for (int index = 0; index < actual.Length; index++)
+                {
+                    JsonElement location = actual[index];
+                    AssertLocationUri(location, orderedExpected[index].Uri);
+                    JsonElement range = location.GetProperty("range");
+                    range.GetProperty("start").GetProperty("line").GetInt32().Should().Be(orderedExpected[index].Line);
+                    range.GetProperty("start").GetProperty("character").GetInt32().Should().Be(orderedExpected[index].Character);
+                    range.GetProperty("end").GetProperty("line").GetInt32().Should().Be(orderedExpected[index].Line);
+                    range.GetProperty("end").GetProperty("character").GetInt32().Should()
+                        .Be(orderedExpected[index].Character + orderedExpected[index].Token.Length);
+                }
+            }
+
+            int calleeDefinition = callee.IndexOf("Double", StringComparison.Ordinal);
+            int callerCall = caller.IndexOf("Double", StringComparison.Ordinal);
+            int otherCall = otherCaller.IndexOf("Double", StringComparison.Ordinal);
+            List<(string Uri, string Source, int Offset, string Token)> functionLocations = [];
+            functionLocations.AddRange(Expected(callerUri, caller, "Double", 2));
+            functionLocations.AddRange(Expected(otherCallerUri, otherCaller, "Double", 1));
+            functionLocations.Add((calleeUri, callee, calleeDefinition, "Double"));
+            await AssertReferences(calleeUri, callee, calleeDefinition, true, [.. functionLocations]);
+            await AssertReferences(callerUri, caller, callerCall, true, [.. functionLocations]);
+            await AssertReferences(callerUri, caller, callerCall, false,
+                [.. functionLocations.Where(item => !item.Uri.Equals(calleeUri, StringComparison.Ordinal))]);
+
+            List<(string Uri, string Source, int Offset, string Token)> valueLocations = [];
+            valueLocations.AddRange(Expected(calleeUri, callee, "value", 3));
+            valueLocations.AddRange(Expected(callerUri, caller, "value", 2));
+            valueLocations.AddRange(Expected(otherCallerUri, otherCaller, "value", 1));
+            int namedLabel = caller.IndexOf("value:", StringComparison.Ordinal);
+            await AssertReferences(callerUri, caller, namedLabel, true, [.. valueLocations]);
+            await AssertReferences(calleeUri, callee, callee.IndexOf("value", StringComparison.Ordinal), false,
+                [.. valueLocations.Where(item => !(item.Uri.Equals(calleeUri, StringComparison.Ordinal)
+                    && item.Offset == callee.IndexOf("value", StringComparison.Ordinal)))]);
+
+            List<(string Uri, string Source, int Offset, string Token)> inputLocations =
+            [.. Expected(callerUri, caller, "input", 2)];
+            await AssertReferences(callerUri, caller, caller.IndexOf("input", StringComparison.Ordinal), true, [.. inputLocations]);
+
+            List<(string Uri, string Source, int Offset, string Token)> localLocations = [.. Expected(callerUri, caller, "result", 3)];
+            await AssertReferences(callerUri, caller, caller.IndexOf("result", StringComparison.Ordinal), true, [.. localLocations]);
+            await AssertReferences(callerUri, caller, caller.LastIndexOf("result", StringComparison.Ordinal), false,
+                [.. localLocations.Where(item => item.Offset != caller.IndexOf("result", StringComparison.Ordinal))]);
+
+            int activityOffset = activity.IndexOf("Application", StringComparison.Ordinal);
+            await AssertReferences(activityUri, activity, activityOffset, true,
+                (activityUri, activity, activityOffset, "Application"));
+            await AssertReferences(activityUri, activity, activityOffset, false);
+            int entryOffset = activity.IndexOf("Start", StringComparison.Ordinal);
+            await AssertReferences(activityUri, activity, entryOffset, true, (activityUri, activity, entryOffset, "Start"));
+            await AssertReferences(activityUri, activity, entryOffset, false);
+
+            int builtInOffset = caller.IndexOf("int32 Calculate", StringComparison.Ordinal);
+            await AssertReferences(callerUri, caller, builtInOffset, true);
+            int punctuationOffset = caller.IndexOf("; return", StringComparison.Ordinal);
+            await AssertReferences(callerUri, caller, punctuationOffset, true);
+
+            (int definitionLine, int definitionCharacter) = GetSourcePositionAtOffset(caller, callerCall);
+            JsonElement definition = await RequestSourceDefinition(session, callerUri, definitionLine, definitionCharacter);
+            AssertLocationUri(definition, calleeUri);
+
+            string addedCall = otherCaller.Replace("return Double(value: other);", "int32 extra = Double(value: other); return Double(value: extra);", StringComparison.Ordinal);
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = otherCallerUri, languageId = "sushi", version = 1, text = otherCaller } });
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = otherCallerUri, version = 2 },
+                contentChanges = new[] { new { text = addedCall } }
+            });
+            functionLocations.RemoveAll(item => item.Uri.Equals(otherCallerUri, StringComparison.Ordinal));
+            functionLocations.AddRange(Expected(otherCallerUri, addedCall, "Double", 2));
+
+            string callerWithAdditionalCall = caller.Replace("return Double(value: result);",
+                "int32 extraCaller = Double(value: input); return Double(value: extraCaller);", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 2 },
+                contentChanges = new[] { new { text = callerWithAdditionalCall } }
+            });
+            functionLocations.RemoveAll(item => item.Uri.Equals(callerUri, StringComparison.Ordinal));
+            functionLocations.AddRange(Expected(callerUri, callerWithAdditionalCall, "Double", 3));
+            await AssertReferences(callerUri, callerWithAdditionalCall,
+                callerWithAdditionalCall.IndexOf("Double", StringComparison.Ordinal), true, [.. functionLocations]);
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 3 },
+                contentChanges = new[] { new { text = caller } }
+            });
+            functionLocations.RemoveAll(item => item.Uri.Equals(callerUri, StringComparison.Ordinal));
+            functionLocations.AddRange(Expected(callerUri, caller, "Double", 2));
+            await AssertReferences(callerUri, caller, callerCall, true, [.. functionLocations]);
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = otherCallerUri, version = 3 },
+                contentChanges = new[] { new { text = otherCaller } }
+            });
+            functionLocations.RemoveAll(item => item.Uri.Equals(otherCallerUri, StringComparison.Ordinal));
+            functionLocations.AddRange(Expected(otherCallerUri, otherCaller, "Double", 1));
+            await AssertReferences(callerUri, caller, callerCall, true, [.. functionLocations]);
+
+            string invalidCaller = caller.Replace("Double(value: input)", "Missing(value: input)", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 4 },
+                contentChanges = new[] { new { text = invalidCaller } }
+            });
+            await AssertReferences(callerUri, invalidCaller, invalidCaller.IndexOf("Missing", StringComparison.Ordinal), true);
+
+            Directory.Exists(Path.Combine(directory, "bin"))
+                .Should()
+                .BeFalse("Find All References must not invoke native compilation");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task SourceHoverShouldFollowBoundLocalAndParameterIdentitiesAcrossSiblingScopes()
     {
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Hover Local Identity " + Guid.NewGuid().ToString("N"));
@@ -1749,6 +1982,14 @@ public class InspectionDocumentLookupTests
         {
             textDocument = new { uri },
             position = new { line, character }
+        });
+
+    private static Task<JsonElement> RequestSourceReferences(ServerSession session, string uri, int line, int character, bool includeDeclaration)
+        => session.Request("textDocument/references", new
+        {
+            textDocument = new { uri },
+            position = new { line, character },
+            context = new { includeDeclaration }
         });
 
     private static (int Line, int Character) GetUtf16SourcePosition(string source, string token)

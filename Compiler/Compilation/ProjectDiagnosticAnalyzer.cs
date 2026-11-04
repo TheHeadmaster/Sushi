@@ -87,7 +87,7 @@ internal sealed class ProjectDiagnosticAnalyzer
 
             if (members.Count > 0)
             {
-                projects.Add(new ProjectContext(projectDirectory, Array.AsReadOnly(members.ToArray())));
+                projects.Add(new ProjectContext(projectDirectory, snapshot.Uri, Array.AsReadOnly(members.ToArray())));
             }
         }
 
@@ -154,7 +154,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                     continue;
                 }
 
-                BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), cancellationToken);
+                BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), project.ProjectUri, cancellationToken);
             }
         }
 
@@ -176,7 +176,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 continue;
             }
 
-            BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), cancellationToken);
+            BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), null, cancellationToken);
         }
 
         foreach (SourceState source in sources)
@@ -187,7 +187,7 @@ internal sealed class ProjectDiagnosticAnalyzer
         return results;
     }
 
-    private static void BindBodies(SourceState source, IReadOnlyList<PackageCallable> callables, CancellationToken cancellationToken)
+    private static void BindBodies(SourceState source, IReadOnlyList<PackageCallable> callables, Uri? projectUri, CancellationToken cancellationToken)
     {
         SourceFileSyntax syntax = (SourceFileSyntax)source.Result.SyntaxTree.Root;
         List<BoundFunction> functions = [];
@@ -222,7 +222,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             SourceSemanticSymbol activitySymbol = new(activity.Declaration, SourceSemanticSymbolKind.Activity, 0,
                 activity.Name, null, null, activityDocumentation, null, activity.Accessibility,
                 DefinitionSpan: activity.Declaration.Name.Span);
-            occurrences.Add(new SourceSemanticOccurrence(activity.Declaration.Name.Span, activitySymbol));
+            occurrences.Add(new SourceSemanticOccurrence(activity.Declaration.Name.Span, activitySymbol, IsDeclaration: true));
 
             foreach (ActivityMethodDeclarationSyntax methodDeclaration in activity.Declaration.Members.OfType<ActivityMethodDeclarationSyntax>())
             {
@@ -239,7 +239,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 SourceSemanticSymbol methodSymbol = new(methodDeclaration, SourceSemanticSymbolKind.ActivityMethod, 0,
                     method.Name, signature?.ReturnType, signature, methodDocumentation, activity.Name, method.Accessibility,
                     DefinitionSpan: methodDeclaration.Name.Span);
-                occurrences.Add(new SourceSemanticOccurrence(methodDeclaration.Name.Span, methodSymbol));
+                occurrences.Add(new SourceSemanticOccurrence(methodDeclaration.Name.Span, methodSymbol, IsDeclaration: true));
                 if (signature is not null)
                 {
                     AddActivityMethodSignatureOccurrences(methodDeclaration, signature, methodDocumentation, method.Name, occurrences);
@@ -248,7 +248,12 @@ internal sealed class ProjectDiagnosticAnalyzer
         }
 
         occurrences.Sort((left, right) => left.Span.Start.CompareTo(right.Span.Start));
-        source.Result = source.Result with { Functions = functions, SemanticOccurrences = Array.AsReadOnly(occurrences.ToArray()) };
+        source.Result = source.Result with
+        {
+            Functions = functions,
+            SemanticOccurrences = Array.AsReadOnly(occurrences.ToArray()),
+            SemanticProjectUri = projectUri
+        };
     }
 
     private static BoundFunction? CreateActivityMethodSignature(BoundActivityMethod method, CancellationToken cancellationToken)
@@ -290,7 +295,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
                 parameter.Name, parameter.Type, signature, documentation, containingName,
                 DefinitionSpan: declaration.Parameters[index].NameToken.Span);
-            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
+            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol, IsDeclaration: true));
             AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, signature, occurrences);
         }
 
@@ -305,7 +310,7 @@ internal sealed class ProjectDiagnosticAnalyzer
     {
         SourceSemanticSymbol functionSymbol = new(declaration, SourceSemanticSymbolKind.Function, 0, function.Name,
             function.ReturnType, function, documentation, null, DefinitionSpan: declaration.Name.Span);
-        occurrences.Add(new SourceSemanticOccurrence(declaration.Name.Span, functionSymbol));
+        occurrences.Add(new SourceSemanticOccurrence(declaration.Name.Span, functionSymbol, IsDeclaration: true));
 
         for (int index = 0; index < function.Parameters.Count && index < declaration.Parameters.Count; index++)
         {
@@ -313,7 +318,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
                 parameter.Name, parameter.Type, function, documentation, function.Name,
                 DefinitionSpan: declaration.Parameters[index].NameToken.Span);
-            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
+            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol, IsDeclaration: true));
             AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, function, occurrences);
         }
 
@@ -387,7 +392,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
-    private sealed record ProjectContext(string Directory, IReadOnlyList<SourceSnapshot> Members);
+    private sealed record ProjectContext(string Directory, Uri ProjectUri, IReadOnlyList<SourceSnapshot> Members);
 }
 
 /// <summary>

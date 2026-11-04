@@ -116,7 +116,7 @@ internal sealed class LocalBindingContext
             SourceSemanticSymbol symbol = new(this.owner, SourceSemanticSymbolKind.Local, local.Index, local.Name, local.Type,
                 this.function, null, this.function.Name, DefinitionSpan: nameSpan);
             this.localSymbols.Add(local.Index, symbol);
-            this.occurrences.Add(new SourceSemanticOccurrence(nameSpan, symbol));
+            this.occurrences.Add(new SourceSemanticOccurrence(nameSpan, symbol, IsDeclaration: true));
             if (typeSpan is SourceSpan typeLocation)
             {
                 SourceSemanticSymbol typeSymbol = new(this.owner, SourceSemanticSymbolKind.Type, 0, type.ToString(), type, this.function, null, this.function.Name);

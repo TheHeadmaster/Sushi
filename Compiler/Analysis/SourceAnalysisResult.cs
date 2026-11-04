@@ -40,4 +40,9 @@ public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree S
     /// Gets source-token occurrences resolved by the compiler binding path.
     /// </summary>
     internal IReadOnlyList<SourceSemanticOccurrence> SemanticOccurrences { get; init; } = [];
+
+    /// <summary>
+    /// Gets the project whose callable catalog resolved this file, or null when it was analyzed as a standalone source.
+    /// </summary>
+    internal Uri? SemanticProjectUri { get; init; }
 }
