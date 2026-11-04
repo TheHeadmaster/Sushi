@@ -240,7 +240,7 @@ internal static class SourceRenameValidation
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!TryMapSpan(diagnostic.Span, edits, out int start, out int end))
                 {
-                    return false;
+                    throw new InvalidOperationException($"Could not map baseline diagnostic {diagnostic.DisplayName} at [{diagnostic.Span.Start}, {diagnostic.Span.End}] in {diagnostic.Span.Snapshot.Uri.LocalPath}.");
                 }
 
                 DiagnosticKey key = new(Path.GetFullPath(diagnostic.Span.Snapshot.Uri.LocalPath), diagnostic.Code,
@@ -263,7 +263,15 @@ internal static class SourceRenameValidation
             }
         }
 
-        return actual.All(item => expected.TryGetValue(item.Key, out int count) && item.Value <= count);
+        foreach ((DiagnosticKey key, int count) in actual)
+        {
+            if (!expected.TryGetValue(key, out int expectedCount) || count > expectedCount)
+            {
+                throw new InvalidOperationException($"Candidate introduced diagnostic {key} with count {count}; baseline count was {expectedCount}.");
+            }
+        }
+
+        return false;
     }
 
     private static bool RetainsAllRenamedOccurrences(
