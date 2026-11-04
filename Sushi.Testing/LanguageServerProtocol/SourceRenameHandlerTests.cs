@@ -129,6 +129,37 @@ public sealed class SourceRenameHandlerTests
     }
 
     [Test]
+    public async Task FunctionRenameShouldAllowAValidEscapedReservedIdentifier()
+    {
+        const string source = "package Example; namespace Example; public int32 Double() { return 1; } public int32 Caller() { return Double(); }";
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        await File.WriteAllTextAsync(path, source);
+
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("Double", StringComparison.Ordinal), "@return"), CancellationToken.None);
+
+            edit.Should().NotBeNull();
+            TextEdit[] edits = edit!.Changes!.Single().Value.ToArray();
+            edits.Should().HaveCount(2);
+            edits.Should().OnlyContain(item => item.NewText == "@return");
+            string renamed = ApplyEdits(source, edits);
+            renamed.Should().Contain("public int32 @return()")
+                .And.Contain("return @return();");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task PrepareRenameShouldSelectTheCompleteEscapedIdentifierToken()
     {
         const string source = "package Example; namespace Example; public int32 @return() { return 1; }";

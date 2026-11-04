@@ -319,9 +319,11 @@ internal static class SourceRenameValidation
         return true;
     }
 
-    private static bool TryMapSpan(SourceSpan span, IReadOnlyList<SourceRenameTextEdit> edits, out int start, out int end)
+    internal static bool TryMapSpan(SourceSpan span, IReadOnlyList<SourceRenameTextEdit> edits, out int start, out int end)
     {
-        int delta = 0;
+        int startDelta = 0;
+        int containedDelta = 0;
+        SourceRenameTextEdit? exactEdit = null;
         foreach (SourceRenameTextEdit edit in edits)
         {
             if (!edit.Span.Snapshot.Uri.IsSamePath(span.Snapshot.Uri))
@@ -331,15 +333,14 @@ internal static class SourceRenameValidation
 
             if (span.Start == edit.Span.Start && span.End == edit.Span.End)
             {
-                start = span.Start + delta;
-                end = start + Encoding.UTF8.GetByteCount(edit.NewText);
-                return true;
+                exactEdit = edit;
+                continue;
             }
 
             int editDelta = Encoding.UTF8.GetByteCount(edit.NewText) - edit.Span.Length;
             if (edit.Span.End <= span.Start)
             {
-                delta += editDelta;
+                startDelta += editDelta;
             }
             else if (edit.Span.Start >= span.End)
             {
@@ -347,7 +348,7 @@ internal static class SourceRenameValidation
             }
             else if (span.Start <= edit.Span.Start && edit.Span.End <= span.End)
             {
-                delta += editDelta;
+                containedDelta += editDelta;
             }
             else
             {
@@ -357,8 +358,10 @@ internal static class SourceRenameValidation
             }
         }
 
-        start = span.Start + delta;
-        end = span.End + delta;
+        start = span.Start + startDelta;
+        end = exactEdit is SourceRenameTextEdit replacement
+            ? start + Encoding.UTF8.GetByteCount(replacement.NewText)
+            : span.End + startDelta + containedDelta;
         return true;
     }
 

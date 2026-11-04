@@ -23,7 +23,7 @@ internal static class SourceRenameIdentifier
         ArgumentNullException.ThrowIfNull(spelling);
         cancellationToken.ThrowIfCancellationRequested();
         semanticName = string.Empty;
-        if (spelling.Length == 0 || spelling.Contains('\uFEFF'))
+        if (spelling.Length == 0 || spelling.Contains('\uFEFF', StringComparison.Ordinal))
         {
             return false;
         }

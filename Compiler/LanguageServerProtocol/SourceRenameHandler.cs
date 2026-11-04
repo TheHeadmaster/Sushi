@@ -27,8 +27,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
         cancellationToken.ThrowIfCancellationRequested();
         Uri documentUri = request.TextDocument.Uri.ToUri();
         if (!IsSupportedSource(documentUri)
-            || !SourceRenameIdentifier.TryValidate(request.NewName, out string replacementName, cancellationToken)
-            || IsBuiltInTypeName(replacementName))
+            || !SourceRenameIdentifier.TryValidate(request.NewName, out _, cancellationToken))
         {
             return null;
         }
@@ -106,7 +105,8 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
     /// <inheritdoc />
     protected override RenameRegistrationOptions CreateRegistrationOptions(RenameCapability capability, ClientCapabilities clientCapabilities)
     {
-        this.supportsDocumentChanges = clientCapabilities.Workspace?.WorkspaceEdit?.DocumentChanges == true;
+        this.supportsDocumentChanges = clientCapabilities.Workspace?.WorkspaceEdit is
+            { IsSupported: true, Value: { DocumentChanges: true } };
         return new RenameRegistrationOptions
         {
             PrepareProvider = true,
@@ -292,10 +292,6 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
 
     private static bool IsSupportedSource(Uri uri)
         => uri.IsFile && Path.GetExtension(uri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsBuiltInTypeName(string name)
-        => name is "bool" or "void" or "int8" or "uint8" or "int16" or "uint16" or "int32" or "uint32"
-            or "int64" or "uint64" or "int128" or "uint128";
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 }

@@ -14,11 +14,13 @@ namespace Sushi.Testing.LanguageServerProtocol;
 [TestFixture]
 public sealed class SourceRenameProtocolTests
 {
-    [Test]
-    public async Task InitializedServerShouldExposePrepareRenameAndReturnVersionedEdits()
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task InitializedServerShouldExposePrepareRenameAndReturnCapabilityCompatibleEdits(bool supportsDocumentChanges)
     {
         const string declaration = "package Example; namespace Example; public int32 Double(int32 value) { return value; }";
         const string source = "package Example; namespace Example; public int32 Caller() { return Double(1); }";
+        const string unopenedSource = "package Example; namespace Example; public int32 OtherCaller() { return Double(2); }";
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "RenameProtocol " + Guid.NewGuid().ToString("N"));
         string sourceDirectory = Path.Combine(directory, "Sources");
         Directory.CreateDirectory(sourceDirectory);
@@ -38,7 +40,10 @@ public sealed class SourceRenameProtocolTests
         Directory.CreateDirectory(directory);
         string path = Path.Combine(sourceDirectory, "Program.sus");
         await File.WriteAllTextAsync(path, source);
+        string unopenedPath = Path.Combine(sourceDirectory, "Other.sus");
+        await File.WriteAllTextAsync(unopenedPath, unopenedSource);
         string uri = new Uri(path).AbsoluteUri;
+        string unopenedUri = new Uri(unopenedPath).AbsoluteUri;
 
         try
         {
@@ -49,7 +54,7 @@ public sealed class SourceRenameProtocolTests
                 capabilities = new
                 {
                     textDocument = new { rename = new { prepareSupport = true } },
-                    workspace = new { workspaceEdit = new { documentChanges = true } }
+                    workspace = new { workspaceEdit = new { documentChanges = supportsDocumentChanges } }
                 },
                 workspaceFolders = new[] { new { uri = new Uri(directory).AbsoluteUri, name = "RenameProtocol" } }
             });
@@ -81,16 +86,33 @@ public sealed class SourceRenameProtocolTests
                 position = new { line = 0, character = selected + 1 },
                 newName = "Twice"
             });
-            JsonElement[] documentEdits = [.. edit.GetProperty("documentChanges").EnumerateArray()];
-            documentEdits.Should().HaveCount(2);
-            JsonElement programEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == uri);
-            JsonElement mathEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == declarationUri);
-            programEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(7);
-            mathEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(3);
-            programEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
-            mathEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
-            programEdit.GetProperty("edits")[0].GetProperty("newText").GetString().Should().Be("Twice");
-            mathEdit.GetProperty("edits")[0].GetProperty("newText").GetString().Should().Be("Twice");
+            if (supportsDocumentChanges)
+            {
+                edit.TryGetProperty("changes", out _).Should().BeFalse();
+                JsonElement[] documentEdits = [.. edit.GetProperty("documentChanges").EnumerateArray()];
+                documentEdits.Should().HaveCount(3);
+                JsonElement programEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == uri);
+                JsonElement mathEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == declarationUri);
+                JsonElement unopenedEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == unopenedUri);
+                programEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(7);
+                mathEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(3);
+                unopenedEdit.GetProperty("textDocument").GetProperty("version").ValueKind.Should().Be(JsonValueKind.Null);
+                programEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
+                mathEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
+                unopenedEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
+                programEdit.GetProperty("edits")[0].GetProperty("newText").GetString().Should().Be("Twice");
+                mathEdit.GetProperty("edits")[0].GetProperty("newText").GetString().Should().Be("Twice");
+                unopenedEdit.GetProperty("edits")[0].GetProperty("newText").GetString().Should().Be("Twice");
+            }
+            else
+            {
+                edit.TryGetProperty("documentChanges", out _).Should().BeFalse();
+                JsonElement changes = edit.GetProperty("changes");
+                changes.EnumerateObject().Should().HaveCount(3);
+                changes.GetProperty(uri)[0].GetProperty("newText").GetString().Should().Be("Twice");
+                changes.GetProperty(declarationUri)[0].GetProperty("newText").GetString().Should().Be("Twice");
+                changes.GetProperty(unopenedUri)[0].GetProperty("newText").GetString().Should().Be("Twice");
+            }
         }
         finally
         {
@@ -100,6 +122,8 @@ public sealed class SourceRenameProtocolTests
 
     private sealed class LanguageServerSession : IAsyncDisposable
     {
+        private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan CleanupTimeout = TimeSpan.FromSeconds(5);
         private readonly Process process;
         private readonly Stream input;
         private readonly Stream output;
@@ -129,73 +153,102 @@ public sealed class SourceRenameProtocolTests
             this.output = this.process.StandardOutput.BaseStream;
         }
 
-        internal Task Notify(string method, object parameters)
-            => this.Send(new { jsonrpc = "2.0", method, @params = parameters });
+        internal async Task Notify(string method, object parameters, CancellationToken cancellationToken = default)
+        {
+            using CancellationTokenSource timeout = CreateTimeout(cancellationToken, RequestTimeout);
+            try
+            {
+                await this.Send(new { jsonrpc = "2.0", method, @params = parameters }, timeout.Token);
+            }
+            catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Sending language server notification '{method}' timed out after {RequestTimeout}.", exception);
+            }
+        }
 
-        internal async Task<JsonElement> Request(string method, object parameters)
+        internal async Task<JsonElement> Request(string method, object parameters, CancellationToken cancellationToken = default)
         {
             int id = ++this.nextId;
-            await this.Send(new { jsonrpc = "2.0", id, method, @params = parameters });
-            while (true)
+            using CancellationTokenSource timeout = CreateTimeout(cancellationToken, RequestTimeout);
+            try
             {
-                JsonElement message = await this.ReadMessage();
-                if (message.TryGetProperty("id", out JsonElement responseId) && responseId.GetInt32() == id)
+                await this.Send(new { jsonrpc = "2.0", id, method, @params = parameters }, timeout.Token);
+                while (true)
                 {
-                    if (message.TryGetProperty("error", out JsonElement error))
+                    JsonElement message = await this.ReadMessage(method, timeout.Token);
+                    if (message.TryGetProperty("id", out JsonElement responseId) && responseId.GetInt32() == id)
                     {
-                        throw new InvalidOperationException(error.ToString());
-                    }
+                        if (message.TryGetProperty("error", out JsonElement error))
+                        {
+                            throw new InvalidOperationException($"Language server request '{method}' failed: {error}.");
+                        }
 
-                    return message.GetProperty("result").Clone();
+                        return message.GetProperty("result").Clone();
+                    }
                 }
+            }
+            catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Language server request '{method}' timed out after {RequestTimeout}.", exception);
             }
         }
 
         public async ValueTask DisposeAsync()
         {
-            if (this.process.HasExited)
-            {
-                this.process.Dispose();
-                return;
-            }
-
             try
             {
-                _ = await this.Request("shutdown", new { });
-                await this.Notify("exit", new { });
-                await this.process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                if (!this.process.HasExited)
+                {
+                    using CancellationTokenSource cleanup = new(CleanupTimeout);
+                    try
+                    {
+                        _ = await this.Request("shutdown", new { }, cleanup.Token);
+                        await this.Notify("exit", new { }, cleanup.Token);
+                        await this.process.WaitForExitAsync(cleanup.Token);
+                    }
+                    catch (Exception exception) when (exception is OperationCanceledException or TimeoutException or IOException or InvalidOperationException)
+                    {
+                    }
+                }
             }
             finally
             {
                 if (!this.process.HasExited)
                 {
-                    this.process.Kill(entireProcessTree: true);
+                    try
+                    {
+                        this.process.Kill(entireProcessTree: true);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                    }
                 }
 
                 this.process.Dispose();
             }
         }
 
-        private async Task Send<T>(T message)
+        private async Task Send<T>(T message, CancellationToken cancellationToken)
         {
             byte[] content = JsonSerializer.SerializeToUtf8Bytes(message);
             byte[] header = Encoding.ASCII.GetBytes($"Content-Length: {content.Length}\r\n\r\n");
-            await this.input.WriteAsync(header);
-            await this.input.WriteAsync(content);
-            await this.input.FlushAsync();
+            await this.input.WriteAsync(header, cancellationToken);
+            await this.input.WriteAsync(content, cancellationToken);
+            await this.input.FlushAsync(cancellationToken);
         }
 
-        private async Task<JsonElement> ReadMessage()
+        private async Task<JsonElement> ReadMessage(string method, CancellationToken cancellationToken)
         {
             StringBuilder header = new();
             int matched = 0;
             byte[] singleByte = new byte[1];
             while (matched < 4)
             {
-                int read = await this.output.ReadAsync(singleByte.AsMemory());
+                int read = await this.output.ReadAsync(singleByte.AsMemory(), cancellationToken);
                 if (read == 0)
                 {
-                    throw new EndOfStreamException("The language server closed its output stream.");
+                    string exitStatus = this.process.HasExited ? $" Exit code: {this.process.ExitCode}." : string.Empty;
+                    throw new EndOfStreamException($"The language server closed its output while awaiting '{method}'.{exitStatus}");
                 }
 
                 char character = (char)singleByte[0];
@@ -214,10 +267,11 @@ public sealed class SourceRenameProtocolTests
             int offset = 0;
             while (offset < content.Length)
             {
-                int read = await this.output.ReadAsync(content.AsMemory(offset));
+                int read = await this.output.ReadAsync(content.AsMemory(offset), cancellationToken);
                 if (read == 0)
                 {
-                    throw new EndOfStreamException("The language server closed its output stream.");
+                    string exitStatus = this.process.HasExited ? $" Exit code: {this.process.ExitCode}." : string.Empty;
+                    throw new EndOfStreamException($"The language server closed its output while awaiting '{method}'.{exitStatus}");
                 }
 
                 offset += read;
@@ -225,6 +279,13 @@ public sealed class SourceRenameProtocolTests
 
             using JsonDocument document = JsonDocument.Parse(content);
             return document.RootElement.Clone();
+        }
+
+        private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken, TimeSpan timeout)
+        {
+            CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            source.CancelAfter(timeout);
+            return source;
         }
     }
 }
