@@ -29,25 +29,25 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
         if (!IsSupportedSource(documentUri)
             || !SourceRenameIdentifier.TryValidate(request.NewName, out _, cancellationToken))
         {
-            throw new InvalidOperationException("Rename was rejected before source analysis: unsupported source or identifier spelling.");
+            return null;
         }
 
         SourceSemanticAnalysisSet? analysisSet = await this.workspace.GetSourceReferenceAnalysisSet(documentUri, cancellationToken);
         if (analysisSet is null || !TryGetSelectedOccurrence(analysisSet.Selected, request.Position, out SourceSemanticOccurrence? selected))
         {
-            throw new InvalidOperationException("Rename was rejected because source analysis or cursor selection was unavailable.");
+            return null;
         }
 
         if (selected is null || !SourceSemanticSymbolIdentity.TryCreate(selected.Symbol, out _))
         {
-            throw new InvalidOperationException("Rename was rejected because the selected symbol has no supported declaration identity.");
+            return null;
         }
 
         IReadOnlyList<SourceSpan> references = SourceReferencesResolver.Resolve(analysisSet.Analyses,
             analysisSet.Selected, GetOffset(analysisSet.Selected.Snapshot, request.Position), includeDeclaration: true, cancellationToken);
         if (references.Count == 0)
         {
-            throw new InvalidOperationException("Rename was rejected because the compiler did not resolve any references.");
+            return null;
         }
 
         List<SourceRenameTextEdit> edits = [];
@@ -56,7 +56,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
             cancellationToken.ThrowIfCancellationRequested();
             if (!HasSemanticSpelling(reference, selected.Symbol.Name, cancellationToken))
             {
-                throw new InvalidOperationException("Rename was rejected because a reference spelling did not match its semantic name.");
+                return null;
             }
 
             edits.Add(new SourceRenameTextEdit(reference, request.NewName));
@@ -65,7 +65,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
         if (selected.Symbol.Kind is SourceSemanticSymbolKind.Parameter
             && !TryAddParameterDocumentationEdits(selected.Symbol, request.NewName, edits))
         {
-            throw new InvalidOperationException("Rename was rejected because attached parameter documentation could not be mapped.");
+            return null;
         }
 
         edits.Sort((left, right) =>
@@ -77,19 +77,19 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
 
         if (!TryValidateEditSet(edits, cancellationToken))
         {
-            throw new InvalidOperationException("Rename was rejected because its edit ranges were invalid or overlapping.");
+            return null;
         }
 
         bool isNoOp = edits.All(edit => GetText(edit.Span) == edit.NewText);
         if (!isNoOp && !await SourceRenameValidation.IsSemanticallySafeAsync(analysisSet, selected, references, edits, cancellationToken))
         {
-            throw new InvalidOperationException("Rename was rejected by prospective semantic validation.");
+            return null;
         }
 
         cancellationToken.ThrowIfCancellationRequested();
         if (!await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken))
         {
-            throw new InvalidOperationException("Rename was rejected because the source context became stale.");
+            return null;
         }
 
         if (isNoOp)
@@ -101,7 +101,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
         cancellationToken.ThrowIfCancellationRequested();
         if (!await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken))
         {
-            throw new InvalidOperationException("Rename was rejected because the source context became stale after edit creation.");
+            return await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken) ? workspaceEdit : null;
         }
 
         return workspaceEdit;

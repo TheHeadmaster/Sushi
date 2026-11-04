@@ -43,13 +43,13 @@ internal static class SourceRenameValidation
 
         if (edits.Count == 0 || references.Count == 0 || target.Symbol.DefinitionSpan is not SourceSpan targetDefinition)
         {
-            throw new InvalidOperationException("Prospective rename validation had no complete target or edits.");
+            return false;
         }
 
         if (!TryCreateSnapshotSet(analysisSet, edits, cancellationToken,
             out IReadOnlyList<SourceSnapshot> originalSnapshots, out IReadOnlyList<SourceSnapshot> candidateSnapshots))
         {
-            throw new InvalidOperationException("Prospective rename validation could not construct candidate snapshots.");
+            return false;
         }
 
         ProjectDiagnosticAnalyzer analyzer = new();
@@ -63,18 +63,18 @@ internal static class SourceRenameValidation
         IReadOnlyList<SourceAnalysisResult> candidateAnalyses = candidate.Select(result => result.Analysis).OfType<SourceAnalysisResult>().ToArray();
         if (!HasSameMappedOccurrences(baselineAnalyses, candidateAnalyses, edits, cancellationToken))
         {
-            throw new InvalidOperationException("Prospective rename validation found a changed or unmappable semantic occurrence.");
+            return false;
         }
 
         if (IntroducesDiagnostics(baseline, candidate, edits, cancellationToken))
         {
-            throw new InvalidOperationException("Prospective rename validation found a new or unmappable diagnostic.");
+            return false;
         }
 
         if (!RetainsAllRenamedOccurrences(candidateAnalyses, target.Symbol.Kind, targetDefinition,
             references, edits, cancellationToken))
         {
-            throw new InvalidOperationException("Prospective rename validation did not retain every renamed occurrence.");
+            return false;
         }
 
         return true;
@@ -240,7 +240,7 @@ internal static class SourceRenameValidation
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!TryMapSpan(diagnostic.Span, edits, out int start, out int end))
                 {
-                    throw new InvalidOperationException($"Could not map baseline diagnostic {diagnostic.DisplayName} at [{diagnostic.Span.Start}, {diagnostic.Span.End}] in {diagnostic.Span.Snapshot.Uri.LocalPath}.");
+                    return true;
                 }
 
                 DiagnosticKey key = new(Path.GetFullPath(diagnostic.Span.Snapshot.Uri.LocalPath), diagnostic.Code,
@@ -263,15 +263,7 @@ internal static class SourceRenameValidation
             }
         }
 
-        foreach ((DiagnosticKey key, int count) in actual)
-        {
-            if (!expected.TryGetValue(key, out int expectedCount) || count > expectedCount)
-            {
-                throw new InvalidOperationException($"Candidate introduced diagnostic {key} with count {count}; baseline count was {expectedCount}.");
-            }
-        }
-
-        return false;
+        return actual.Any(item => !expected.TryGetValue(item.Key, out int count) || item.Value > count);
     }
 
     private static bool RetainsAllRenamedOccurrences(
