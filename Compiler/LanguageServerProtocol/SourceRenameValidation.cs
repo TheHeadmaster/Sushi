@@ -43,13 +43,13 @@ internal static class SourceRenameValidation
 
         if (edits.Count == 0 || references.Count == 0 || target.Symbol.DefinitionSpan is not SourceSpan targetDefinition)
         {
-            return false;
+            throw new InvalidOperationException("Prospective rename validation had no complete target or edits.");
         }
 
         if (!TryCreateSnapshotSet(analysisSet, edits, cancellationToken,
             out IReadOnlyList<SourceSnapshot> originalSnapshots, out IReadOnlyList<SourceSnapshot> candidateSnapshots))
         {
-            return false;
+            throw new InvalidOperationException("Prospective rename validation could not construct candidate snapshots.");
         }
 
         ProjectDiagnosticAnalyzer analyzer = new();
@@ -61,12 +61,20 @@ internal static class SourceRenameValidation
 
         IReadOnlyList<SourceAnalysisResult> baselineAnalyses = baseline.Select(result => result.Analysis).OfType<SourceAnalysisResult>().ToArray();
         IReadOnlyList<SourceAnalysisResult> candidateAnalyses = candidate.Select(result => result.Analysis).OfType<SourceAnalysisResult>().ToArray();
-        if (!HasSameMappedOccurrences(baselineAnalyses, candidateAnalyses, edits, cancellationToken)
-            || IntroducesDiagnostics(baseline, candidate, edits, cancellationToken)
-            || !RetainsAllRenamedOccurrences(candidateAnalyses, target.Symbol.Kind, targetDefinition,
-                references, edits, cancellationToken))
+        if (!HasSameMappedOccurrences(baselineAnalyses, candidateAnalyses, edits, cancellationToken))
         {
-            return false;
+            throw new InvalidOperationException("Prospective rename validation found a changed or unmappable semantic occurrence.");
+        }
+
+        if (IntroducesDiagnostics(baseline, candidate, edits, cancellationToken))
+        {
+            throw new InvalidOperationException("Prospective rename validation found a new or unmappable diagnostic.");
+        }
+
+        if (!RetainsAllRenamedOccurrences(candidateAnalyses, target.Symbol.Kind, targetDefinition,
+            references, edits, cancellationToken))
+        {
+            throw new InvalidOperationException("Prospective rename validation did not retain every renamed occurrence.");
         }
 
         return true;
