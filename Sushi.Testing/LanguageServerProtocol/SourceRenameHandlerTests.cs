@@ -19,7 +19,7 @@ public sealed class SourceRenameHandlerTests
     [Test]
     public async Task FunctionRenameShouldReturnCompleteEditsThatRemainSemanticallyBound()
     {
-        const string source = "package Example; namespace Example; public int32 Double(int32 value) { return value; } public int32 Caller() { return Double(1); }";
+        const string source = "package Example; namespace Example; /* 😀 */ public int32 Double(int32 value) { return value; } public int32 Caller() { return Double(1); }";
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "Program.sus");
@@ -63,6 +63,36 @@ public sealed class SourceRenameHandlerTests
     }
 
     [Test]
+    public async Task LocalRenameShouldUpdateItsDeclarationAndReferences()
+    {
+        const string source = "package Example; namespace Example; public int32 Caller(int32 input) { int32 result = input; return result; }";
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        await File.WriteAllTextAsync(path, source);
+
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("result", StringComparison.Ordinal), "total"), CancellationToken.None);
+
+            edit.Should().NotBeNull();
+            TextEdit[] edits = edit!.Changes!.Single().Value.ToArray();
+            edits.Should().HaveCount(2);
+            string renamed = ApplyEdits(source, edits);
+            renamed.Should().Contain("int32 total = input;")
+                .And.Contain("return total;");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task ParameterRenameShouldUpdateBoundUsesAndAttachedParamDirective()
     {
         const string source = "package Example; namespace Example;\n/// @param value The value.\npublic int32 Double(int32 value) { return value; } public int32 Caller(int32 input) { return Double(value: input); }";
@@ -95,6 +125,31 @@ public sealed class SourceRenameHandlerTests
                 .And.Contain("return number;")
                 .And.Contain("Double(number: input)");
             renamed.Should().Contain("Double(number: input)");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task ParameterRenameShouldRejectAnExistingParameterName()
+    {
+        const string source = "package Example; namespace Example; public int32 Sum(int32 left, int32 right) { return left + right; }";
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        await File.WriteAllTextAsync(path, source);
+
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("left", StringComparison.Ordinal), "right"), CancellationToken.None);
+
+            edit.Should().BeNull();
         }
         finally
         {

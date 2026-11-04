@@ -91,9 +91,9 @@ public sealed class SourceRenameProtocolTests
                 edit.TryGetProperty("changes", out _).Should().BeFalse();
                 JsonElement[] documentEdits = [.. edit.GetProperty("documentChanges").EnumerateArray()];
                 documentEdits.Should().HaveCount(3);
-                JsonElement programEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == uri);
-                JsonElement mathEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == declarationUri);
-                JsonElement unopenedEdit = documentEdits.Single(item => item.GetProperty("textDocument").GetProperty("uri").GetString() == unopenedUri);
+                JsonElement programEdit = documentEdits.Single(item => IsSameFileUri(item.GetProperty("textDocument").GetProperty("uri").GetString(), path));
+                JsonElement mathEdit = documentEdits.Single(item => IsSameFileUri(item.GetProperty("textDocument").GetProperty("uri").GetString(), declarationPath));
+                JsonElement unopenedEdit = documentEdits.Single(item => IsSameFileUri(item.GetProperty("textDocument").GetProperty("uri").GetString(), unopenedPath));
                 programEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(7);
                 mathEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(3);
                 unopenedEdit.GetProperty("textDocument").GetProperty("version").ValueKind.Should().Be(JsonValueKind.Null);
@@ -109,15 +109,33 @@ public sealed class SourceRenameProtocolTests
                 edit.TryGetProperty("documentChanges", out _).Should().BeFalse();
                 JsonElement changes = edit.GetProperty("changes");
                 changes.EnumerateObject().Should().HaveCount(3);
-                changes.GetProperty(uri)[0].GetProperty("newText").GetString().Should().Be("Twice");
-                changes.GetProperty(declarationUri)[0].GetProperty("newText").GetString().Should().Be("Twice");
-                changes.GetProperty(unopenedUri)[0].GetProperty("newText").GetString().Should().Be("Twice");
+                GetChangesForPath(changes, path)[0].GetProperty("newText").GetString().Should().Be("Twice");
+                GetChangesForPath(changes, declarationPath)[0].GetProperty("newText").GetString().Should().Be("Twice");
+                GetChangesForPath(changes, unopenedPath)[0].GetProperty("newText").GetString().Should().Be("Twice");
             }
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static JsonElement GetChangesForPath(JsonElement changes, string path)
+    {
+        JsonProperty[] matches = [.. changes.EnumerateObject().Where(item => IsSameFileUri(item.Name, path))];
+        matches.Should().ContainSingle();
+        return matches[0].Value;
+    }
+
+    private static bool IsSameFileUri(string? uriText, string path)
+    {
+        if (!Uri.TryCreate(uriText, UriKind.Absolute, out Uri? uri) || !uri.IsFile)
+        {
+            return false;
+        }
+
+        StringComparer pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        return pathComparer.Equals(Path.GetFullPath(uri.LocalPath), Path.GetFullPath(path));
     }
 
     private sealed class LanguageServerSession : IAsyncDisposable
