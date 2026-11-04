@@ -63,7 +63,7 @@ internal static class SourceRenameValidation
         IReadOnlyList<SourceAnalysisResult> candidateAnalyses = candidate.Select(result => result.Analysis).OfType<SourceAnalysisResult>().ToArray();
         if (!HasSameMappedOccurrences(baselineAnalyses, candidateAnalyses, edits, cancellationToken)
             || IntroducesDiagnostics(baseline, candidate, edits, cancellationToken)
-            || !RetainsAllRenamedOccurrences(candidateAnalyses, target.Symbol.Kind, target.Symbol.Index, targetDefinition,
+            || !RetainsAllRenamedOccurrences(candidateAnalyses, target.Symbol.Kind, targetDefinition,
                 references, edits, cancellationToken))
         {
             return false;
@@ -261,7 +261,6 @@ internal static class SourceRenameValidation
     private static bool RetainsAllRenamedOccurrences(
         IReadOnlyList<SourceAnalysisResult> candidates,
         SourceSemanticSymbolKind kind,
-        int index,
         SourceSpan definition,
         IReadOnlyList<SourceSpan> references,
         IReadOnlyList<SourceRenameTextEdit> edits,
