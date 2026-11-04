@@ -63,6 +63,33 @@ public sealed class SourceRenameHandlerTests
     }
 
     [Test]
+    public async Task RenameToTheExistingNameShouldReturnAnEmptyWorkspaceEdit()
+    {
+        const string source = "package Example; namespace Example; public int32 Double() { return 1; }";
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        await File.WriteAllTextAsync(path, source);
+
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("Double", StringComparison.Ordinal), "Double"), CancellationToken.None);
+
+            edit.Should().NotBeNull();
+            edit!.Changes.Should().BeNull();
+            edit.DocumentChanges.Should().BeNull();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task LocalRenameShouldUpdateItsDeclarationAndReferences()
     {
         const string source = "package Example; namespace Example; public int32 Caller(int32 input) { int32 result = input; return result; }";
