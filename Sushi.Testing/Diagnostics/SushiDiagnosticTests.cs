@@ -51,6 +51,16 @@ public class SushiDiagnosticTests
     }
 
     [TestCase(WarningType.TomlSyntaxWarning, 1, "SUSW0001", TestName = "Diagnostic Should Preserve TOML Syntax Warning Code")]
+    [TestCase(WarningType.MissingPublicDocumentation, 2, "SUSW0002", TestName = "Diagnostic Should Preserve Missing Documentation Warning Code")]
+    [TestCase(WarningType.DetachedDocumentationBlock, 3, "SUSW0003", TestName = "Diagnostic Should Preserve Detached Documentation Warning Code")]
+    [TestCase(WarningType.UnrecognizedDocumentationDirective, 4, "SUSW0004", TestName = "Diagnostic Should Preserve Unrecognized Documentation Directive Warning Code")]
+    [TestCase(WarningType.DuplicateParameterDocumentation, 5, "SUSW0005", TestName = "Diagnostic Should Preserve Duplicate Parameter Documentation Warning Code")]
+    [TestCase(WarningType.DuplicateReturnDocumentation, 6, "SUSW0006", TestName = "Diagnostic Should Preserve Duplicate Return Documentation Warning Code")]
+    [TestCase(WarningType.UnknownDocumentationParameter, 7, "SUSW0007", TestName = "Diagnostic Should Preserve Unknown Documentation Parameter Warning Code")]
+    [TestCase(WarningType.MissingPublicParameterDocumentation, 8, "SUSW0008", TestName = "Diagnostic Should Preserve Missing Public Parameter Documentation Warning Code")]
+    [TestCase(WarningType.ReturnDocumentationOnVoid, 9, "SUSW0009", TestName = "Diagnostic Should Preserve Void Return Documentation Warning Code")]
+    [TestCase(WarningType.MissingReturnDocumentation, 10, "SUSW0010", TestName = "Diagnostic Should Preserve Missing Return Documentation Warning Code")]
+    [TestCase(WarningType.EmptyDocumentationDescription, 11, "SUSW0011", TestName = "Diagnostic Should Preserve Empty Documentation Description Warning Code")]
     public void WarningDiagnosticShould_0(WarningType type, int expectedCode, string expectedDisplayName)
     {
         SushiDiagnostic diagnostic = new((int)type, "Test diagnostic.", DiagnosticSeverity.Warning, CreateSpan());

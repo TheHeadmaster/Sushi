@@ -60,6 +60,7 @@ public class MVPProjectCompilerTests
             MVPCompilationResult compilation = await new MVPProjectCompiler().CompileAsync(projectPath, CancellationToken.None);
 
             compilation.Diagnostics
+                .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
                 .Should()
                 .BeEmpty();
 

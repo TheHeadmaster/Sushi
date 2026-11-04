@@ -291,8 +291,13 @@ public class SourceSemanticAnalysisTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
+
+        diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(WarningType.MissingPublicDocumentation));
 
         BoundFunction function = result.Functions
             .Should()
@@ -349,8 +354,13 @@ public class SourceSemanticAnalysisTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await AnalysisHelper.AnalyzeSource(source, testUri);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
+
+        diagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(WarningType.MissingPublicDocumentation));
 
         BoundFunction function = result.Functions
             .Should()
@@ -397,6 +407,7 @@ public class SourceSemanticAnalysisTests
             .BeEmpty();
 
         SushiDiagnostic diagnostic = diagnostics
+            .Where(candidate => candidate.Severity == DiagnosticSeverity.Error)
             .Should()
             .ContainSingle()
             .Which;

@@ -40,6 +40,7 @@ public class MVPBooleanCompilationTests
         await WithProject("bool", expression, async compilation =>
         {
             compilation.Diagnostics
+                .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
                 .Should()
                 .BeEmpty();
 

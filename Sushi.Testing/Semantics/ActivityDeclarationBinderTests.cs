@@ -32,6 +32,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -97,6 +98,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -126,6 +128,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -162,6 +165,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -394,6 +398,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> sourceDiagnostics) = await Analyze(source);
 
         sourceDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -438,10 +443,12 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult secondResult, IReadOnlyList<SushiDiagnostic> secondDiagnostics) = await Analyze(second, "B.sus");
 
         firstDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
         secondDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -489,10 +496,12 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult applicationResult, IReadOnlyList<SushiDiagnostic> applicationDiagnostics) = await Analyze(application, "Application.sus");
 
         workerDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
         applicationDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -554,6 +563,7 @@ public class ActivityDeclarationBinderTests
             .Contain(diagnostic => diagnostic.IsType(ErrorType.MissingActivityEntry));
 
         validDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -585,6 +595,7 @@ public class ActivityDeclarationBinderTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

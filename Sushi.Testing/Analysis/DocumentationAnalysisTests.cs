@@ -381,6 +381,241 @@ public sealed class DocumentationAnalysisTests
             .ContainSingle();
     }
 
+    [Test]
+    public async Task DirectivesShouldRetainMultilineMarkdownDescriptionsAndProse()
+    {
+        string source = Header + "/// Calculates a total for user@example.com.\n///\n/// **Details** are available.\n/// @param value The first line.\n///\n/// The `value` is included.\n/// @return The total.\n/// It is rounded.\npublic int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+        DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
+
+        block.Content.Prose.Text
+            .Should()
+            .Be("Calculates a total for user@example.com.\n\n**Details** are available.");
+
+        block.Content.Directives
+            .Should()
+            .HaveCount(2);
+
+        block.Content.Directives[0].ParameterName
+            .Should()
+            .Be("value");
+
+        block.Content.Directives[0].Description.Text
+            .Should()
+            .Be("The first line.\n\nThe `value` is included.");
+
+        block.Content.Directives[1].Description.Text
+            .Should()
+            .Be("The total.\nIt is rounded.");
+
+        DocumentationWarnings(diagnostics)
+            .Should()
+            .BeEmpty();
+
+        block.Content.Prose.Snapshot
+            .Should()
+            .BeSameAs(result.Snapshot);
+    }
+
+    [Test]
+    public async Task DirectivesInsideValidFencesAndEscapedLinesShouldRemainProse()
+    {
+        string source = Header + "/// Contact user@example.com.\n/// \\@param is literal.\n/// ```sushi\n/// @param hidden ignored\n/// ````\n/// ~~~~text\n/// @return hidden ignored\n/// ~~~\n/// ~~~~\n/// @returns not-an-alias\n/// @throws deferred\n/// @param value provided\n/// @return provided\npublic int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+        DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
+
+        block.Content.Directives
+            .Select(directive => directive.Kind)
+            .Should()
+            .Equal(DocumentationDirectiveKind.Parameter, DocumentationDirectiveKind.Return);
+
+        block.Content.Prose.Text
+            .Should()
+            .Contain("@param is literal")
+            .And.Contain("@param hidden ignored")
+            .And.Contain("@return hidden ignored")
+            .And.Contain("@returns not-an-alias")
+            .And.Contain("@throws deferred");
+
+        DocumentationWarnings(diagnostics)
+            .Where(diagnostic => diagnostic.IsType(WarningType.UnrecognizedDocumentationDirective))
+            .Should()
+            .HaveCount(2);
+    }
+
+    [Test]
+    public async Task PublicUndocumentedCallableShouldProduceOnlyMissingDeclarationWarning()
+    {
+        string source = Header + "public int32 Calculate(int32 left, int32 right) { return left + right; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0002");
+    }
+
+    [Test]
+    public async Task DetachedBlockBeforePublicCallableShouldNotAttachAndShouldPreserveMissingDeclarationPrecedence()
+    {
+        string source = Header + "/// detached docs\n\npublic int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        result.DocumentationBlocks.Should().ContainSingle(block => !block.IsAttached);
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0003", "SUSW0002");
+    }
+
+    [Test]
+    public async Task PublicCallableWithPartialDocumentationShouldWarnForEachMissingComponent()
+    {
+        string source = Header + "/// Adds values.\n/// @param left First operand.\npublic int32 Add(int32 left, int32 right) { return left + right; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0008", "SUSW0010");
+    }
+
+    [Test]
+    public async Task PublicActivityAndVisibleLifecycleMethodRequireTheirOwnDocumentation()
+    {
+        string source = Header + "public activity Application : task\n{\n    public entry void Start() { return; }\n}";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0002", "SUSW0002");
+    }
+
+    [Test]
+    public async Task CompletePublicDocumentationShouldHaveNoDocumentationWarnings()
+    {
+        string source = Header + "/// Adds values.\n/// @param left First operand.\n/// @param right Second operand.\n/// @return Sum.\npublic int32 Add(int32 left, int32 right) { return left + right; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Test]
+    public async Task DirectiveValidationShouldUseExactNamesAndReportDuplicatesAndEmptyDescriptions()
+    {
+        string source = Header + "/// @param @return \n/// @param @return duplicate\n/// @param Return wrong case\n/// @return\n/// @return duplicate\npublic int32 Calculate(int32 @return) { return @return; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .GroupBy(diagnostic => diagnostic.DisplayName)
+            .ToDictionary(group => group.Key, group => group.Count())
+            .Should()
+            .BeEquivalentTo(new Dictionary<string, int>
+            {
+                ["SUSW0005"] = 1,
+                ["SUSW0007"] = 1,
+                ["SUSW0006"] = 1,
+                ["SUSW0011"] = 2
+            });
+    }
+
+    [Test]
+    public async Task NonPublicCallableShouldNotRequireParameterDocumentationButStillRequiresReturnDocumentation()
+    {
+        string source = Header + "/// Internal helper.\nprivate int32 Helper(int32 value) { return value; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0010");
+    }
+
+    [Test]
+    public async Task VoidReturnDirectiveAndMissingPublicParameterShouldUseDistinctWarnings()
+    {
+        string source = Header + "/// Stops.\n/// @return Nothing.\npublic void Stop(int32 reason) { return; }";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0008", "SUSW0009");
+    }
+
+    [Test]
+    public async Task PublicMethodInsideNonPublicActivityShouldNotBeTreatedAsPublicApi()
+    {
+        string source = Header + "private activity Worker : task\n{\n    public entry int32 Start(int32 value) { return value; }\n}";
+        (_, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+
+        DocumentationWarnings(diagnostics)
+            .Should()
+            .BeEmpty();
+    }
+
+    [TestCase("\n")]
+    [TestCase("\r\n")]
+    [TestCase("\r")]
+    public async Task DirectiveAndParameterSpansShouldRemainUtf8AccurateAcrossLineEndings(string lineEnding)
+    {
+        string source = Header + "/// café 😀" + lineEnding + "/// @param value description" + lineEnding + "/// @return résultat" + lineEnding + "public int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+        DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
+        DocumentationDirective parameter = block.Content.Directives[0];
+        int directiveOffset = ByteOffset(source, source.IndexOf("@param", StringComparison.Ordinal));
+        int parameterOffset = ByteOffset(source, source.IndexOf("value description", StringComparison.Ordinal));
+
+        parameter.NameSpan
+            .Should()
+            .Be(new SourceSpan(result.Snapshot, directiveOffset, directiveOffset + Encoding.UTF8.GetByteCount("@param")));
+
+        parameter.ParameterNameSpan
+            .Should()
+            .Be(new SourceSpan(result.Snapshot, parameterOffset, parameterOffset + Encoding.UTF8.GetByteCount("value")));
+
+        parameter.Description.Snapshot
+            .Should()
+            .BeSameAs(result.Snapshot);
+
+        DocumentationWarnings(diagnostics)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Test]
+    public async Task SignatureOnlyAndFullAnalysisShouldProduceTheSameDocumentationWarnings()
+    {
+        SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, 1, Header + "public int32 Calculate(int32 value) { return value; }");
+        SourceAnalyzer analyzer = new();
+        DiagnosticReporter signatureDiagnostics = new();
+        DiagnosticReporter fullDiagnostics = new();
+
+        await analyzer.AnalyzeDeclarations(snapshot, signatureDiagnostics, CancellationToken.None);
+        await analyzer.Analyze(snapshot, fullDiagnostics, CancellationToken.None);
+
+        signatureDiagnostics.ReportDiagnostics()
+            .Where(IsDocumentationWarning)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0002");
+
+        fullDiagnostics.ReportDiagnostics()
+            .Where(IsDocumentationWarning)
+            .Select(diagnostic => diagnostic.DisplayName)
+            .Should()
+            .Equal("SUSW0002");
+    }
+
+    private static IEnumerable<SushiDiagnostic> DocumentationWarnings(IEnumerable<SushiDiagnostic> diagnostics)
+        => diagnostics.Where(IsDocumentationWarning);
+
+    private static bool IsDocumentationWarning(SushiDiagnostic diagnostic)
+        => diagnostic.DisplayName is "SUSW0002" or "SUSW0003" or "SUSW0004" or "SUSW0005" or "SUSW0006" or "SUSW0007" or "SUSW0008" or "SUSW0009" or "SUSW0010" or "SUSW0011";
+
     private static Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> Analyze(string source)
         => AnalysisHelper.AnalyzeSource(SourceSnapshot.FromText(testUri, version: null, source));
 

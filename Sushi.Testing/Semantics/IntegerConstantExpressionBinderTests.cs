@@ -63,6 +63,7 @@ public class IntegerConstantExpressionBinderTests
             .Be(expectedValue);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -193,6 +194,7 @@ public class IntegerConstantExpressionBinderTests
             .Contain("ret i32 19");
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }

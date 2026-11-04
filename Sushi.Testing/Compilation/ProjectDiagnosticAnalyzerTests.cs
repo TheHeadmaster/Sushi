@@ -30,6 +30,7 @@ public class ProjectDiagnosticAnalyzerTests
             .ContainSingle()
             .Which;
         result.Reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
         ((Sushi.Analysis.SourceAnalysisResult)result.Analysis).Functions
@@ -49,9 +50,18 @@ public class ProjectDiagnosticAnalyzerTests
         IReadOnlyList<ProjectDiagnosticResult> results = await project.Analyze(caller, callee);
         ProjectDiagnosticResult callerResult = results.Single(result => result.Analysis.Snapshot.Uri.IsSamePath(project.CallerUri));
 
-        callerResult.Reporter.ReportDiagnostics()
+        IReadOnlyList<SushiDiagnostic> callerDiagnostics = callerResult.Reporter.ReportDiagnostics();
+        callerDiagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
+        SushiDiagnostic documentationWarning = callerDiagnostics
+            .Should()
+            .ContainSingle(diagnostic => diagnostic.IsType(WarningType.MissingPublicDocumentation))
+            .Which;
+        documentationWarning.Span.Snapshot
+            .Should()
+            .BeSameAs(callerResult.Analysis.Snapshot);
         ((Sushi.Analysis.SourceAnalysisResult)callerResult.Analysis).Functions
             .Should()
             .ContainSingle();
@@ -69,6 +79,7 @@ public class ProjectDiagnosticAnalyzerTests
         IReadOnlyList<ProjectDiagnosticResult> results = await project.Analyze(caller, callee);
 
         results.Single(result => result.Analysis.Snapshot.Uri.IsSamePath(project.CallerUri)).Reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -86,12 +97,14 @@ public class ProjectDiagnosticAnalyzerTests
         IReadOnlyList<ProjectDiagnosticResult> restored = await project.Analyze(caller, validCallee, callerVersion: 10, calleeVersion: 5);
 
         valid.Single(result => result.Analysis.Snapshot.Uri.IsSamePath(project.CallerUri)).Reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
         invalid.Single(result => result.Analysis.Snapshot.Uri.IsSamePath(project.CallerUri)).Reporter.ReportDiagnostics()
             .Should()
             .NotBeEmpty();
         restored.Single(result => result.Analysis.Snapshot.Uri.IsSamePath(project.CallerUri)).Reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -112,6 +125,7 @@ public class ProjectDiagnosticAnalyzerTests
             .Reporter.ReportDiagnostics();
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .HaveCountGreaterThan(5)
             .And

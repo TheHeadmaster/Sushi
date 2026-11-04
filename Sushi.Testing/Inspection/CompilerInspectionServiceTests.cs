@@ -52,9 +52,11 @@ public class CompilerInspectionServiceTests
             .Should()
             .BeTrue();
         structured.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
         lowered.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
         structured.Stage
@@ -884,6 +886,7 @@ public class CompilerInspectionServiceTests
             .Should()
             .BeTrue();
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
         result.Context.Functions

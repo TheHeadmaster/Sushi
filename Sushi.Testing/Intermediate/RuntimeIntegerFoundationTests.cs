@@ -62,6 +62,7 @@ public sealed class RuntimeIntegerFoundationTests
             .Be(BoundType.Int32);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -476,6 +477,7 @@ public sealed class RuntimeIntegerFoundationTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(declaration);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

@@ -116,6 +116,7 @@ public class BooleanOperationStructureTests
             .Contain(expectedValue ? "ret i1 true" : "ret i1 false");
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -188,6 +189,7 @@ public class BooleanOperationStructureTests
             .BeTrue();
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }

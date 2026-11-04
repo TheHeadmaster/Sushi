@@ -72,6 +72,7 @@ public class LocalAssignmentCompilationTests
         MVPCompilationResult result = await project.Compile();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -185,6 +186,7 @@ public class LocalAssignmentCompilationTests
         MVPCompilationResult result = await project.Compile();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

@@ -70,6 +70,7 @@ public class BooleanConstantExpressionBinderTests
             .Be(expectedValue);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -227,6 +228,7 @@ public class BooleanConstantExpressionBinderTests
             .Contain("ret i1 true");
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }

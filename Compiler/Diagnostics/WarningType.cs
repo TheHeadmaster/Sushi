@@ -8,5 +8,14 @@ public enum WarningType
 #pragma warning restore CA1008 // Enums should have zero value
 {
     TomlSyntaxWarning = 1,
-    DetachedDocumentationBlock = 3
+    MissingPublicDocumentation = 2,
+    DetachedDocumentationBlock = 3,
+    UnrecognizedDocumentationDirective = 4,
+    DuplicateParameterDocumentation = 5,
+    DuplicateReturnDocumentation = 6,
+    UnknownDocumentationParameter = 7,
+    MissingPublicParameterDocumentation = 8,
+    ReturnDocumentationOnVoid = 9,
+    MissingReturnDocumentation = 10,
+    EmptyDocumentationDescription = 11
 }

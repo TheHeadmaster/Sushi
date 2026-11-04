@@ -87,6 +87,7 @@ public class IntegerComparisonConstantTests
             .Be(expectedValue);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -219,6 +220,7 @@ public class IntegerComparisonConstantTests
             .Contain("ret i1 true");
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }

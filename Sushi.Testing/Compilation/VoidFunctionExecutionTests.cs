@@ -33,6 +33,7 @@ public class VoidFunctionExecutionTests
         (ParserResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = ParsingHelper.ParseFunctionDeclaration(source, testUri);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -78,6 +79,7 @@ public class VoidFunctionExecutionTests
         (SourceAnalysisResult analysis, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(declaration);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -272,6 +274,7 @@ public class VoidFunctionExecutionTests
         (SourceAnalysisResult analysis, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(declaration);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

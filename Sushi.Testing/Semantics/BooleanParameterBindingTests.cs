@@ -59,6 +59,7 @@ public sealed class BooleanParameterBindingTests
             .BeSameAs(reference.Parameter);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }
@@ -93,6 +94,7 @@ public sealed class BooleanParameterBindingTests
             .ContainSingle();
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
     }

@@ -1091,10 +1091,10 @@ public class InspectionDocumentLookupTests
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 7, text = caller } });
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 4, text = callee } });
 
-            JsonElement valid = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 0);
+            JsonElement valid = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 1);
             valid.GetArrayLength()
                 .Should()
-                .Be(0);
+                .Be(1, "the caller has one missing-public-documentation warning while its call remains valid");
 
             string changedSignature = callee.Replace("int32 input", "bool input", StringComparison.Ordinal);
             await session.Notify("textDocument/didChange", new
@@ -1110,10 +1110,10 @@ public class InspectionDocumentLookupTests
             {
                 textDocument = new { uri = calleeUri, version = 6 }, contentChanges = new[] { new { text = callee } }
             });
-            JsonElement restored = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 0);
+            JsonElement restored = await session.WaitForDiagnostics(callerUri, 7, diagnostics => diagnostics.GetArrayLength() == 1);
             restored.GetArrayLength()
                 .Should()
-                .Be(0);
+                .Be(1, "restoring the valid signature should clear the call error and leave the documentation warning");
 
             Directory.Exists(Path.Combine(directory, "bin"))
                 .Should()

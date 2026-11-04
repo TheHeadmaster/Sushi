@@ -55,7 +55,16 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
     private static readonly Dictionary<WarningType, string> warningMessages = new()
     {
         [WarningType.TomlSyntaxWarning] = "Syntax warning in Toml source.",
-        [WarningType.DetachedDocumentationBlock] = "Documentation block is not attached to an eligible immediately following declaration."
+        [WarningType.MissingPublicDocumentation] = "Publicly visible declaration lacks documentation.",
+        [WarningType.DetachedDocumentationBlock] = "Documentation block is not attached to an eligible immediately following declaration.",
+        [WarningType.UnrecognizedDocumentationDirective] = "Documentation directive is not recognized.",
+        [WarningType.DuplicateParameterDocumentation] = "Parameter documentation is duplicated.",
+        [WarningType.DuplicateReturnDocumentation] = "Return documentation is duplicated.",
+        [WarningType.UnknownDocumentationParameter] = "Documentation directive names a parameter that is not declared by the callable.",
+        [WarningType.MissingPublicParameterDocumentation] = "Publicly visible callable parameter lacks documentation.",
+        [WarningType.ReturnDocumentationOnVoid] = "Return documentation is not applicable to a void callable.",
+        [WarningType.MissingReturnDocumentation] = "Documented non-void callable lacks return documentation.",
+        [WarningType.EmptyDocumentationDescription] = "Documentation directive description is empty."
     };
 
     /// <inheritdoc />

@@ -55,7 +55,8 @@ public static class DocumentationProcessor
 
             SourceSpan span = new(sourceFile.Snapshot, lines[0].Start, lines[^1].End);
             SyntaxNode? declaration = FindAttachedDeclaration(sourceFile.Snapshot, span, declarations, cancellationToken);
-            DocumentationBlock block = new(span, lines, declaration);
+            DocumentationContent content = DocumentationContentParser.Parse(sourceFile.Snapshot, lines, diagnosticReporter, cancellationToken);
+            DocumentationBlock block = new(span, lines, declaration, content);
             blocks.Add(block);
 
             if (declaration is null)

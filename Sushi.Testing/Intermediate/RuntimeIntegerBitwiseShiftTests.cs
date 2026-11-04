@@ -299,6 +299,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
         }
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -567,6 +568,7 @@ public sealed class RuntimeIntegerBitwiseShiftTests
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(expression);
 
         diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

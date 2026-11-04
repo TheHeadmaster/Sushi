@@ -66,6 +66,7 @@ public class DoWhileCompilationTests
         MVPCompilationResult result = await project.Compile();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -273,6 +274,7 @@ public class DoWhileCompilationTests
         MVPCompilationResult result = await project.Compile();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 
@@ -370,6 +372,7 @@ public class DoWhileCompilationTests
         MVPCompilationResult result = await project.Compile();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

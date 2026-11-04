@@ -77,6 +77,9 @@ public sealed class SourceAnalyzer : Analyzer
         SourceFileBindResult bindResult = SourceFileBinder.Bind(sourceFile, localDiagnostics, signatureOnly, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
+        DocumentationValidator.Validate(sourceFile, documentationBlocks, localDiagnostics, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
         diagnosticReporter.CommitReporter(localDiagnostics);
 
         SourceAnalysisResult result = new(snapshot, parserResult.Tree, bindResult.Package, bindResult.Namespace, bindResult.Functions)

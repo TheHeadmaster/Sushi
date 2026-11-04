@@ -24,6 +24,11 @@ public sealed class DocumentationBlock
     public IReadOnlyList<SourceSpan> LineSpans { get; }
 
     /// <summary>
+    /// Gets the parsed prose and directive metadata for this block.
+    /// </summary>
+    public DocumentationContent Content { get; }
+
+    /// <summary>
     /// Gets the eligible syntax declaration attached to this block, or <see langword="null"/> when the block is detached.
     /// </summary>
     public SyntaxNode? Declaration { get; }
@@ -33,9 +38,10 @@ public sealed class DocumentationBlock
     /// </summary>
     public bool IsAttached => this.Declaration is not null;
 
-    internal DocumentationBlock(SourceSpan span, IReadOnlyList<SourceSpan> lineSpans, SyntaxNode? declaration)
+    internal DocumentationBlock(SourceSpan span, IReadOnlyList<SourceSpan> lineSpans, SyntaxNode? declaration, DocumentationContent content)
     {
         ArgumentNullException.ThrowIfNull(lineSpans);
+        ArgumentNullException.ThrowIfNull(content);
 
         if (lineSpans.Count == 0)
         {
@@ -77,7 +83,16 @@ public sealed class DocumentationBlock
             throw new ArgumentException("The attached declaration must belong to the documentation block's source snapshot.", nameof(declaration));
         }
 
+        if (!ReferenceEquals(content.Prose.Snapshot, snapshot)
+            || content.Prose.Lines.Any(line => line.Start < span.Start || line.End > span.End)
+            || content.Directives.Any(directive => directive.Span.Start < span.Start || directive.Span.End > span.End
+                || directive.Description.Lines.Any(line => line.Start < span.Start || line.End > span.End)))
+        {
+            throw new ArgumentException("Documentation content must belong to the block source span.", nameof(content));
+        }
+
         this.Span = span;
+        this.Content = content;
         this.LineSpans = Array.AsReadOnly(lines);
         this.Declaration = declaration;
     }
