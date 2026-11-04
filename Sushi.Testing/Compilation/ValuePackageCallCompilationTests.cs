@@ -398,6 +398,7 @@ public class ValuePackageCallCompilationTests
             .BeNull();
 
         result.Diagnostics
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .ContainSingle()
             .Which

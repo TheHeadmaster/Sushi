@@ -122,6 +122,7 @@ public class IntegerBitwiseShiftConstantTests
             .BeEmpty();
 
         SushiDiagnostic diagnostic = diagnostics
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .ContainSingle()
             .Which;

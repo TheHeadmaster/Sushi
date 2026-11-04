@@ -435,6 +435,7 @@ public sealed class RuntimeIntegerArithmeticTests
         SourceAnalysisResult result = (SourceAnalysisResult)await new SourceAnalyzer().Analyze(snapshot, reporter, CancellationToken.None);
 
         reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

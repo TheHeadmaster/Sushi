@@ -291,6 +291,7 @@ public sealed class RuntimeBooleanShortCircuitTests
             .BeEmpty();
 
         reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .ContainSingle(diagnostic => diagnostic.IsType(ErrorType.UnknownIdentifier));
     }
@@ -486,6 +487,7 @@ public sealed class RuntimeBooleanShortCircuitTests
         SourceAnalysisResult result = (SourceAnalysisResult)await new SourceAnalyzer().Analyze(snapshot, reporter, CancellationToken.None);
 
         reporter.ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

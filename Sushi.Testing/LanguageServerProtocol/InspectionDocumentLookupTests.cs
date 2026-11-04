@@ -1185,7 +1185,7 @@ public class InspectionDocumentLookupTests
                 .Which
                 .GetArrayLength()
                 .Should()
-                .Be(0);
+                .Be(1, "the public function receives one missing-documentation warning");
 
             await session.Notify("textDocument/didOpen", new
             {

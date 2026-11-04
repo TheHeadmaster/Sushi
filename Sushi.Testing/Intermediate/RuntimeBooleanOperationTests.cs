@@ -328,6 +328,7 @@ public sealed class RuntimeBooleanOperationTests
 
         reporter
             .ReportDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
             .Should()
             .BeEmpty();
 

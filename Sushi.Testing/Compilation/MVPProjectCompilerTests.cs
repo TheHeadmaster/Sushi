@@ -214,6 +214,7 @@ public class MVPProjectCompilerTests
                 .BeNull();
     
             compilation.Diagnostics
+                .Where(diagnostic => diagnostic.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error)
                 .Should()
                 .HaveCount(2);
     

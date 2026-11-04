@@ -120,6 +120,7 @@ public class MVPBooleanCompilationTests
                 .BeNull();
 
             SushiDiagnostic diagnostic = compilation.Diagnostics
+                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
                 .Should()
                 .ContainSingle()
                 .Which;

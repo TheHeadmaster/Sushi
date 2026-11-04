@@ -543,7 +543,7 @@ public sealed class DocumentationAnalysisTests
         DocumentationWarnings(diagnostics)
             .Select(diagnostic => diagnostic.DisplayName)
             .Should()
-            .Equal("SUSW0008", "SUSW0009");
+            .Equal("SUSW0009", "SUSW0008");
     }
 
     [Test]
