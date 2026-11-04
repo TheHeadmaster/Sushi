@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Sushi.Analysis;
 using Sushi.Documentation;
 using Sushi.Semantics;
@@ -9,7 +8,7 @@ namespace Sushi.LanguageServerProtocol;
 /// <summary>
 /// Resolves Hover only from compiler-bound occurrences owned by one source snapshot.
 /// </summary>
-internal static partial class SourceHoverResolver
+internal static class SourceHoverResolver
 {
     /// <summary>
     /// Finds the semantic occurrence at a canonical UTF-8 source offset and formats its metadata.
@@ -171,101 +170,6 @@ internal static partial class SourceHoverResolver
         };
     }
 
-    private static string SanitizeMarkdown(string value)
-    {
-        string[] lines = value.Split('\n');
-        System.Text.StringBuilder safe = new(value.Length);
-        char fenceMarker = '\0';
-        int fenceLength = 0;
-        for (int index = 0; index < lines.Length; index++)
-        {
-            if (index > 0)
-            {
-                safe.Append('\n');
-            }
-
-            string line = lines[index];
-            if (fenceMarker != '\0')
-            {
-                if (IsClosingFence(line, fenceMarker, fenceLength))
-                {
-                    fenceMarker = '\0';
-                    fenceLength = 0;
-                }
-
-                safe.Append(line);
-                continue;
-            }
-
-            if (TryReadOpeningFence(line, out char marker, out int length))
-            {
-                fenceMarker = marker;
-                fenceLength = length;
-                safe.Append(line);
-                continue;
-            }
-
-            string safeLine = RawHtmlTagRegex().Replace(line, match => $"&lt;{match.Groups[1].Value}&gt;");
-            safe.Append(UnsafeLinkRegex().Replace(safeLine, "](#unsafe-link)"));
-        }
-
-        return safe.ToString();
-    }
-
-    private static bool TryReadOpeningFence(string line, out char marker, out int length)
-    {
-        int position = 0;
-        while (position < line.Length && position < 3 && line[position] == ' ')
-        {
-            position++;
-        }
-
-        marker = position < line.Length ? line[position] : '\0';
-        if (marker is not '`' and not '~')
-        {
-            length = 0;
-            return false;
-        }
-
-        int start = position++;
-        while (position < line.Length && line[position] == marker)
-        {
-            position++;
-        }
-
-        length = position - start;
-        if (length < 3 || (marker == '`' && line[position..].Contains('`', StringComparison.Ordinal)))
-        {
-            marker = '\0';
-            length = 0;
-            return false;
-        }
-
-        return true;
-    }
-
-    private static bool IsClosingFence(string line, char marker, int minimumLength)
-    {
-        int position = 0;
-        while (position < line.Length && position < 3 && line[position] == ' ')
-        {
-            position++;
-        }
-
-        int start = position;
-        while (position < line.Length && line[position] == marker)
-        {
-            position++;
-        }
-
-        if (position - start < minimumLength)
-        {
-            return false;
-        }
-
-        return line[position..].All(char.IsWhiteSpace);
-    }
-
     private static string GetAccessibility(Accessibility accessibility) => accessibility switch
     {
         Accessibility.Public => "public",
@@ -284,11 +188,7 @@ internal static partial class SourceHoverResolver
         _ => "unknown"
     };
 
-    [GeneratedRegex("<(/?[A-Za-z][^>]*)>", RegexOptions.CultureInvariant)]
-    private static partial Regex RawHtmlTagRegex();
-
-    [GeneratedRegex(@"\]\(\s*(?:javascript|data|vbscript):[^)]*\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex UnsafeLinkRegex();
+    internal static string SanitizeMarkdown(string value) => SourceHoverMarkdown.Render(value);
 }
 
 /// <summary>
