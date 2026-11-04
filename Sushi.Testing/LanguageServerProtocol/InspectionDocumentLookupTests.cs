@@ -1851,7 +1851,7 @@ public class InspectionDocumentLookupTests
             JsonElement definition = await RequestSourceDefinition(session, callerUri, definitionLine, definitionCharacter);
             AssertLocationUri(definition, calleeUri);
 
-            string addedCall = otherCaller.Replace("return Double(value: other);", "int32 extra = Double(value: other); return Double(value: extra);", StringComparison.Ordinal);
+            string addedCall = otherCaller.Replace("return Double(value: result);", "int32 extra = Double(value: result); return Double(value: extra);", StringComparison.Ordinal);
             await session.Notify("textDocument/didOpen", new { textDocument = new { uri = otherCallerUri, languageId = "sushi", version = 1, text = otherCaller } });
             await session.Notify("textDocument/didChange", new
             {
