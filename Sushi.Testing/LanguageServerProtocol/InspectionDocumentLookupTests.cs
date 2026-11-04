@@ -1570,9 +1570,7 @@ public class InspectionDocumentLookupTests
             {
                 (int line, int character) = GetUtf16SourcePosition(source, token);
                 JsonElement location = await RequestSourceDefinition(session, callerUri, line, character);
-                location.GetProperty("uri").GetString()
-                    .Should()
-                    .Be(calleeUri);
+                AssertLocationUri(location, calleeUri);
                 (int targetLine, int targetCharacter) = GetUtf16SourcePosition(targetSource, targetToken);
                 JsonElement range = location.GetProperty("range");
                 range.GetProperty("start").GetProperty("line").GetInt32().Should().Be(targetLine);
@@ -1586,26 +1584,26 @@ public class InspectionDocumentLookupTests
 
             (int calleeDeclarationLine, int calleeDeclarationCharacter) = GetUtf16SourcePosition(callee, "Double");
             JsonElement declarationLocation = await RequestSourceDefinition(session, calleeUri, calleeDeclarationLine, calleeDeclarationCharacter);
-            declarationLocation.GetProperty("uri").GetString().Should().Be(calleeUri);
+            AssertLocationUri(declarationLocation, calleeUri);
             AssertLocationRange(declarationLocation, callee, "Double");
 
             (int activityLine, int activityCharacter) = GetUtf16SourcePosition(activity, "Application");
             JsonElement activityLocation = await RequestSourceDefinition(session, activityUri, activityLine, activityCharacter);
-            activityLocation.GetProperty("uri").GetString().Should().Be(activityUri);
+            AssertLocationUri(activityLocation, activityUri);
             AssertLocationRange(activityLocation, activity, "Application");
             (int entryLine, int entryCharacter) = GetUtf16SourcePosition(activity, "Start");
             JsonElement entryLocation = await RequestSourceDefinition(session, activityUri, entryLine, entryCharacter);
-            entryLocation.GetProperty("uri").GetString().Should().Be(activityUri);
+            AssertLocationUri(entryLocation, activityUri);
             AssertLocationRange(entryLocation, activity, "Start");
 
             (int inputLine, int inputCharacter) = GetUtf16SourcePosition(caller, "input)");
             JsonElement inputLocation = await RequestSourceDefinition(session, callerUri, inputLine, inputCharacter);
-            inputLocation.GetProperty("uri").GetString().Should().Be(callerUri);
+            AssertLocationUri(inputLocation, callerUri);
             AssertLocationRange(inputLocation, caller, "input");
 
             (int localLine, int localCharacter) = GetUtf16SourcePosition(caller, "return result");
             JsonElement localLocation = await RequestSourceDefinition(session, callerUri, localLine, localCharacter + "return ".Length);
-            localLocation.GetProperty("uri").GetString().Should().Be(callerUri);
+            AssertLocationUri(localLocation, callerUri);
             AssertLocationRange(localLocation, caller, "result");
 
             JsonElement hover = await RequestSourceHover(session, callerUri, GetUtf16SourcePosition(caller, "Double").Line,
@@ -1790,6 +1788,12 @@ public class InspectionDocumentLookupTests
         range.GetProperty("end").GetProperty("line").GetInt32().Should().Be(line);
         range.GetProperty("end").GetProperty("character").GetInt32().Should().Be(character + token.Length);
     }
+
+    private static void AssertLocationUri(JsonElement location, string expectedUri)
+        => DocumentUri.Parse(location.GetProperty("uri").GetString()!).ToUri()
+            .IsSamePath(DocumentUri.Parse(expectedUri).ToUri())
+            .Should()
+            .BeTrue();
 
     private static Task<JsonElement> InspectFunction(ServerSession session, string uri, string source, string functionName, string stage)
     {
