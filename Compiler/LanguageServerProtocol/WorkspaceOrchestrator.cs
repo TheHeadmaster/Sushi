@@ -416,6 +416,19 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Confirms that a source-semantic result still represents the current workspace context.
+    /// </summary>
+    /// <param name="analysis">The result whose source and project dependencies must remain current.</param>
+    /// <param name="cancellationToken">Cancels revalidation if the workspace changed.</param>
+    /// <returns>True only when current analysis reuses the exact result instance.</returns>
+    internal async Task<bool> IsCurrentSourceAnalysisAsync(SourceAnalysisResult analysis, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        SourceAnalysisResult? current = await this.GetSourceHoverAnalysis(analysis.Snapshot.Uri, cancellationToken);
+        return ReferenceEquals(current, analysis);
+    }
+
     private void AdvanceWorkspaceGeneration()
     {
         this.workspaceGeneration++;

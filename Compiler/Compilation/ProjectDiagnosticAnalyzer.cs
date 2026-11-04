@@ -220,7 +220,8 @@ internal sealed class ProjectDiagnosticAnalyzer
         {
             documentationByDeclaration.TryGetValue(activity.Declaration, out DocumentationBlock? activityDocumentation);
             SourceSemanticSymbol activitySymbol = new(activity.Declaration, SourceSemanticSymbolKind.Activity, 0,
-                activity.Name, null, null, activityDocumentation, null, activity.Accessibility);
+                activity.Name, null, null, activityDocumentation, null, activity.Accessibility,
+                DefinitionSpan: activity.Declaration.Name.Span);
             occurrences.Add(new SourceSemanticOccurrence(activity.Declaration.Name.Span, activitySymbol));
 
             foreach (ActivityMethodDeclarationSyntax methodDeclaration in activity.Declaration.Members.OfType<ActivityMethodDeclarationSyntax>())
@@ -236,7 +237,8 @@ internal sealed class ProjectDiagnosticAnalyzer
                 documentationByDeclaration.TryGetValue(methodDeclaration, out DocumentationBlock? methodDocumentation);
                 BoundFunction? signature = CreateActivityMethodSignature(method, cancellationToken);
                 SourceSemanticSymbol methodSymbol = new(methodDeclaration, SourceSemanticSymbolKind.ActivityMethod, 0,
-                    method.Name, signature?.ReturnType, signature, methodDocumentation, activity.Name, method.Accessibility);
+                    method.Name, signature?.ReturnType, signature, methodDocumentation, activity.Name, method.Accessibility,
+                    DefinitionSpan: methodDeclaration.Name.Span);
                 occurrences.Add(new SourceSemanticOccurrence(methodDeclaration.Name.Span, methodSymbol));
                 if (signature is not null)
                 {
@@ -286,7 +288,8 @@ internal sealed class ProjectDiagnosticAnalyzer
         {
             BoundParameter parameter = signature.Parameters[index];
             SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
-                parameter.Name, parameter.Type, signature, documentation, containingName);
+                parameter.Name, parameter.Type, signature, documentation, containingName,
+                DefinitionSpan: declaration.Parameters[index].NameToken.Span);
             occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
             AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, signature, occurrences);
         }
@@ -301,14 +304,15 @@ internal sealed class ProjectDiagnosticAnalyzer
         ICollection<SourceSemanticOccurrence> occurrences)
     {
         SourceSemanticSymbol functionSymbol = new(declaration, SourceSemanticSymbolKind.Function, 0, function.Name,
-            function.ReturnType, function, documentation, null);
+            function.ReturnType, function, documentation, null, DefinitionSpan: declaration.Name.Span);
         occurrences.Add(new SourceSemanticOccurrence(declaration.Name.Span, functionSymbol));
 
         for (int index = 0; index < function.Parameters.Count && index < declaration.Parameters.Count; index++)
         {
             BoundParameter parameter = function.Parameters[index];
             SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
-                parameter.Name, parameter.Type, function, documentation, function.Name);
+                parameter.Name, parameter.Type, function, documentation, function.Name,
+                DefinitionSpan: declaration.Parameters[index].NameToken.Span);
             occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
             AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, function, occurrences);
         }

@@ -30,6 +30,7 @@ internal enum SourceSemanticSymbolKind
 /// <param name="ContainingName">The containing callable or activity name when useful.</param>
 /// <param name="Accessibility">The declared access level for activities when available.</param>
 /// <param name="CompilerSymbol">The compiler-assigned callable identity for a resolved function reference.</param>
+/// <param name="DefinitionSpan">The exact source token that declares this symbol, when it has a source definition.</param>
 internal sealed record SourceSemanticSymbol(
     SyntaxNode Declaration,
     SourceSemanticSymbolKind Kind,
@@ -40,7 +41,8 @@ internal sealed record SourceSemanticSymbol(
     DocumentationBlock? Documentation,
     string? ContainingName,
     Accessibility? Accessibility = null,
-    string? CompilerSymbol = null);
+    string? CompilerSymbol = null,
+    SourceSpan? DefinitionSpan = null);
 
 /// <summary>
 /// Associates a source-token range with the exact symbol selected during binding.

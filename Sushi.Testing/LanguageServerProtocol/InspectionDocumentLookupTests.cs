@@ -1520,6 +1520,160 @@ public class InspectionDocumentLookupTests
     }
 
     [Test]
+    public async Task InitializedServerShouldResolveSourceDefinitionsUsingCurrentCompilerSelectedSymbols()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Source Definition " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            const string configuration = """
+                name = "SourceDefinition"
+                assembly = "SourceDefinition"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string caller = "package Example;\rnamespace Example;\rpublic int32 Calculate(int32 input) { int32 result = Double(value: input); return result; }";
+            string callee = "package Example;\r\nnamespace Example;\r\n/// 🍣 doubles its input.\r\npublic int32 Double(int32 value) { return value * 2; }";
+            string activity = "package Example;\r\nnamespace Example;\r\npublic activity Application : task { public entry void Start() { return; } }";
+            string projectPath = Path.Combine(directory, "SourceDefinition.susproj");
+            string callerPath = Path.Combine(sourcesDirectory, "Caller.sus");
+            string calleePath = Path.Combine(sourcesDirectory, "Math.sus");
+            string activityPath = Path.Combine(sourcesDirectory, "Application.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            await File.WriteAllTextAsync(activityPath, activity);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+            string activityUri = ExtensionUri(new Uri(activityPath));
+            await using ServerSession session = new(directory);
+            JsonElement initialization = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { hover = new { contentFormat = hoverContentFormats } } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "SourceDefinition" } }
+            });
+            initialization.GetProperty("capabilities").TryGetProperty("definitionProvider", out _)
+                .Should()
+                .BeTrue("ordinary Sushi source definition navigation is registered");
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 1, text = caller } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 1, text = callee } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = activityUri, languageId = "sushi", version = 1, text = activity } });
+
+            async Task AssertTarget(string source, string token, string targetSource, string targetToken)
+            {
+                (int line, int character) = GetUtf16SourcePosition(source, token);
+                JsonElement location = await RequestSourceDefinition(session, callerUri, line, character);
+                location.GetProperty("uri").GetString()
+                    .Should()
+                    .Be(calleeUri);
+                (int targetLine, int targetCharacter) = GetUtf16SourcePosition(targetSource, targetToken);
+                JsonElement range = location.GetProperty("range");
+                range.GetProperty("start").GetProperty("line").GetInt32().Should().Be(targetLine);
+                range.GetProperty("start").GetProperty("character").GetInt32().Should().Be(targetCharacter);
+                range.GetProperty("end").GetProperty("line").GetInt32().Should().Be(targetLine);
+                range.GetProperty("end").GetProperty("character").GetInt32().Should().Be(targetCharacter + targetToken.Length);
+            }
+
+            await AssertTarget(caller, "Double", callee, "Double");
+            await AssertTarget(caller, "value:", callee, "value");
+
+            (int calleeDeclarationLine, int calleeDeclarationCharacter) = GetUtf16SourcePosition(callee, "Double");
+            JsonElement declarationLocation = await RequestSourceDefinition(session, calleeUri, calleeDeclarationLine, calleeDeclarationCharacter);
+            declarationLocation.GetProperty("uri").GetString().Should().Be(calleeUri);
+            AssertLocationRange(declarationLocation, callee, "Double");
+
+            (int activityLine, int activityCharacter) = GetUtf16SourcePosition(activity, "Application");
+            JsonElement activityLocation = await RequestSourceDefinition(session, activityUri, activityLine, activityCharacter);
+            activityLocation.GetProperty("uri").GetString().Should().Be(activityUri);
+            AssertLocationRange(activityLocation, activity, "Application");
+            (int entryLine, int entryCharacter) = GetUtf16SourcePosition(activity, "Start");
+            JsonElement entryLocation = await RequestSourceDefinition(session, activityUri, entryLine, entryCharacter);
+            entryLocation.GetProperty("uri").GetString().Should().Be(activityUri);
+            AssertLocationRange(entryLocation, activity, "Start");
+
+            (int inputLine, int inputCharacter) = GetUtf16SourcePosition(caller, "input)");
+            JsonElement inputLocation = await RequestSourceDefinition(session, callerUri, inputLine, inputCharacter);
+            inputLocation.GetProperty("uri").GetString().Should().Be(callerUri);
+            AssertLocationRange(inputLocation, caller, "input");
+
+            (int localLine, int localCharacter) = GetUtf16SourcePosition(caller, "return result");
+            JsonElement localLocation = await RequestSourceDefinition(session, callerUri, localLine, localCharacter + "return ".Length);
+            localLocation.GetProperty("uri").GetString().Should().Be(callerUri);
+            AssertLocationRange(localLocation, caller, "result");
+
+            JsonElement hover = await RequestSourceHover(session, callerUri, GetUtf16SourcePosition(caller, "Double").Line,
+                GetUtf16SourcePosition(caller, "Double").Character);
+            hover.GetProperty("contents").GetProperty("value").GetString()
+                .Should()
+                .Contain("public int32 Double(int32 value)");
+
+            (int builtInLine, int builtInCharacter) = GetUtf16SourcePosition(caller, "int32 Calculate");
+            JsonElement builtIn = await RequestSourceDefinition(session, callerUri, builtInLine, builtInCharacter);
+            builtIn.ValueKind.Should().Be(JsonValueKind.Null, "built-in types have no Sushi source declaration");
+
+            string movedCaller = caller.Replace("public int32 Calculate", "/// Current source snapshot.\rpublic int32 Calculate", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 2 },
+                contentChanges = new[] { new { text = movedCaller } }
+            });
+            await AssertTarget(movedCaller, "Double", callee, "Double");
+
+            string movedCallee = "package Example;\r\nnamespace Example;\r\n\r\n/// 🍣 doubles its input.\r\npublic int32 Double(int32 value) { return value * 2; }";
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 2 },
+                contentChanges = new[] { new { text = movedCallee } }
+            });
+            await AssertTarget(movedCaller, "Double", movedCallee, "Double");
+
+            string inaccessibleCallee = movedCallee.Replace("public int32 Double", "private int32 Double", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 3 },
+                contentChanges = new[] { new { text = inaccessibleCallee } }
+            });
+            (int callLine, int callCharacter) = GetUtf16SourcePosition(movedCaller, "Double");
+            JsonElement inaccessible = await RequestSourceDefinition(session, callerUri, callLine, callCharacter);
+            inaccessible.ValueKind.Should().Be(JsonValueKind.Null, "an inaccessible call has no selected definition");
+
+            string ambiguousCallee = movedCallee + "\r\npublic bool Double(bool other) { return other; }";
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 4 },
+                contentChanges = new[] { new { text = ambiguousCallee } }
+            });
+            JsonElement ambiguous = await RequestSourceDefinition(session, callerUri, callLine, callCharacter);
+            ambiguous.ValueKind.Should().Be(JsonValueKind.Null, "unsupported overload ambiguity cannot choose a declaration");
+
+            string invalidCaller = movedCaller.Replace("Double(value: input)", "Missing(value: input)", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = callerUri, version = 3 },
+                contentChanges = new[] { new { text = invalidCaller } }
+            });
+            (int missingLine, int missingCharacter) = GetUtf16SourcePosition(invalidCaller, "Missing");
+            JsonElement missing = await RequestSourceDefinition(session, callerUri, missingLine, missingCharacter);
+            missing.ValueKind.Should().Be(JsonValueKind.Null, "unresolved calls have no compiler-selected declaration");
+
+            Directory.Exists(Path.Combine(directory, "bin"))
+                .Should()
+                .BeFalse("source navigation must not invoke native compilation");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task SourceHoverShouldFollowBoundLocalAndParameterIdentitiesAcrossSiblingScopes()
     {
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Hover Local Identity " + Guid.NewGuid().ToString("N"));
@@ -1586,6 +1740,51 @@ public class InspectionDocumentLookupTests
             textDocument = new { uri },
             position = new { line, character }
         });
+
+    private static Task<JsonElement> RequestSourceDefinition(ServerSession session, string uri, int line, int character)
+        => session.Request("textDocument/definition", new
+        {
+            textDocument = new { uri },
+            position = new { line, character }
+        });
+
+    private static (int Line, int Character) GetUtf16SourcePosition(string source, string token)
+    {
+        int offset = source.IndexOf(token, StringComparison.Ordinal);
+        offset.Should().BeGreaterThanOrEqualTo(0);
+        int line = 0;
+        int lineStart = 0;
+        for (int index = 0; index < offset; index++)
+        {
+            if (source[index] == '\r')
+            {
+                line++;
+                if (index + 1 < offset && source[index + 1] == '\n')
+                {
+                    index++;
+                }
+
+                lineStart = index + 1;
+            }
+            else if (source[index] == '\n')
+            {
+                line++;
+                lineStart = index + 1;
+            }
+        }
+
+        return (line, offset - lineStart);
+    }
+
+    private static void AssertLocationRange(JsonElement location, string source, string token)
+    {
+        (int line, int character) = GetUtf16SourcePosition(source, token);
+        JsonElement range = location.GetProperty("range");
+        range.GetProperty("start").GetProperty("line").GetInt32().Should().Be(line);
+        range.GetProperty("start").GetProperty("character").GetInt32().Should().Be(character);
+        range.GetProperty("end").GetProperty("line").GetInt32().Should().Be(line);
+        range.GetProperty("end").GetProperty("character").GetInt32().Should().Be(character + token.Length);
+    }
 
     private static Task<JsonElement> InspectFunction(ServerSession session, string uri, string source, string functionName, string stage)
     {

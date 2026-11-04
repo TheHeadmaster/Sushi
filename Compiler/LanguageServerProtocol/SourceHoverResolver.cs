@@ -21,7 +21,8 @@ internal static class SourceHoverResolver
     {
         ArgumentNullException.ThrowIfNull(analysis);
         cancellationToken.ThrowIfCancellationRequested();
-        SourceSemanticOccurrence? occurrence = FindOccurrence(analysis.SemanticOccurrences, analysis.Snapshot, offset);
+        SourceSemanticOccurrence? occurrence = SourceSemanticOccurrenceLookup.FindOccurrence(
+            analysis.SemanticOccurrences, analysis.Snapshot, offset);
         if (occurrence is null)
         {
             return null;
@@ -31,36 +32,6 @@ internal static class SourceHoverResolver
         return markdown is null ? null : new SourceHoverResult(occurrence.Span, markdown);
     }
 
-
-    private static SourceSemanticOccurrence? FindOccurrence(
-        IReadOnlyList<SourceSemanticOccurrence> occurrences,
-        SourceSnapshot snapshot,
-        int offset)
-    {
-        int low = 0;
-        int high = occurrences.Count;
-        while (low < high)
-        {
-            int middle = low + ((high - low) / 2);
-            if (occurrences[middle].Span.Start <= offset)
-            {
-                low = middle + 1;
-            }
-            else
-            {
-                high = middle;
-            }
-        }
-
-        int candidate = low - 1;
-        if (candidate < 0)
-        {
-            return null;
-        }
-
-        SourceSemanticOccurrence occurrence = occurrences[candidate];
-        return ReferenceEquals(occurrence.Span.Snapshot, snapshot) && offset < occurrence.Span.End ? occurrence : null;
-    }
 
     private static string? Format(SourceSemanticSymbol symbol, CancellationToken cancellationToken)
     {

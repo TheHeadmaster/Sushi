@@ -114,7 +114,7 @@ internal sealed class LocalBindingContext
         if (this.owner is not null && this.function is not null)
         {
             SourceSemanticSymbol symbol = new(this.owner, SourceSemanticSymbolKind.Local, local.Index, local.Name, local.Type,
-                this.function, null, this.function.Name);
+                this.function, null, this.function.Name, DefinitionSpan: nameSpan);
             this.localSymbols.Add(local.Index, symbol);
             this.occurrences.Add(new SourceSemanticOccurrence(nameSpan, symbol));
             if (typeSpan is SourceSpan typeLocation)
@@ -159,7 +159,8 @@ internal sealed class LocalBindingContext
         if (parameter is not null && this.owner is not null && this.function is not null)
         {
             SourceSemanticSymbol symbol = new(this.owner, SourceSemanticSymbolKind.Parameter, parameter.Index, parameter.Name,
-                parameter.Type, this.function, this.documentation, this.function.Name);
+                parameter.Type, this.function, this.documentation, this.function.Name,
+                DefinitionSpan: this.owner.Parameters[parameter.Index].NameToken.Span);
             this.occurrences.Add(new SourceSemanticOccurrence(occurrenceSpan, symbol));
         }
 
@@ -192,7 +193,8 @@ internal sealed class LocalBindingContext
         }
 
         SourceSemanticSymbol symbol = new(callable.Declaration, SourceSemanticSymbolKind.Function, 0, callable.Name,
-            callable.Function.ReturnType, callable.Function, callable.Documentation, null, CompilerSymbol: callable.Symbol);
+            callable.Function.ReturnType, callable.Function, callable.Documentation, null, CompilerSymbol: callable.Symbol,
+            DefinitionSpan: callable.Declaration.Name.Span);
         this.occurrences.Add(new SourceSemanticOccurrence(span, symbol));
     }
 
@@ -210,7 +212,8 @@ internal sealed class LocalBindingContext
         }
 
         SourceSemanticSymbol symbol = new(callable.Declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
-            parameter.Name, parameter.Type, callable.Function, callable.Documentation, callable.Name, CompilerSymbol: callable.Symbol);
+            parameter.Name, parameter.Type, callable.Function, callable.Documentation, callable.Name, CompilerSymbol: callable.Symbol,
+            DefinitionSpan: callable.Declaration.Parameters[parameter.Index].NameToken.Span);
         this.occurrences.Add(new SourceSemanticOccurrence(span, symbol));
     }
 
