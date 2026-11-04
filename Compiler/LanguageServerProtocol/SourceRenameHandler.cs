@@ -105,6 +105,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
     /// <inheritdoc />
     protected override RenameRegistrationOptions CreateRegistrationOptions(RenameCapability capability, ClientCapabilities clientCapabilities)
     {
+        ArgumentNullException.ThrowIfNull(clientCapabilities);
         this.supportsDocumentChanges = clientCapabilities.Workspace?.WorkspaceEdit is
             { IsSupported: true, Value: { DocumentChanges: true } };
         return new RenameRegistrationOptions

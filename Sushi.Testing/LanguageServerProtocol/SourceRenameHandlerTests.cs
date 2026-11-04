@@ -128,8 +128,9 @@ public sealed class SourceRenameHandlerTests
         }
     }
 
-    [Test]
-    public async Task FunctionRenameShouldAllowAValidEscapedReservedIdentifier()
+    [TestCase("@return")]
+    [TestCase("@int32")]
+    public async Task FunctionRenameShouldAllowAValidEscapedReservedIdentifier(string escapedName)
     {
         const string source = "package Example; namespace Example; public int32 Double() { return 1; } public int32 Caller() { return Double(); }";
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
@@ -143,15 +144,15 @@ public sealed class SourceRenameHandlerTests
             await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
             SourceRenameHandler handler = new(workspace);
 
-            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("Double", StringComparison.Ordinal), "@return"), CancellationToken.None);
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(path, source.IndexOf("Double", StringComparison.Ordinal), escapedName), CancellationToken.None);
 
             edit.Should().NotBeNull();
             TextEdit[] edits = edit!.Changes!.Single().Value.ToArray();
             edits.Should().HaveCount(2);
-            edits.Should().OnlyContain(item => item.NewText == "@return");
+            edits.Should().OnlyContain(item => item.NewText == escapedName);
             string renamed = ApplyEdits(source, edits);
-            renamed.Should().Contain("public int32 @return()")
-                .And.Contain("return @return();");
+            renamed.Should().Contain($"public int32 {escapedName}()")
+                .And.Contain($"return {escapedName}();");
         }
         finally
         {

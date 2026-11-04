@@ -155,7 +155,7 @@ public sealed class SourceRenameProtocolTests
 
         internal async Task Notify(string method, object parameters, CancellationToken cancellationToken = default)
         {
-            using CancellationTokenSource timeout = CreateTimeout(cancellationToken, RequestTimeout);
+            using CancellationTokenSource timeout = CreateTimeout(RequestTimeout, cancellationToken);
             try
             {
                 await this.Send(new { jsonrpc = "2.0", method, @params = parameters }, timeout.Token);
@@ -169,7 +169,7 @@ public sealed class SourceRenameProtocolTests
         internal async Task<JsonElement> Request(string method, object parameters, CancellationToken cancellationToken = default)
         {
             int id = ++this.nextId;
-            using CancellationTokenSource timeout = CreateTimeout(cancellationToken, RequestTimeout);
+            using CancellationTokenSource timeout = CreateTimeout(RequestTimeout, cancellationToken);
             try
             {
                 await this.Send(new { jsonrpc = "2.0", id, method, @params = parameters }, timeout.Token);
@@ -281,7 +281,7 @@ public sealed class SourceRenameProtocolTests
             return document.RootElement.Clone();
         }
 
-        private static CancellationTokenSource CreateTimeout(CancellationToken cancellationToken, TimeSpan timeout)
+        private static CancellationTokenSource CreateTimeout(TimeSpan timeout, CancellationToken cancellationToken)
         {
             CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             source.CancelAfter(timeout);
