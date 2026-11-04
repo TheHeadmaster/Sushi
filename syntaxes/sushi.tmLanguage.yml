@@ -21,12 +21,158 @@ repository:
       - include: '#block-comment'
 
   documentation-line-comment:
-    begin: '///'
+    begin: '^([ \t]*///)'
     beginCaptures:
-      '0':
+      '1':
         name: punctuation.definition.comment.sus
-    end: '$'
-    name: comment.line.documentation.sus
+    end: '^(?![ \t]*///)'
+    name: comment.block.documentation.sus
+    patterns:
+      - include: '#documentation-comment-prefix'
+      - include: '#documentation-sushi-fenced-code'
+      - include: '#documentation-fenced-code'
+      - include: '#documentation-directive'
+      - include: '#documentation-link-reference'
+      - include: '#documentation-parameter-reference'
+      - include: '#documentation-markdown-link'
+      - include: '#documentation-markdown-reference-link'
+      - include: '#documentation-inline-code'
+      - include: '#documentation-heading'
+      - include: '#documentation-quote'
+      - include: '#documentation-list'
+      - include: '#documentation-emphasis'
+
+  documentation-comment-prefix:
+    match: '^[ \t]*///'
+    name: punctuation.definition.comment.sus
+
+  documentation-sushi-fenced-code:
+    begin: '(?<=///)[ \t]*(\x60{3,})[ \t]*sushi[ \t]*$'
+    beginCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+    end: '(?<=///)[ \t]*(\1)[ \t]*$'
+    endCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+    contentName: meta.embedded.block.sus
+    patterns:
+      - include: '#documentation-comment-prefix'
+      - include: '#integer-literals'
+      - include: '#words'
+      - include: '#operators'
+      - include: '#punctuation'
+
+  documentation-fenced-code:
+    begin: '(?<=///)[ \t]*(\x60{3,}|~{3,})([A-Za-z0-9_+.-]*)[ \t]*$'
+    beginCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+      '2':
+        name: constant.other.language-name.markdown
+    end: '(?<=///)[ \t]*(\1)[ \t]*$'
+    endCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+    name: markup.raw.block.markdown
+    patterns:
+      - include: '#documentation-comment-prefix'
+      - match: '(?s).+'
+        name: markup.raw.block.markdown
+
+  documentation-directive:
+    match: '(?<=///)[ \t]*(@(?:param|return))(?:[ \t]+([^ \t]+))?'
+    captures:
+      '1':
+        name: keyword.other.documentation.sus
+      '2':
+        name: variable.other.parameter.sus
+
+  documentation-link-reference:
+    match: '(\{@link[ \t]+)([^|}]+?)([ \t]*\|[ \t]*([^}]*))?(\})'
+    captures:
+      '1':
+        name: punctuation.definition.reference.begin.sus
+      '2':
+        name: entity.name.reference.sus
+      '3':
+        name: punctuation.separator.label.sus
+      '4':
+        name: string.other.label.sus
+      '5':
+        name: punctuation.definition.reference.end.sus
+
+  documentation-parameter-reference:
+    match: '(\{@param[ \t]+)([^} \t]+)([ \t]*\})'
+    captures:
+      '1':
+        name: punctuation.definition.reference.begin.sus
+      '2':
+        name: variable.other.parameter.sus
+      '3':
+        name: punctuation.definition.reference.end.sus
+
+  documentation-markdown-link:
+    match: '(\[[^\]\n]+\])\(([^)\n]+)\)'
+    captures:
+      '1':
+        name: string.other.link.title.markdown
+      '2':
+        name: markup.underline.link.markdown
+
+  documentation-markdown-reference-link:
+    match: '(\[[^\]\n]+\])(\[[^\]\n]*\])'
+    captures:
+      '1':
+        name: string.other.link.title.markdown
+      '2':
+        name: markup.underline.link.markdown
+
+  documentation-inline-code:
+    begin: '(\x60+)(?!\x60)'
+    beginCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+    end: '(\x60+)'
+    endCaptures:
+      '1':
+        name: punctuation.definition.raw.markdown
+    name: markup.inline.raw.markdown
+
+  documentation-heading:
+    match: '(?<=///)[ \t]*(#{1,6})([ \t]+.*)$'
+    captures:
+      '1':
+        name: punctuation.definition.heading.markdown
+      '2':
+        name: markup.heading.markdown
+
+  documentation-quote:
+    match: '(?<=///)[ \t]*(>+)([ \t]?.*)$'
+    captures:
+      '1':
+        name: punctuation.definition.quote.markdown
+      '2':
+        name: markup.quote.markdown
+
+  documentation-list:
+    match: '(?<=///)[ \t]*(?:([-+*])|([0-9]+\.))([ \t]+)'
+    captures:
+      '1':
+        name: punctuation.definition.list.markdown
+      '2':
+        name: punctuation.definition.list.markdown
+      '3':
+        name: punctuation.whitespace.list.markdown
+
+  documentation-emphasis:
+    patterns:
+      - match: '(\*\*|__)(?=\S).+?\1'
+        name: markup.bold.markdown
+      - match: '(~~)(?=\S).+?\1'
+        name: markup.strikethrough.markdown
+      - match: '(\*|_)(?=\S).+?\1'
+        name: markup.italic.markdown
 
   line-comment:
     begin: '//'

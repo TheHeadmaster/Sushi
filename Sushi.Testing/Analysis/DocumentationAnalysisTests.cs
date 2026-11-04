@@ -663,11 +663,43 @@ public sealed class DocumentationAnalysisTests
             .Equal("SUSW0002");
     }
 
+
+    [Test]
+    public async Task InlineReferencesShouldPreserveUtf8SpansAndIgnoreMarkdownCodeBoundaries()
+    {
+        string source = Header
+            + "/// résumé {@link Calculate(int32) | calculation} and {@param value}\n"
+            + "/// `{@link InlineCode}` \\{@link Escaped} {@link incomplete\n"
+            + "/// ```sushi\n/// {@link FenceExample}\n/// ```\n"
+            + "public int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+        DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
+        DocumentationReference link = block.Content.InlineReferences[0];
+        DocumentationReference parameter = block.Content.InlineReferences[1];
+        int targetStart = ByteOffset(source, source.IndexOf("Calculate(int32)", StringComparison.Ordinal));
+        int constructStart = ByteOffset(source, source.IndexOf("{@link Calculate", StringComparison.Ordinal));
+
+        block.Content.InlineReferences
+            .Should()
+            .HaveCount(2);
+
+        link.Kind.Should().Be(DocumentationReferenceKind.Link);
+        link.WrittenTarget.Should().Be("Calculate(int32)");
+        link.DisplayText.Should().Be("calculation");
+        link.Span.Should().Be(new SourceSpan(result.Snapshot, constructStart,
+            constructStart + Encoding.UTF8.GetByteCount("{@link Calculate(int32) | calculation}")));
+        link.TargetNameSpan.Should().Be(new SourceSpan(result.Snapshot, targetStart, targetStart + Encoding.UTF8.GetByteCount("Calculate")));
+        parameter.Kind.Should().Be(DocumentationReferenceKind.Parameter);
+        parameter.TargetNameSpelling.Should().Be("value");
+
+        DocumentationWarnings(diagnostics).Should().BeEmpty();
+    }
+
     private static IEnumerable<SushiDiagnostic> DocumentationWarnings(IEnumerable<SushiDiagnostic> diagnostics)
         => diagnostics.Where(IsDocumentationWarning);
 
     private static bool IsDocumentationWarning(SushiDiagnostic diagnostic)
-        => diagnostic.DisplayName is "SUSW0002" or "SUSW0003" or "SUSW0004" or "SUSW0005" or "SUSW0006" or "SUSW0007" or "SUSW0008" or "SUSW0009" or "SUSW0010" or "SUSW0011";
+        => diagnostic.DisplayName is "SUSW0002" or "SUSW0003" or "SUSW0004" or "SUSW0005" or "SUSW0006" or "SUSW0007" or "SUSW0008" or "SUSW0009" or "SUSW0010" or "SUSW0011" or "SUSW0012" or "SUSW0013" or "SUSW0014" or "SUSW0015";
 
     private static Task<(SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics)> Analyze(string source)
         => AnalysisHelper.AnalyzeSource(SourceSnapshot.FromText(testUri, version: null, source));

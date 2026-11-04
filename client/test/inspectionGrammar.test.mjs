@@ -48,3 +48,26 @@ test('contributions restrict inspection actions to ordinary Sushi source editors
 	assert.equal(manifest.contributes.menus['editor/context'].find(item => item.command === sourceCommand.command).when, sourceCommand.enablement);
 	assert.equal(manifest.contributes.menus.commandPalette.find(item => item.command === sourceCommand.command).when, sourceCommand.enablement);
 });
+
+
+test('Sushi documentation comments scope Markdown, semantic references, and embedded Sushi fences', () => {
+	const grammar = JSON.parse(readFileSync(new URL('../../syntaxes/sushi.tmLanguage.json', import.meta.url), 'utf8'));
+	const documentation = grammar.repository['documentation-line-comment'];
+	assert.equal(documentation.name, 'comment.block.documentation.sus');
+	assert.ok(documentation.patterns.some(pattern => pattern.include === '#documentation-sushi-fenced-code'));
+	for (const [name, scope] of [
+		['documentation-link-reference', 'entity.name.reference.sus'],
+		['documentation-parameter-reference', 'variable.other.parameter.sus'],
+		['documentation-markdown-link', 'markup.underline.link.markdown'],
+		['documentation-inline-code', 'markup.inline.raw.markdown'],
+		['documentation-heading', 'markup.heading.markdown'],
+		['documentation-quote', 'markup.quote.markdown'],
+		['documentation-list', 'punctuation.definition.list.markdown']
+	]) {
+		assert.ok(JSON.stringify(grammar.repository[name]).includes(scope), name);
+	}
+	assert.equal(grammar.repository['documentation-sushi-fenced-code'].contentName, 'meta.embedded.block.sus');
+	const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+	const sourceGrammar = manifest.contributes.grammars.find(item => item.scopeName === 'source.sus');
+	assert.equal(sourceGrammar.embeddedLanguages['meta.embedded.block.sus'], 'sushi');
+});

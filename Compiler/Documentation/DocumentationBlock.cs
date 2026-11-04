@@ -86,7 +86,9 @@ public sealed class DocumentationBlock
         if (!ReferenceEquals(content.Prose.Snapshot, snapshot)
             || content.Prose.Lines.Any(line => line.Start < span.Start || line.End > span.End)
             || content.Directives.Any(directive => directive.Span.Start < span.Start || directive.Span.End > span.End
-                || directive.Description.Lines.Any(line => line.Start < span.Start || line.End > span.End)))
+                || directive.Description.Lines.Any(line => line.Start < span.Start || line.End > span.End))
+            || content.InlineReferences.Any(reference => reference.Span.Start < span.Start || reference.Span.End > span.End
+                || (reference.TargetNameSpan is SourceSpan target && (target.Start < span.Start || target.End > span.End))))
         {
             throw new ArgumentException("Documentation content must belong to the block source span.", nameof(content));
         }

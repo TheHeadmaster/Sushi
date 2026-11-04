@@ -1,3 +1,4 @@
+using System.Text;
 using Sushi.Analysis;
 using Sushi.Documentation;
 using Sushi.Semantics;
@@ -47,7 +48,7 @@ internal static class SourceHoverResolver
         DocumentationBlock? documentation = symbol.Documentation;
         if (documentation is not null && symbol.Kind is SourceSemanticSymbolKind.Function or SourceSemanticSymbolKind.Activity or SourceSemanticSymbolKind.ActivityMethod)
         {
-            string prose = SanitizeMarkdown(documentation.Content.Prose.Text);
+            string prose = SanitizeMarkdown(RenderDocumentationText(documentation.Content.Prose, documentation.Content, cancellationToken));
             if (!string.IsNullOrWhiteSpace(prose))
             {
                 sections.Add(prose);
@@ -71,7 +72,7 @@ internal static class SourceHoverResolver
                     if (directive.ParameterName is string name && !string.IsNullOrWhiteSpace(directive.Description.Text)
                         && callable.Parameters.Any(parameter => StringComparer.Ordinal.Equals(parameter.Name, name)))
                     {
-                        parameterDescriptions.Add($"- `{name}`: {SanitizeMarkdown(directive.Description.Text)}");
+                        parameterDescriptions.Add($"- `{name}`: {SanitizeMarkdown(RenderDocumentationText(directive.Description, documentation.Content, cancellationToken))}");
                     }
                 }
 
@@ -86,7 +87,7 @@ internal static class SourceHoverResolver
                 if (callable.ReturnType is not BoundType.Void && returnDirective is not null
                     && !string.IsNullOrWhiteSpace(returnDirective.Description.Text))
                 {
-                    sections.Add("**Returns**\n\n" + SanitizeMarkdown(returnDirective.Description.Text));
+                    sections.Add("**Returns**\n\n" + SanitizeMarkdown(RenderDocumentationText(returnDirective.Description, documentation.Content, cancellationToken)));
                 }
             }
         }
@@ -97,7 +98,7 @@ internal static class SourceHoverResolver
             DocumentationDirective? parameter = parameterDirectives.Length == 1 ? parameterDirectives[0] : null;
             if (parameter is not null && !string.IsNullOrWhiteSpace(parameter.Description.Text))
             {
-                sections.Add(SanitizeMarkdown(parameter.Description.Text));
+                sections.Add(SanitizeMarkdown(RenderDocumentationText(parameter.Description, documentation.Content, cancellationToken)));
             }
         }
 
@@ -158,6 +159,39 @@ internal static class SourceHoverResolver
         BoundType.Void => "void",
         _ => "unknown"
     };
+
+
+    private static string RenderDocumentationText(DocumentationText text, DocumentationContent content, CancellationToken cancellationToken)
+    {
+        StringBuilder rendered = new();
+        ReadOnlySpan<byte> source = text.Snapshot.Bytes.Span;
+        for (int index = 0; index < text.Lines.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (index > 0)
+            {
+                rendered.Append('\\n');
+            }
+
+            SourceSpan line = text.Lines[index];
+            int position = line.Start;
+            foreach (DocumentationReference reference in content.InlineReferences.Where(item =>
+                item.Span.Start >= line.Start && item.Span.End <= line.End))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                rendered.Append(Encoding.UTF8.GetString(source[position..reference.Span.Start]));
+                string replacement = reference.Kind is DocumentationReferenceKind.Link
+                    ? reference.DisplayText ?? reference.WrittenTarget ?? string.Empty
+                    : reference.TargetNameSpelling ?? string.Empty;
+                rendered.Append(replacement);
+                position = reference.Span.End;
+            }
+
+            rendered.Append(Encoding.UTF8.GetString(source[position..line.End]));
+        }
+
+        return rendered.ToString();
+    }
 
     internal static string SanitizeMarkdown(string value) => SourceHoverMarkdown.Render(value);
 }

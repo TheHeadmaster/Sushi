@@ -5,7 +5,7 @@ using Sushi.Source;
 namespace Sushi.Documentation;
 
 /// <summary>
-/// Parses directive structure from source-backed documentation lines without interpreting Markdown.
+/// Parses documentation directives and explicit references from source-backed lines while respecting Markdown code boundaries.
 /// </summary>
 internal static class DocumentationContentParser
 {
@@ -30,7 +30,9 @@ internal static class DocumentationContentParser
         }
 
         DirectiveCandidate?[] candidates = new DirectiveCandidate?[lines.Count];
+        List<DocumentationReference> references = [];
         Fence? fence = null;
+        int inlineCodeDelimiterLength = 0;
         for (int index = 0; index < lines.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -48,11 +50,13 @@ internal static class DocumentationContentParser
 
             if (TryReadFence(content, out Fence newFence))
             {
+                inlineCodeDelimiterLength = 0;
                 fence = newFence;
                 continue;
             }
 
-            DirectiveCandidate? candidate = ParseDirective(lines[index], content, diagnosticReporter);
+            bool[] inlineCode = ParseInlineReferences(lines[index], content, references, ref inlineCodeDelimiterLength, cancellationToken);
+            DirectiveCandidate? candidate = ParseDirective(lines[index], content, inlineCode, diagnosticReporter);
             candidates[index] = candidate;
         }
 
@@ -93,13 +97,296 @@ internal static class DocumentationContentParser
             index = lastLine;
         }
 
-        return new DocumentationContent(new DocumentationText(snapshot, proseLines), directives);
+        return new DocumentationContent(new DocumentationText(snapshot, proseLines), directives, references);
     }
 
-    private static DirectiveCandidate? ParseDirective(Line line, ReadOnlySpan<byte> content, IDiagnosticReporter diagnosticReporter)
+    private static bool[] ParseInlineReferences(Line line, ReadOnlySpan<byte> content,
+        ICollection<DocumentationReference> references, ref int inlineCodeDelimiterLength, CancellationToken cancellationToken)
+    {
+        bool[] inlineCode = MarkInlineCode(content, ref inlineCodeDelimiterLength, cancellationToken);
+        for (int index = 0; index < content.Length; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (inlineCode[index] || content[index] != (byte)'{' || IsEscaped(content, index))
+            {
+                continue;
+            }
+
+            DocumentationReferenceKind? kind = StartsWith(content, index, "{@link ")
+                ? DocumentationReferenceKind.Link
+                : StartsWith(content, index, "{@param ") ? DocumentationReferenceKind.Parameter : null;
+            if (kind is null)
+            {
+                continue;
+            }
+
+            int close = FindReferenceClose(content, index + 1, cancellationToken);
+            if (close < 0)
+            {
+                continue;
+            }
+
+            SourceSpan construct = new(line.FullSpan.Snapshot, line.Content.Start + index, line.Content.Start + close + 1);
+            int bodyOffset = kind is DocumentationReferenceKind.Link ? 7 : 8;
+            ReadOnlySpan<byte> body = content[(index + bodyOffset)..close];
+            int absoluteBodyStart = line.Content.Start + index + bodyOffset;
+            references.Add(kind is DocumentationReferenceKind.Link
+                ? ParseLinkReference(construct, body, absoluteBodyStart)
+                : ParseParameterReference(construct, body, absoluteBodyStart));
+            index = close;
+        }
+
+        return inlineCode;
+    }
+
+    private static int FindReferenceClose(ReadOnlySpan<byte> content, int start, CancellationToken cancellationToken)
+    {
+        int nestedBraces = 0;
+        for (int position = start; position < content.Length; position++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (IsEscaped(content, position))
+            {
+                continue;
+            }
+
+            if (content[position] == (byte)'{')
+            {
+                nestedBraces++;
+            }
+            else if (content[position] == (byte)'}')
+            {
+                if (nestedBraces == 0)
+                {
+                    return position;
+                }
+
+                nestedBraces--;
+            }
+        }
+
+        return -1;
+    }
+
+    private static DocumentationReference ParseLinkReference(SourceSpan construct, ReadOnlySpan<byte> body, int bodyStart)
+    {
+        int separator = body.IndexOf((byte)'|');
+        ReadOnlySpan<byte> targetSource = separator < 0 ? body : body[..separator];
+        ReadOnlySpan<byte> displaySource = separator < 0 ? ReadOnlySpan<byte>.Empty : body[(separator + 1)..];
+        ReadOnlySpan<byte> target = TrimHorizontalWhitespace(targetSource, out int targetLeading);
+        ReadOnlySpan<byte> display = TrimHorizontalWhitespace(displaySource, out int displayLeading);
+        int targetStart = bodyStart + targetLeading;
+        SourceSpan targetSpan = new(construct.Snapshot, targetStart, targetStart + target.Length);
+        SourceSpan? displaySpan = separator < 0
+            ? null
+            : new SourceSpan(construct.Snapshot, bodyStart + separator + 1 + displayLeading,
+                bodyStart + separator + 1 + displayLeading + display.Length);
+        int openParenthesis = target.IndexOf((byte)'(');
+        ReadOnlySpan<byte> qualifiedName = openParenthesis < 0 ? target : target[..openParenthesis];
+        List<SourceSpan> parameterTypeSpans = [];
+        bool wellFormed = !qualifiedName.IsEmpty;
+
+        if (openParenthesis >= 0)
+        {
+            if (target[^1] != (byte)')')
+            {
+                wellFormed = false;
+            }
+            else
+            {
+                ReadOnlySpan<byte> typeList = target[(openParenthesis + 1)..^1];
+                int typeStart = 0;
+                while (typeStart < typeList.Length)
+                {
+                    int comma = typeList[typeStart..].IndexOf((byte)',');
+                    int typeEnd = comma < 0 ? typeList.Length : typeStart + comma;
+                    ReadOnlySpan<byte> sourceType = typeList[typeStart..typeEnd];
+                    ReadOnlySpan<byte> type = TrimHorizontalWhitespace(sourceType, out int typeLeading);
+                    if (type.IsEmpty)
+                    {
+                        wellFormed = false;
+                    }
+                    else
+                    {
+                        int typeAbsoluteStart = targetStart + openParenthesis + 1 + typeStart + typeLeading;
+                        parameterTypeSpans.Add(new SourceSpan(construct.Snapshot, typeAbsoluteStart, typeAbsoluteStart + type.Length));
+                    }
+
+                    if (comma < 0)
+                    {
+                        break;
+                    }
+
+                    typeStart = typeEnd + 1;
+                    if (typeStart == typeList.Length)
+                    {
+                        wellFormed = false;
+                    }
+                }
+            }
+        }
+
+        int finalSeparator = qualifiedName.LastIndexOf((byte)'.');
+        ReadOnlySpan<byte> name = finalSeparator < 0 ? qualifiedName : qualifiedName[(finalSeparator + 1)..];
+        SourceSpan? qualifierSpan = finalSeparator < 0
+            ? null
+            : new SourceSpan(construct.Snapshot, targetStart, targetStart + finalSeparator);
+        SourceSpan? nameSpan = null;
+        if (!name.IsEmpty)
+        {
+            int componentOffset = finalSeparator < 0 ? 0 : finalSeparator + 1;
+            int nameStart = targetStart + componentOffset;
+            nameSpan = new SourceSpan(construct.Snapshot, nameStart, nameStart + name.Length);
+        }
+        else
+        {
+            wellFormed = false;
+        }
+
+        if (qualifiedName.IsEmpty || qualifiedName[0] == (byte)'.' || qualifiedName[^1] == (byte)'.')
+        {
+            wellFormed = false;
+        }
+
+        return new DocumentationReference(DocumentationReferenceKind.Link, construct, nameSpan, targetSpan,
+            qualifierSpan, parameterTypeSpans, displaySpan, openParenthesis >= 0, wellFormed);
+    }
+
+    private static DocumentationReference ParseParameterReference(SourceSpan construct, ReadOnlySpan<byte> body, int bodyStart)
+    {
+        ReadOnlySpan<byte> target = TrimHorizontalWhitespace(body, out int leadingWhitespace);
+        bool wellFormed = !target.IsEmpty;
+        foreach (byte value in target)
+        {
+            if (IsHorizontalWhitespace(value))
+            {
+                wellFormed = false;
+            }
+        }
+
+        SourceSpan? targetSpan = target.IsEmpty
+            ? null
+            : new SourceSpan(construct.Snapshot, bodyStart + leadingWhitespace, bodyStart + leadingWhitespace + target.Length);
+        return new DocumentationReference(DocumentationReferenceKind.Parameter, construct, targetSpan, targetSpan,
+            null, [], null, false, wellFormed);
+    }
+
+    private static bool[] MarkInlineCode(ReadOnlySpan<byte> content, ref int openDelimiterLength, CancellationToken cancellationToken)
+    {
+        bool[] marked = new bool[content.Length];
+        int position = 0;
+        if (openDelimiterLength > 0)
+        {
+            int closing = FindMatchingBacktickRun(content, 0, openDelimiterLength, cancellationToken);
+            if (closing < 0)
+            {
+                Array.Fill(marked, true);
+                return marked;
+            }
+
+            int closingEnd = FindBacktickRunEnd(content, closing, cancellationToken);
+            Array.Fill(marked, true, 0, closingEnd);
+            openDelimiterLength = 0;
+            position = closingEnd;
+        }
+
+        while (position < content.Length)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (content[position] != 96 || IsEscaped(content, position))
+            {
+                position++;
+                continue;
+            }
+
+            int runEnd = FindBacktickRunEnd(content, position, cancellationToken);
+            int runLength = runEnd - position;
+            int closing = FindMatchingBacktickRun(content, runEnd, runLength, cancellationToken);
+            if (closing < 0)
+            {
+                Array.Fill(marked, true, position, content.Length - position);
+                openDelimiterLength = runLength;
+                break;
+            }
+
+            int closingEnd = FindBacktickRunEnd(content, closing, cancellationToken);
+            Array.Fill(marked, true, position, closingEnd - position);
+            position = closingEnd;
+        }
+
+        return marked;
+    }
+
+    private static int FindMatchingBacktickRun(ReadOnlySpan<byte> content, int start, int expectedLength, CancellationToken cancellationToken)
+    {
+        for (int position = start; position < content.Length;)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (content[position] != 96)
+            {
+                position++;
+                continue;
+            }
+
+            int runEnd = FindBacktickRunEnd(content, position, cancellationToken);
+            if (runEnd - position == expectedLength && !IsEscaped(content, position))
+            {
+                return position;
+            }
+
+            position = runEnd;
+        }
+
+        return -1;
+    }
+
+    private static int FindBacktickRunEnd(ReadOnlySpan<byte> content, int start, CancellationToken cancellationToken)
+    {
+        int end = start + 1;
+        while (end < content.Length && content[end] == 96)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            end++;
+        }
+
+        return end;
+    }
+
+    private static bool IsEscaped(ReadOnlySpan<byte> content, int position)
+    {
+        int slashes = 0;
+        for (int index = position - 1; index >= 0 && content[index] == (byte)'\\'; index--)
+        {
+            slashes++;
+        }
+
+        return (slashes & 1) != 0;
+    }
+
+    private static bool StartsWith(ReadOnlySpan<byte> content, int start, string value)
+        => content[start..].StartsWith(Encoding.ASCII.GetBytes(value));
+
+    private static ReadOnlySpan<byte> TrimHorizontalWhitespace(ReadOnlySpan<byte> value, out int leadingWhitespace)
+    {
+        leadingWhitespace = 0;
+        while (leadingWhitespace < value.Length && IsHorizontalWhitespace(value[leadingWhitespace]))
+        {
+            leadingWhitespace++;
+        }
+
+        int end = value.Length;
+        while (end > leadingWhitespace && IsHorizontalWhitespace(value[end - 1]))
+        {
+            end--;
+        }
+
+        return value[leadingWhitespace..end];
+    }
+
+    private static DirectiveCandidate? ParseDirective(Line line, ReadOnlySpan<byte> content, bool[] inlineCode, IDiagnosticReporter diagnosticReporter)
     {
         int position = SkipHorizontalWhitespace(content, 0);
-        if (position >= content.Length || content[position] != (byte)'@')
+        if (position >= content.Length || content[position] != (byte)'@' || inlineCode[position])
         {
             return null;
         }

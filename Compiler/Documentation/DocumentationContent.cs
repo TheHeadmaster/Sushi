@@ -13,6 +13,92 @@ public enum DocumentationDirectiveKind
     Return
 }
 
+/// <summary>Identifies an explicit semantic reference embedded in documentation Markdown.</summary>
+public enum DocumentationReferenceKind
+{
+    Link,
+    Parameter
+}
+
+/// <summary>Represents a completed inline reference with exact source-backed target locations.</summary>
+public sealed class DocumentationReference
+{
+    private readonly ReadOnlyCollection<SourceSpan> parameterTypeSpans;
+    private readonly SourceSpan? writtenTargetSpan;
+    private readonly SourceSpan? targetQualifierSpan;
+    private readonly SourceSpan? displayTextSpan;
+
+    /// <summary>Gets the kind of semantic documentation reference.</summary>
+    public DocumentationReferenceKind Kind { get; }
+
+    /// <summary>Gets the complete source span of the reference construct.</summary>
+    public SourceSpan Span { get; }
+
+    /// <summary>Gets the final identifier component span used for navigation and Rename.</summary>
+    public SourceSpan? TargetNameSpan { get; }
+
+    /// <summary>Gets the source spelling of the target identifier from its authoritative span.</summary>
+    public string? TargetNameSpelling => GetSourceText(this.TargetNameSpan);
+
+    /// <summary>Gets the written link target from its authoritative span.</summary>
+    public string? WrittenTarget => GetSourceText(this.writtenTargetSpan);
+
+    /// <summary>Gets the optional qualifier preceding a link target name.</summary>
+    public string? TargetQualifier => GetSourceText(this.targetQualifierSpan);
+
+    /// <summary>Gets explicit parameter type spellings from their source spans.</summary>
+    public IReadOnlyList<string> ParameterTypeSpellings
+        => Array.AsReadOnly(this.parameterTypeSpans.Select(span => GetSourceText(span) ?? string.Empty).ToArray());
+
+    /// <summary>Gets whether the link includes an explicit parameter type signature.</summary>
+    public bool HasExplicitSignature { get; }
+
+    /// <summary>Gets optional display text, which is not interpreted as another symbol reference.</summary>
+    public string? DisplayText => GetSourceText(this.displayTextSpan);
+
+    /// <summary>Gets whether the completed construct has a structurally valid target.</summary>
+    public bool IsWellFormed { get; }
+
+    internal DocumentationReference(DocumentationReferenceKind kind, SourceSpan span, SourceSpan? targetNameSpan,
+        SourceSpan? writtenTargetSpan, SourceSpan? targetQualifierSpan, IReadOnlyList<SourceSpan> parameterTypeSpans,
+        SourceSpan? displayTextSpan, bool hasExplicitSignature, bool isWellFormed)
+    {
+        ArgumentNullException.ThrowIfNull(parameterTypeSpans);
+        SourceSpan[] typeSpans = [.. parameterTypeSpans];
+        if (typeSpans.Any(typeSpan => !IsContained(span, typeSpan))
+            || (targetNameSpan is SourceSpan targetSpan && !IsContained(span, targetSpan))
+            || (writtenTargetSpan is SourceSpan writtenSpan && !IsContained(span, writtenSpan))
+            || (targetQualifierSpan is SourceSpan qualifierSpan && !IsContained(span, qualifierSpan))
+            || (displayTextSpan is SourceSpan displaySpan && !IsContained(span, displaySpan)))
+        {
+            throw new ArgumentException("Documentation reference components must belong to and fit within their source construct.");
+        }
+
+        this.Kind = kind;
+        this.Span = span;
+        this.TargetNameSpan = targetNameSpan;
+        this.writtenTargetSpan = writtenTargetSpan;
+        this.targetQualifierSpan = targetQualifierSpan;
+        this.parameterTypeSpans = Array.AsReadOnly(typeSpans);
+        this.HasExplicitSignature = hasExplicitSignature;
+        this.displayTextSpan = displayTextSpan;
+        this.IsWellFormed = isWellFormed;
+    }
+
+    private static bool IsContained(SourceSpan parent, SourceSpan child)
+        => ReferenceEquals(parent.Snapshot, child.Snapshot) && child.Start >= parent.Start && child.End <= parent.End;
+
+    private static string? GetSourceText(SourceSpan? span)
+    {
+        if (span is not SourceSpan value)
+        {
+            return null;
+        }
+
+        return Encoding.UTF8.GetString(value.Snapshot.Bytes.Span[value.Start..value.End]);
+    }
+}
+
 /// <summary>
 /// Represents documentation text as ordered source-backed line segments.
 /// </summary>
@@ -144,26 +230,28 @@ public sealed class DocumentationDirective
 }
 
 /// <summary>
-/// Holds parsed prose and recognized directives for one source-backed documentation block.
+/// Holds parsed prose, directives, and explicit semantic references for one documentation block.
 /// </summary>
 public sealed class DocumentationContent
 {
     private readonly ReadOnlyCollection<DocumentationDirective> directives;
+    private readonly ReadOnlyCollection<DocumentationReference> inlineReferences;
 
-    /// <summary>
-    /// Gets the prose lines that are not consumed as recognized directive descriptions.
-    /// </summary>
+    /// <summary>Gets prose lines that are not consumed as recognized directive descriptions.</summary>
     public DocumentationText Prose { get; }
 
-    /// <summary>
-    /// Gets recognized directives in source order.
-    /// </summary>
+    /// <summary>Gets recognized directives in source order.</summary>
     public IReadOnlyList<DocumentationDirective> Directives => this.directives;
 
-    internal DocumentationContent(DocumentationText prose, IReadOnlyList<DocumentationDirective> directives)
+    /// <summary>Gets completed inline semantic references in source order.</summary>
+    public IReadOnlyList<DocumentationReference> InlineReferences => this.inlineReferences;
+
+    internal DocumentationContent(DocumentationText prose, IReadOnlyList<DocumentationDirective> directives,
+        IReadOnlyList<DocumentationReference> inlineReferences)
     {
         ArgumentNullException.ThrowIfNull(prose);
         ArgumentNullException.ThrowIfNull(directives);
+        ArgumentNullException.ThrowIfNull(inlineReferences);
 
         int previousStart = -1;
         foreach (DocumentationDirective directive in directives)
@@ -176,8 +264,20 @@ public sealed class DocumentationContent
             previousStart = directive.Span.Start;
         }
 
+        DocumentationReference[] copiedReferences = [.. inlineReferences];
+        previousStart = -1;
+        foreach (DocumentationReference reference in copiedReferences)
+        {
+            if (!ReferenceEquals(reference.Span.Snapshot, prose.Snapshot) || reference.Span.Start < previousStart)
+            {
+                throw new ArgumentException("Inline references must be source ordered in one snapshot.", nameof(inlineReferences));
+            }
+
+            previousStart = reference.Span.Start;
+        }
+
         this.Prose = prose;
-        DocumentationDirective[] copiedDirectives = [.. directives];
-        this.directives = Array.AsReadOnly(copiedDirectives);
+        this.directives = Array.AsReadOnly([.. directives]);
+        this.inlineReferences = Array.AsReadOnly(copiedReferences);
     }
 }

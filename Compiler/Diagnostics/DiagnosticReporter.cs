@@ -64,7 +64,11 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [WarningType.MissingPublicParameterDocumentation] = "Publicly visible callable parameter lacks documentation.",
         [WarningType.ReturnDocumentationOnVoid] = "Return documentation is not applicable to a void callable.",
         [WarningType.MissingReturnDocumentation] = "Documented non-void callable lacks return documentation.",
-        [WarningType.EmptyDocumentationDescription] = "Documentation directive description is empty."
+        [WarningType.EmptyDocumentationDescription] = "Documentation directive description is empty.",
+        [WarningType.UnresolvedDocumentationReference] = "Explicit semantic documentation reference does not resolve to an eligible symbol.",
+        [WarningType.AmbiguousDocumentationReference] = "Explicit semantic documentation reference resolves ambiguously.",
+        [WarningType.InaccessibleDocumentationReference] = "Explicit semantic documentation reference names a symbol that is inaccessible in its authored context.",
+        [WarningType.UnknownDocumentationReferenceParameter] = "Inline {@param} reference does not name a parameter of the declaration owning the documentation block."
     };
 
     /// <inheritdoc />

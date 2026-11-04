@@ -105,6 +105,12 @@ public sealed class MVPProjectCompiler(MVPExecutableBuilder executableBuilder)
             return Failed(diagnosticReporter);
         }
 
+        foreach (SourceAnalysisResult source in sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ProjectDiagnosticAnalyzer.AnalyzeDocumentationReferences(source, catalog, diagnosticReporter, cancellationToken);
+        }
+
         SourceAnalysisResult rootSource = sources.Single(source => ReferenceEquals(source.Snapshot, root.Declaration.Span.Snapshot));
         IReadOnlyList<PackageCallable> rootCallables = ProjectCallableCatalog.SelectVisible(rootSource, catalog, cancellationToken);
 

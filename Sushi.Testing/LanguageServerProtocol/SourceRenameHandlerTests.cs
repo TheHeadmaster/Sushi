@@ -62,6 +62,90 @@ public sealed class SourceRenameHandlerTests
         }
     }
 
+
+    [Test]
+    public async Task FunctionRenameShouldUpdateAResolvedDocumentationLinkAndPreserveItsDisplayLabel()
+    {
+        const string source = "package Example; namespace Example;\n/// Café: {@link Calculate(int32) | the routine}. `Calculate` stays literal.\npublic int32 Calculate(int32 value) { return value; }\npublic int32 Caller() { return Calculate(1); }";
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        await File.WriteAllTextAsync(path, source);
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(path), 1, source, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+            int target = source.IndexOf("Calculate", source.IndexOf("{@link", StringComparison.Ordinal), StringComparison.Ordinal);
+            (int line, int character) = GetPosition(source, target);
+            WorkspaceEdit? edit = await handler.Handle(new RenameParams
+            {
+                TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(path) },
+                Position = new Position(line, character),
+                NewName = "Compute"
+            }, CancellationToken.None);
+
+            edit.Should().NotBeNull();
+            TextEdit[] edits = edit!.Changes!.Single().Value.ToArray();
+            edits.Should().HaveCount(3);
+            edits.Single(item => item.Range.Start.Line == 1).Range.Start.Character.Should().Be(
+                source.Split('\n')[1].IndexOf("Calculate", StringComparison.Ordinal));
+            string renamed = ApplyEdits(source, edits);
+            renamed.Should().Contain("{@link Compute(int32) | the routine}")
+                .And.Contain("`Calculate` stays literal.")
+                .And.Contain("public int32 Compute(int32 value)")
+                .And.Contain("return Compute(1);");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+
+    [Test]
+    public async Task FunctionRenameShouldUpdateDocumentationAndCodeAcrossOpenProjectFiles()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string projectPath = Path.Combine(directory, "Project.susproj");
+        string definitionPath = Path.Combine(directory, "Math.sus");
+        string callerPath = Path.Combine(directory, "Caller.sus");
+        const string project = """
+            name = "Rename"
+            assembly = "Rename"
+            language-version = "1.0"
+            [build]
+            default = "debug"
+            sources = ["*.sus"]
+            [build.targets.debug]
+            type = "Sushi.MVP.Debug"
+            """;
+        const string definition = "package Example; namespace Math; public int32 Calculate(int32 value) { return value; }";
+        const string caller = "package Example; namespace Math;\n/// {@link Calculate(int32)} is used here.\npublic int32 Caller() { return Calculate(1); }";
+        try
+        {
+            using WorkspaceOrchestrator workspace = new();
+            await workspace.OpenDocument(new Uri(projectPath), 1, project, CancellationToken.None);
+            await workspace.OpenDocument(new Uri(definitionPath), 1, definition, CancellationToken.None);
+            await workspace.OpenDocument(new Uri(callerPath), 1, caller, CancellationToken.None);
+            SourceRenameHandler handler = new(workspace);
+            WorkspaceEdit? edit = await handler.Handle(CreateRenameRequest(
+                definitionPath, definition.IndexOf("Calculate", StringComparison.Ordinal), "Compute"), CancellationToken.None);
+
+            edit.Should().NotBeNull();
+            edit!.Changes.Should().NotBeNull().And.HaveCount(2);
+            edit.Changes!.Values.SelectMany(value => value)
+                .Should().HaveCount(3);
+            edit.Changes.Values.SelectMany(value => value).Select(value => value.NewText)
+                .Should().OnlyContain(value => value == "Compute");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Test]
     public async Task RenameToTheExistingNameShouldReturnAnEmptyWorkspaceEdit()
     {
@@ -122,7 +206,7 @@ public sealed class SourceRenameHandlerTests
     [Test]
     public async Task ParameterRenameShouldUpdateBoundUsesAndAttachedParamDirective()
     {
-        const string source = "package Example; namespace Example;\n/// @param value The value.\npublic int32 Double(int32 value) { return value; } public int32 Caller(int32 input) { return Double(value: input); }";
+        const string source = "package Example; namespace Example;\n/// {@param value} Inline parameter reference.\n/// @param value The value.\npublic int32 Double(int32 value) { return value; } public int32 Caller(int32 input) { return Double(value: input); }";
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Rename " + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
         string path = Path.Combine(directory, "Program.sus");
@@ -145,9 +229,10 @@ public sealed class SourceRenameHandlerTests
 
             edit.Should().NotBeNull();
             TextEdit[] edits = edit!.Changes!.Single().Value.ToArray();
-            edits.Should().HaveCount(4);
+            edits.Should().HaveCount(5);
             string renamed = ApplyEdits(source, edits);
-            renamed.Should().Contain("@param number The value.")
+            renamed.Should().Contain("{@param number} Inline parameter reference.")
+                .And.Contain("@param number The value.")
                 .And.Contain("Double(int32 number)")
                 .And.Contain("return number;")
                 .And.Contain("Double(number: input)");

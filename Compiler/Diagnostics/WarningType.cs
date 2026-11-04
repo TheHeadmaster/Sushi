@@ -17,5 +17,9 @@ public enum WarningType
     MissingPublicParameterDocumentation = 8,
     ReturnDocumentationOnVoid = 9,
     MissingReturnDocumentation = 10,
-    EmptyDocumentationDescription = 11
+    EmptyDocumentationDescription = 11,
+    UnresolvedDocumentationReference = 12,
+    AmbiguousDocumentationReference = 13,
+    InaccessibleDocumentationReference = 14,
+    UnknownDocumentationReferenceParameter = 15
 }

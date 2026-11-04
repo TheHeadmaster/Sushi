@@ -1,6 +1,8 @@
 using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Documentation;
+using Sushi.Lexing;
+using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -154,7 +156,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                     continue;
                 }
 
-                BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), project.ProjectUri, cancellationToken);
+                BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), catalog, project.ProjectUri, cancellationToken);
             }
         }
 
@@ -176,7 +178,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 continue;
             }
 
-            BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), null, cancellationToken);
+            BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), catalog, null, cancellationToken);
         }
 
         foreach (SourceState source in sources)
@@ -187,7 +189,7 @@ internal sealed class ProjectDiagnosticAnalyzer
         return results;
     }
 
-    private static void BindBodies(SourceState source, IReadOnlyList<PackageCallable> callables, Uri? projectUri, CancellationToken cancellationToken)
+    private static void BindBodies(SourceState source, IReadOnlyList<PackageCallable> callables, IReadOnlyList<ProjectCallable> catalog, Uri? projectUri, CancellationToken cancellationToken)
     {
         SourceFileSyntax syntax = (SourceFileSyntax)source.Result.SyntaxTree.Root;
         List<BoundFunction> functions = [];
@@ -247,6 +249,8 @@ internal sealed class ProjectDiagnosticAnalyzer
             }
         }
 
+        AddDocumentationReferenceOccurrences(source.Result, callables, catalog, occurrences, source.Reporter, cancellationToken);
+
         occurrences.Sort((left, right) => left.Span.Start.CompareTo(right.Span.Start));
         source.Result = source.Result with
         {
@@ -255,6 +259,333 @@ internal sealed class ProjectDiagnosticAnalyzer
             SemanticProjectUri = projectUri
         };
     }
+
+
+
+    internal static void AnalyzeDocumentationReferences(
+        SourceAnalysisResult source,
+        IReadOnlyList<ProjectCallable> catalog,
+        IDiagnosticReporter reporter,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(reporter);
+        List<SourceSemanticOccurrence> occurrences = [];
+        SourceFileSyntax syntax = (SourceFileSyntax)source.SyntaxTree.Root;
+        Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = new(ReferenceEqualityComparer.Instance);
+        foreach (DocumentationBlock block in source.DocumentationBlocks)
+        {
+            if (block.Declaration is SyntaxNode declaration)
+            {
+                documentationByDeclaration.Add(declaration, block);
+            }
+        }
+
+        for (int index = 0; index < syntax.FunctionDeclarations.Count && index < source.Functions.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            FunctionDeclarationSyntax declaration = syntax.FunctionDeclarations[index];
+            documentationByDeclaration.TryGetValue(declaration, out DocumentationBlock? documentation);
+            AddFunctionDeclarationOccurrences(declaration, source.Functions[index], documentation, occurrences);
+        }
+
+        foreach (BoundActivity activity in source.Activities)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            documentationByDeclaration.TryGetValue(activity.Declaration, out DocumentationBlock? documentation);
+            occurrences.Add(new SourceSemanticOccurrence(activity.Declaration.Name.Span,
+                new SourceSemanticSymbol(activity.Declaration, SourceSemanticSymbolKind.Activity, 0, activity.Name,
+                    null, null, documentation, null, activity.Accessibility, DefinitionSpan: activity.Declaration.Name.Span),
+                IsDeclaration: true));
+
+            foreach (ActivityMethodDeclarationSyntax methodDeclaration in activity.Declaration.Members.OfType<ActivityMethodDeclarationSyntax>())
+            {
+                BoundActivityMethod? method = methodDeclaration == activity.Entry.Declaration
+                    ? activity.Entry
+                    : methodDeclaration == activity.Stop?.Declaration ? activity.Stop : null;
+                if (method is null)
+                {
+                    continue;
+                }
+
+                documentationByDeclaration.TryGetValue(methodDeclaration, out DocumentationBlock? methodDocumentation);
+                BoundFunction? signature = CreateActivityMethodSignature(method, cancellationToken);
+                occurrences.Add(new SourceSemanticOccurrence(methodDeclaration.Name.Span,
+                    new SourceSemanticSymbol(methodDeclaration, SourceSemanticSymbolKind.ActivityMethod, 0, method.Name,
+                        signature?.ReturnType, signature, methodDocumentation, activity.Name, method.Accessibility,
+                        DefinitionSpan: methodDeclaration.Name.Span),
+                    IsDeclaration: true));
+                if (signature is not null)
+                {
+                    AddActivityMethodSignatureOccurrences(methodDeclaration, signature, methodDocumentation, method.Name, occurrences);
+                }
+            }
+        }
+
+        AddDocumentationReferenceOccurrences(source, ProjectCallableCatalog.SelectVisible(source, catalog, cancellationToken),
+            catalog, occurrences, reporter, cancellationToken);
+    }
+
+    private static void AddDocumentationReferenceOccurrences(
+        SourceAnalysisResult source,
+        IReadOnlyList<PackageCallable> visibleCallables,
+        IReadOnlyList<ProjectCallable> catalog,
+        ICollection<SourceSemanticOccurrence> occurrences,
+        IDiagnosticReporter reporter,
+        CancellationToken cancellationToken)
+    {
+        foreach (DocumentationBlock block in source.DocumentationBlocks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (block.Declaration is not SyntaxNode declaration)
+            {
+                continue;
+            }
+
+            foreach (DocumentationReference reference in block.Content.InlineReferences)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                SourceSpan diagnosticSpan = reference.TargetNameSpan ?? reference.Span;
+                if (!reference.IsWellFormed || reference.TargetNameSpelling is null
+                    || !TryBindDocumentationIdentifier(reference.TargetNameSpelling, cancellationToken, out SyntaxToken targetToken))
+                {
+                    reporter.GenerateWarning(reference.Kind is DocumentationReferenceKind.Parameter
+                        ? WarningType.UnknownDocumentationReferenceParameter
+                        : WarningType.UnresolvedDocumentationReference, diagnosticSpan);
+                    continue;
+                }
+
+                string? targetName = IdentifierBinder.Bind(targetToken);
+                if (targetName is null
+                    || (reference.Kind is DocumentationReferenceKind.Link && !HasLexicallyValidQualifiedTarget(reference, cancellationToken)))
+                {
+                    reporter.GenerateWarning(reference.Kind is DocumentationReferenceKind.Parameter
+                        ? WarningType.UnknownDocumentationReferenceParameter
+                        : WarningType.UnresolvedDocumentationReference, diagnosticSpan);
+                    continue;
+                }
+
+                if (reference.Kind is DocumentationReferenceKind.Parameter)
+                {
+                    SourceSemanticOccurrence? parameter = occurrences.FirstOrDefault(item =>
+                        item.IsDeclaration
+                        && item.Symbol.Kind is SourceSemanticSymbolKind.Parameter
+                        && ReferenceEquals(item.Symbol.Declaration, declaration)
+                        && StringComparer.Ordinal.Equals(item.Symbol.Name, targetName));
+                    if (parameter is null)
+                    {
+                        reporter.GenerateWarning(WarningType.UnknownDocumentationReferenceParameter, diagnosticSpan);
+                        continue;
+                    }
+
+                    occurrences.Add(new SourceSemanticOccurrence(diagnosticSpan, parameter.Symbol));
+                    continue;
+                }
+
+                List<ProjectCallable> sameName = [.. catalog.Where(item =>
+                    StringComparer.Ordinal.Equals(item.Callable.Function.Name, targetName))];
+                List<ProjectCallable> qualifiedCandidates = reference.TargetQualifier is string qualifier
+                    ? [.. sameName.Where(item => QualifierMatches(item.Source, qualifier, cancellationToken))]
+                    : [.. sameName.Where(item => ProjectCallableCatalog.BelongsToSameScope(item.Source, source))];
+                List<ProjectCallable> signatureCandidates = [.. qualifiedCandidates.Where(item =>
+                    SignatureMatches(item.Callable.Function, reference, cancellationToken))];
+
+                if (signatureCandidates.Count == 0)
+                {
+                    List<SourceSemanticOccurrence> localCandidates = [.. occurrences.Where(item =>
+                        item.IsDeclaration
+                        && item.Symbol.Kind is SourceSemanticSymbolKind.Activity or SourceSemanticSymbolKind.ActivityMethod
+                        && StringComparer.Ordinal.Equals(item.Symbol.Name, targetName)
+                        && (reference.TargetQualifier is not string localQualifier || QualifierMatches(source, localQualifier, cancellationToken))
+                        && SignatureMatches(item.Symbol.Callable, reference, cancellationToken))];
+                    if (localCandidates.Count == 1)
+                    {
+                        if (IsAccessible(localCandidates[0].Symbol.Accessibility))
+                        {
+                            occurrences.Add(new SourceSemanticOccurrence(diagnosticSpan, localCandidates[0].Symbol));
+                        }
+                        else
+                        {
+                            reporter.GenerateWarning(WarningType.InaccessibleDocumentationReference, diagnosticSpan);
+                        }
+
+                        continue;
+                    }
+
+                    if (localCandidates.Count > 1)
+                    {
+                        reporter.GenerateWarning(WarningType.AmbiguousDocumentationReference, diagnosticSpan);
+                        continue;
+                    }
+
+                    bool localInaccessible = occurrences.Any(item =>
+                        item.IsDeclaration
+                        && item.Symbol.Kind is SourceSemanticSymbolKind.Activity or SourceSemanticSymbolKind.ActivityMethod
+                        && StringComparer.Ordinal.Equals(item.Symbol.Name, targetName)
+                        && (reference.TargetQualifier is not string localQualifier || QualifierMatches(source, localQualifier, cancellationToken))
+                        && SignatureMatches(item.Symbol.Callable, reference, cancellationToken)
+                        && !IsAccessible(item.Symbol.Accessibility));
+                    if (localInaccessible)
+                    {
+                        reporter.GenerateWarning(WarningType.InaccessibleDocumentationReference, diagnosticSpan);
+                        continue;
+                    }
+                }
+
+                if (signatureCandidates.Count == 0)
+                {
+                    reporter.GenerateWarning(WarningType.UnresolvedDocumentationReference, diagnosticSpan);
+                    continue;
+                }
+
+                List<ProjectCallable> accessibleCandidates = [.. signatureCandidates.Where(item =>
+                    item.Callable.Function.Accessibility is not (Accessibility.Private or Accessibility.Protected)
+                    && (reference.TargetQualifier is not null || visibleCallables.Contains(item.Callable)))];
+                if (accessibleCandidates.Count == 0)
+                {
+                    reporter.GenerateWarning(WarningType.InaccessibleDocumentationReference, diagnosticSpan);
+                    continue;
+                }
+
+                if (accessibleCandidates.Count != 1)
+                {
+                    reporter.GenerateWarning(WarningType.AmbiguousDocumentationReference, diagnosticSpan);
+                    continue;
+                }
+
+                ProjectCallable selected = accessibleCandidates[0];
+                SourceSemanticSymbol symbol = new(
+                    selected.Declaration,
+                    SourceSemanticSymbolKind.Function,
+                    0,
+                    selected.Callable.Function.Name,
+                    selected.Callable.Function.ReturnType,
+                    selected.Callable.Function,
+                    selected.Callable.Documentation,
+                    null,
+                    CompilerSymbol: selected.Callable.Symbol,
+                    DefinitionSpan: selected.Declaration.Name.Span);
+                occurrences.Add(new SourceSemanticOccurrence(diagnosticSpan, symbol));
+            }
+        }
+    }
+
+    private static bool TryBindDocumentationIdentifier(string spelling, CancellationToken cancellationToken, out SyntaxToken token)
+    {
+        if (spelling.IndexOf('\uFEFF') >= 0)
+        {
+            token = default;
+            return false;
+        }
+
+        SourceSnapshot snapshot = SourceSnapshot.FromText(new Uri("file:///SushiDocumentationReference.sus"), 0, spelling);
+        LexerResult lexed = new SourceLexer().Lex(snapshot, new DiagnosticReporter(), cancellationToken);
+        LexToken[] identifiers = [.. lexed.Tokens.Where(item =>
+            item.Type is LexTokenType.Identifier or LexTokenType.EscapedIdentifier)];
+        if (identifiers.Length != 1 || identifiers[0].Span.Start != 0 || identifiers[0].Span.End != snapshot.SourceLength
+            || lexed.Tokens.Any(item => item.Type is LexTokenType.Unknown))
+        {
+            token = default;
+            return false;
+        }
+
+        token = new SyntaxToken(
+            identifiers[0].Type is LexTokenType.EscapedIdentifier ? SyntaxType.EscapedIdentifierToken : SyntaxType.IdentifierToken,
+            identifiers[0]);
+        return true;
+    }
+
+
+    private static bool HasLexicallyValidQualifiedTarget(DocumentationReference reference, CancellationToken cancellationToken)
+    {
+        string? writtenTarget = reference.WrittenTarget;
+        if (writtenTarget is null)
+        {
+            return false;
+        }
+
+        int signatureStart = writtenTarget.IndexOf('(');
+        string qualifiedName = signatureStart < 0 ? writtenTarget : writtenTarget[..signatureStart];
+        string[] components = qualifiedName.Split('.');
+        if (components.Length == 0 || components.Any(string.IsNullOrWhiteSpace)
+            || !StringComparer.Ordinal.Equals(components[^1], reference.TargetNameSpelling))
+        {
+            return false;
+        }
+
+        foreach (string component in components)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryBindDocumentationIdentifier(component, cancellationToken, out _))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool QualifierMatches(SourceAnalysisResult source, string qualifier, CancellationToken cancellationToken)
+    {
+        string[] components = qualifier.Split('.');
+        if (components.Length == 0 || components.Any(string.IsNullOrWhiteSpace))
+        {
+            return false;
+        }
+
+        List<string> names = [];
+        foreach (string component in components)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!TryBindDocumentationIdentifier(component, cancellationToken, out SyntaxToken token))
+            {
+                return false;
+            }
+
+            names.Add(IdentifierBinder.Bind(token)!);
+        }
+
+        string writtenQualifier = string.Join(".", names);
+        string fullName = string.Join(".", new[] { source.Package?.QualifiedName, source.Namespace?.QualifiedName }
+            .Where(item => !string.IsNullOrWhiteSpace(item)));
+        return StringComparer.Ordinal.Equals(writtenQualifier, fullName)
+            || StringComparer.Ordinal.Equals(writtenQualifier, source.Namespace?.QualifiedName);
+    }
+
+    private static bool SignatureMatches(BoundFunction? callable, DocumentationReference reference, CancellationToken cancellationToken)
+    {
+        if (!reference.HasExplicitSignature)
+        {
+            return true;
+        }
+
+        IReadOnlyList<string> parameterTypes = reference.ParameterTypeSpellings;
+        if (callable is null || callable.Parameters.Count != parameterTypes.Count)
+        {
+            return false;
+        }
+
+        for (int index = 0; index < callable.Parameters.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            BoundType? expected = parameterTypes[index] switch
+            {
+                "int32" => BoundType.Int32,
+                "bool" => BoundType.Bool,
+                _ => null
+            };
+            if (expected is null || callable.Parameters[index].Type != expected)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAccessible(Accessibility? accessibility)
+        => accessibility is not (Accessibility.Private or Accessibility.Protected);
 
     private static BoundFunction? CreateActivityMethodSignature(BoundActivityMethod method, CancellationToken cancellationToken)
     {

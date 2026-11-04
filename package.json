@@ -79,7 +79,10 @@
             {
                 "language": "sushi",
                 "scopeName": "source.sus",
-                "path": "./syntaxes/sushi.tmLanguage.json"
+                "path": "./syntaxes/sushi.tmLanguage.json",
+                "embeddedLanguages": {
+                    "meta.embedded.block.sus": "sushi"
+                }
             },
             {
                 "language": "susproj",
