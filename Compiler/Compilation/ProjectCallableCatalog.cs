@@ -1,6 +1,7 @@
 ﻿using Sushi.Analysis;
 using Sushi.Diagnostics;
 using Sushi.Parsing.Syntax;
+using Sushi.Documentation;
 using Sushi.Semantics;
 
 namespace Sushi.Compilation;
@@ -36,6 +37,15 @@ internal static class ProjectCallableCatalog
                 continue;
             }
 
+            Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = new(ReferenceEqualityComparer.Instance);
+            foreach (DocumentationBlock block in source.DocumentationBlocks)
+            {
+                if (block.Declaration is SyntaxNode declaration)
+                {
+                    documentationByDeclaration.Add(declaration, block);
+                }
+            }
+
             for (int i = 0; i < syntax.FunctionDeclarations.Count; i++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -44,7 +54,9 @@ internal static class ProjectCallableCatalog
                 FunctionDeclarationSyntax declaration = syntax.FunctionDeclarations[i];
                 string symbol = $"__sushi_package_function_{catalog.Count}";
 
-                catalog.Add(new ProjectCallable(source, declaration, new PackageCallable(signature, symbol)));
+                documentationByDeclaration.TryGetValue(declaration, out DocumentationBlock? documentation);
+                PackageCallable callable = new(signature, symbol) { Declaration = declaration, Documentation = documentation };
+                catalog.Add(new ProjectCallable(source, declaration, callable));
             }
         }
 

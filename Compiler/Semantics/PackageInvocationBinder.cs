@@ -254,7 +254,31 @@ internal static class PackageInvocationBinder
             valid = false;
         }
 
-        return valid ? new ResolvedCall(selected, arguments) : null;
+        if (!valid)
+        {
+            return null;
+        }
+
+        if (locals is not null)
+        {
+            locals.RecordCallableOccurrence(target.IdentifierToken.Span, selected);
+            foreach (CallArgumentSyntax argument in invocation.Arguments)
+            {
+                if (argument.Name is not SyntaxToken label)
+                {
+                    continue;
+                }
+
+                string? parameterName = IdentifierBinder.Bind(label);
+                BoundParameter? parameter = targetParameters.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.Name, parameterName));
+                if (parameter is not null)
+                {
+                    locals.RecordParameterOccurrence(label.Span, selected, parameter);
+                }
+            }
+        }
+
+        return new ResolvedCall(selected, arguments);
     }
 
     private static void ReportError(SyntaxNode node, string message, IDiagnosticReporter diagnosticReporter)

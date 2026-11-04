@@ -178,6 +178,34 @@ public sealed class DocumentationAnalysisTests
     }
 
     [Test]
+    public async Task DocumentationAttachmentShouldRemainOrderedAcrossManyInterleavedDeclarations()
+    {
+        StringBuilder source = new(Header);
+        for (int index = 0; index < 300; index++)
+        {
+            source.Append("/// docs ").Append(index).Append('\n');
+            source.Append("public int32 Function").Append(index).Append("() { return ").Append(index).AppendLine("; }");
+            if (index % 3 == 0)
+            {
+                source.Append("/// activity docs ").Append(index).Append('\n');
+                source.Append("public activity Activity").Append(index).AppendLine(" : task { }");
+            }
+        }
+
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source.ToString());
+
+        result.DocumentationBlocks
+            .Should()
+            .HaveCount(400)
+            .And.OnlyContain(block => block.IsAttached);
+
+        diagnostics
+            .Where(IsDetachedDocumentation)
+            .Should()
+            .BeEmpty();
+    }
+
+    [Test]
     public async Task ActivityAndLifecycleMethodDocumentationShouldAttachIndependently()
     {
         string source = Header + """
@@ -441,6 +469,31 @@ public sealed class DocumentationAnalysisTests
             .Where(diagnostic => diagnostic.IsType(WarningType.UnrecognizedDocumentationDirective))
             .Should()
             .HaveCount(2);
+    }
+
+    [Test]
+    public async Task UnknownDirectiveAfterRecognizedDirectiveShouldRemainOrdinaryDescriptionText()
+    {
+        string source = Header + "/// @param value The first line.\n/// @throws is unsupported text.\n/// Continuation remains part of the parameter description.\n/// @return The value.\npublic int32 Calculate(int32 value) { return value; }";
+        (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
+        DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
+
+        block.Content.Directives
+            .Should()
+            .HaveCount(2);
+
+        block.Content.Directives[0].Description.Text
+            .Should()
+            .Be("The first line.\n@throws is unsupported text.\nContinuation remains part of the parameter description.");
+
+        block.Content.Prose.Text
+            .Should()
+            .NotContain("@throws is unsupported text.");
+
+        diagnostics
+            .Where(diagnostic => diagnostic.DisplayName == "SUSW0004")
+            .Should()
+            .ContainSingle();
     }
 
     [Test]

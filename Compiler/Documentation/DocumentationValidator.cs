@@ -16,17 +16,19 @@ internal static class DocumentationValidator
         ArgumentNullException.ThrowIfNull(blocks);
         ArgumentNullException.ThrowIfNull(diagnosticReporter);
 
+        Dictionary<SyntaxNode, DocumentationBlock> blocksByDeclaration = CreateAttachmentIndex(sourceFile, blocks, cancellationToken);
+
         foreach (FunctionDeclarationSyntax function in sourceFile.FunctionDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ValidateDeclaration(function, function.AccessModifier, function.Name, function.Parameters, function.ReturnType, IsPublic(function.AccessModifier), blocks, diagnosticReporter, cancellationToken);
+            ValidateDeclaration(function, function.AccessModifier, function.Name, function.Parameters, function.ReturnType, IsPublic(function.AccessModifier), blocksByDeclaration, diagnosticReporter, cancellationToken);
         }
 
         foreach (ActivityDeclarationSyntax activity in sourceFile.ActivityDeclarations)
         {
             cancellationToken.ThrowIfCancellationRequested();
             bool activityIsPublic = IsPublic(activity.AccessModifier);
-            DocumentationBlock? activityBlock = FindBlock(activity, blocks);
+            DocumentationBlock? activityBlock = FindBlock(activity, blocksByDeclaration);
             if (activityBlock is null && activityIsPublic && HasUsableDeclarationName(activity.Name))
             {
                 diagnosticReporter.GenerateWarning(WarningType.MissingPublicDocumentation, activity.Name.Span);
@@ -41,7 +43,7 @@ internal static class DocumentationValidator
                 }
 
                 bool methodIsPublic = activityIsPublic && IsPublic(method.AccessModifier);
-                ValidateDeclaration(method, method.AccessModifier, method.Name, method.Parameters, method.ReturnType, methodIsPublic, blocks, diagnosticReporter, cancellationToken);
+                ValidateDeclaration(method, method.AccessModifier, method.Name, method.Parameters, method.ReturnType, methodIsPublic, blocksByDeclaration, diagnosticReporter, cancellationToken);
             }
         }
     }
@@ -53,7 +55,7 @@ internal static class DocumentationValidator
         IReadOnlyList<ParameterSyntax> parameters,
         SyntaxToken returnType,
         bool isPublic,
-        IReadOnlyList<DocumentationBlock> blocks,
+        IReadOnlyDictionary<SyntaxNode, DocumentationBlock> blocksByDeclaration,
         IDiagnosticReporter diagnosticReporter,
         CancellationToken cancellationToken)
     {
@@ -63,7 +65,7 @@ internal static class DocumentationValidator
             return;
         }
 
-        DocumentationBlock? block = FindBlock(declaration, blocks);
+        DocumentationBlock? block = FindBlock(declaration, blocksByDeclaration);
         if (block is null)
         {
             if (isPublic)
@@ -162,8 +164,31 @@ internal static class DocumentationValidator
         return true;
     }
 
-    private static DocumentationBlock? FindBlock(SyntaxNode declaration, IReadOnlyList<DocumentationBlock> blocks)
-        => blocks.FirstOrDefault(block => ReferenceEquals(block.Declaration, declaration));
+    private static Dictionary<SyntaxNode, DocumentationBlock> CreateAttachmentIndex(
+        SourceFileSyntax sourceFile,
+        IReadOnlyList<DocumentationBlock> blocks,
+        CancellationToken cancellationToken)
+    {
+        Dictionary<SyntaxNode, DocumentationBlock> index = new(ReferenceEqualityComparer.Instance);
+        foreach (DocumentationBlock block in blocks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(block.Span.Snapshot, sourceFile.Snapshot))
+            {
+                throw new ArgumentException("Documentation blocks must belong to the source file snapshot.", nameof(blocks));
+            }
+
+            if (block.Declaration is SyntaxNode declaration && !index.TryAdd(declaration, block))
+            {
+                throw new InvalidOperationException("A declaration cannot own more than one documentation block.");
+            }
+        }
+
+        return index;
+    }
+
+    private static DocumentationBlock? FindBlock(SyntaxNode declaration, IReadOnlyDictionary<SyntaxNode, DocumentationBlock> blocksByDeclaration)
+        => blocksByDeclaration.TryGetValue(declaration, out DocumentationBlock? block) ? block : null;
 
     private static bool HasUsableDeclarationName(SyntaxToken name)
         => name.IsSourceBacked && IdentifierBinder.Bind(name) is not null;

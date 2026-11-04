@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using System.Text;
 using Sushi.Diagnostics;
+using Sushi.Documentation;
 using Sushi.Parsing.Syntax;
 using Sushi.Source;
 
@@ -53,7 +54,9 @@ public sealed class FunctionDeclarationBinder
         FunctionDeclarationSyntax declaration,
         IDiagnosticReporter diagnosticReporter,
         IReadOnlyList<PackageCallable>? callables,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DocumentationBlock? documentation = null,
+        bool captureSourceSemanticOccurrences = false)
     {
         FunctionBindResult signatureResult = BindSignature(declaration, diagnosticReporter, cancellationToken);
         BoundFunction? signature = signatureResult.Function;
@@ -63,7 +66,9 @@ public sealed class FunctionDeclarationBinder
             return new FunctionBindResult(null);
         }
 
-        LocalBindingContext locals = new(signature.Parameters);
+        LocalBindingContext locals = captureSourceSemanticOccurrences
+            ? new LocalBindingContext(signature.Parameters, declaration, signature, documentation)
+            : new LocalBindingContext(signature.Parameters);
         BoundBlock? body = BindBody(declaration.Body, signature.ReturnType, signature.Parameters, diagnosticReporter,
             cancellationToken, callables, locals);
 
@@ -79,7 +84,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType,
-            signature.Parameters, body), locals.GetDeclarationSpans());
+            signature.Parameters, body), locals.GetDeclarationSpans(), locals.GetOccurrences());
     }
 
     /// <summary>
@@ -539,7 +544,7 @@ public sealed class FunctionDeclarationBinder
             return null;
         }
 
-        if (!locals.TryDeclare(name, type.Value, nameToken.Span, out BoundLocal? local))
+        if (!locals.TryDeclare(name, type.Value, nameToken.Span, typeToken.Span, out BoundLocal? local))
         {
             diagnosticReporter.GenerateError(ErrorType.DuplicateLocal, nameToken.Span);
             return null;
@@ -578,7 +583,7 @@ public sealed class FunctionDeclarationBinder
         CancellationToken cancellationToken)
     {
         string? name = IdentifierBinder.Bind(nameToken);
-        BoundExpression? target = name is null ? null : locals.Resolve(name);
+        BoundExpression? target = name is null ? null : locals.Resolve(name, nameToken.Span);
 
         if (target is null)
         {
@@ -939,7 +944,13 @@ public sealed class FunctionDeclarationBinder
             || CanCompleteNormally(conditional.Else);
     }
 
-    private static bool TryBindReturnType(SyntaxToken token, out BoundType type)
+    /// <summary>
+    /// Resolves a source type token using the binder's currently supported concrete type rules.
+    /// </summary>
+    /// <param name="token">The source token declaring the return or parameter type.</param>
+    /// <param name="type">The resolved bound type when the token is supported.</param>
+    /// <returns>True when the token denotes a currently supported type.</returns>
+    internal static bool TryBindReturnType(SyntaxToken token, out BoundType type)
     {
         if (token.Type is SyntaxType.VoidKeyword && token.IsSourceBacked)
         {

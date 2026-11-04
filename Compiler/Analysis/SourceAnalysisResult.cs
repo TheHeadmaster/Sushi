@@ -35,4 +35,9 @@ public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree S
     /// Gets the source-backed documentation blocks associated with the analyzed syntax tree.
     /// </summary>
     public IReadOnlyList<DocumentationBlock> DocumentationBlocks { get; init; } = [];
+
+    /// <summary>
+    /// Gets source-token occurrences resolved by the compiler binding path.
+    /// </summary>
+    internal IReadOnlyList<SourceSemanticOccurrence> SemanticOccurrences { get; init; } = [];
 }

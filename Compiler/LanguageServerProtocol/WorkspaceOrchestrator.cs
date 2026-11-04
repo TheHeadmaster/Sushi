@@ -45,6 +45,12 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
     private long workspaceGeneration;
 
+    private long analyzedWorkspaceGeneration = -1;
+
+    private long cachedHoverGeneration = -1;
+
+    private IReadOnlyDictionary<SourceDocument, SourceAnalysisResult>? cachedHoverAnalyses;
+
     /// <summary>
     /// Initializes the language service with the information about the currently open workspace.
     /// </summary>
@@ -68,7 +74,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
             this.ReplaceWorkspaceFolders(workspaceFolders);
 
             await this.UpdateSourceDocuments(cancellationToken);
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
         }
         finally
         {
@@ -156,7 +162,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
             }
 
             await this.UpdateSourceDocuments(cancellationToken);
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
         }
         finally
         {
@@ -311,6 +317,113 @@ public sealed class WorkspaceOrchestrator : IDisposable
     }
 
     /// <summary>
+    /// Gets current project-aware semantic occurrences for source Hover without publishing diagnostics.
+    /// </summary>
+    /// <param name="documentUri">The ordinary Sushi source document being hovered.</param>
+    /// <param name="cancellationToken">Cancels snapshot capture, project analysis, or stale-result validation.</param>
+    /// <returns>Analysis for one still-current source snapshot, or null when project semantics are ambiguous or unavailable.</returns>
+    internal async Task<SourceAnalysisResult?> GetSourceHoverAnalysis(Uri documentUri, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(documentUri);
+        if (!documentUri.IsFile || !Path.GetExtension(documentUri.LocalPath).Equals(".sus", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        WorkspaceAnalysisInput input;
+        SourceDocument selectedDocument;
+        SourceSnapshot selectedSnapshot;
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (!this.workspace.TryGetDocument(documentUri, out SourceDocument? existing))
+            {
+                return null;
+            }
+
+            selectedDocument = existing;
+            selectedSnapshot = selectedDocument.CurrentSnapshot;
+            if (this.cachedHoverGeneration == this.workspaceGeneration
+                && this.cachedHoverAnalyses is not null
+                && this.cachedHoverAnalyses.TryGetValue(selectedDocument, out SourceAnalysisResult? cachedAnalysis)
+                && ReferenceEquals(cachedAnalysis.Snapshot, selectedSnapshot))
+            {
+                return cachedAnalysis;
+            }
+
+            if (this.analyzedWorkspaceGeneration == this.workspaceGeneration
+                && selectedDocument.TryGetCurrentAnalysis(out AnalysisResult? current, out _)
+                && current is SourceAnalysisResult analyzed)
+            {
+                this.cachedHoverAnalyses = new Dictionary<SourceDocument, SourceAnalysisResult>(ReferenceEqualityComparer.Instance)
+                {
+                    [selectedDocument] = analyzed
+                };
+                this.cachedHoverGeneration = this.workspaceGeneration;
+                return analyzed;
+            }
+
+            input = new WorkspaceAnalysisInput(this.workspaceGeneration,
+                Array.AsReadOnly(this.workspace.Documents.Select(document => new DocumentSnapshot(document, document.CurrentSnapshot)).ToArray()));
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+
+        IReadOnlyList<ProjectDiagnosticResult> results = await this.projectDiagnosticAnalyzer.AnalyzeAsync(
+            input.Documents.Select(item => item.Snapshot).ToArray(), null, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        SourceAnalysisResult? result = results.Select(item => item.Analysis)
+            .OfType<SourceAnalysisResult>()
+            .FirstOrDefault(item => ReferenceEquals(item.Snapshot, selectedSnapshot));
+        if (result is null)
+        {
+            return null;
+        }
+
+        await this.mutationGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (this.workspaceGeneration != input.Generation || !selectedDocument.IsCurrent(selectedSnapshot)
+                || input.Documents.Any(item => !item.Document.IsCurrent(item.Snapshot)))
+            {
+                return null;
+            }
+
+            Dictionary<SourceDocument, SourceAnalysisResult> analyses = new(ReferenceEqualityComparer.Instance);
+            Dictionary<SourceSnapshot, SourceAnalysisResult> analysesBySnapshot = new(ReferenceEqualityComparer.Instance);
+            foreach (SourceAnalysisResult sourceAnalysis in results.Select(diagnostic => diagnostic.Analysis).OfType<SourceAnalysisResult>())
+            {
+                analysesBySnapshot[sourceAnalysis.Snapshot] = sourceAnalysis;
+            }
+
+            foreach (DocumentSnapshot item in input.Documents)
+            {
+                if (analysesBySnapshot.TryGetValue(item.Snapshot, out SourceAnalysisResult? sourceAnalysis))
+                {
+                    analyses.Add(item.Document, sourceAnalysis);
+                }
+            }
+
+            this.cachedHoverAnalyses = analyses;
+            this.cachedHoverGeneration = input.Generation;
+            return result;
+        }
+        finally
+        {
+            this.mutationGate.Release();
+        }
+    }
+
+    private void AdvanceWorkspaceGeneration()
+    {
+        this.workspaceGeneration++;
+        this.cachedHoverGeneration = -1;
+        this.cachedHoverAnalyses = null;
+    }
+
+    /// <summary>
     /// Gets current Sushi syntax for semantic highlighting. Reuses an analyzed
     /// syntax tree when it belongs to the active snapshot, otherwise parses the
     /// current editor snapshot without waiting for debounced semantic analysis.
@@ -419,7 +532,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
             this.CancelScheduledAnalysis();
         }
         finally
@@ -464,7 +577,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 return;
             }
 
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
             this.ScheduleWorkspaceAnalysis(editorAnalysisDebounce, [documentUri]);
         }
         finally
@@ -498,7 +611,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
             
             document.UpdateDisk(diskSnapshot);
 
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
             this.CancelScheduledAnalysis();
         }
         finally
@@ -577,6 +690,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
                 this.PublishDiagnostics(result.Analysis, result.Reporter.ReportDiagnostics());
             }
+
+            this.analyzedWorkspaceGeneration = input.Generation;
         }
         finally
         {
@@ -791,7 +906,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
             if (changed)
             {
-                this.workspaceGeneration++;
+                this.AdvanceWorkspaceGeneration();
             }
         }
         finally
@@ -906,7 +1021,7 @@ public sealed class WorkspaceOrchestrator : IDisposable
                 snapshot = document.CurrentSnapshot;
             }
 
-            this.workspaceGeneration++;
+            this.AdvanceWorkspaceGeneration();
         }
         finally
         {
@@ -937,6 +1052,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
             this.scheduledAnalysisUris = null;
         }
 
+        this.cachedHoverAnalyses = null;
+        this.cachedHoverGeneration = -1;
         this.mutationGate.Dispose();
 
         this.disposed = true;

@@ -26,6 +26,7 @@ public class InspectionDocumentLookupTests
     private static readonly string[] tokenTypes = ["class", "function", "parameter", "variable", "namespace"];
     private static readonly string[] tokenModifiers = ["declaration"];
     private static readonly string[] tokenFormats = ["relative"];
+    private static readonly string[] hoverContentFormats = ["markdown"];
     private const string Source = "package Example; namespace Example;\npublic int32 Value() { return 1; }\npublic activity Application : task { public entry void Start() { return; } }";
 
     [TestCase("file:///c%3A/Projects/Sushi/Program.sus")]
@@ -798,6 +799,14 @@ public class InspectionDocumentLookupTests
         return positions;
     }
 
+    private static (int Line, int Character) GetSourcePositionAtOffset(string text, int offset)
+    {
+        offset.Should().BeInRange(0, text.Length);
+        int line = text[..offset].Count(character => character == '\n');
+        int character = offset - (text.LastIndexOf('\n', Math.Max(0, offset - 1)) + 1);
+        return (line, character);
+    }
+
     private static (int Line, int Character) GetSourcePosition(string text, string token)
     {
         int offset = text.IndexOf(token, StringComparison.Ordinal);
@@ -1239,6 +1248,113 @@ public class InspectionDocumentLookupTests
 
     private static Task<JsonElement> Inspect(ServerSession session, string uri, int version) => session.Request("sourceInspection/inspectFunction",
         new { sourceUri = uri, sourceVersion = version, position = new { line = 1, character = 25 }, stage = "structuredIR" });
+
+    [Test]
+    public async Task InitializedServerShouldProvideProjectResolvedSourceHoverWithCurrentDocumentation()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Source Hover " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            string configuration = """
+                name = "SourceHover"
+                assembly = "SourceHover"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { int32 result = Helper(input: value); return result; }";
+            string callee = "package Example; namespace Example;\n/// Adds one to its input. <script>alert(1)</script> [unsafe](javascript:alert(1))\n/// @param input The supplied value.\n/// @return The incremented value.\npublic int32 Helper(int32 input) { return input + 1; }";
+            string projectPath = Path.Combine(directory, "SourceHover.susproj");
+            string callerPath = Path.Combine(sourcesDirectory, "Caller.sus");
+            string calleePath = Path.Combine(sourcesDirectory, "Helper.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(callerPath, caller);
+            await File.WriteAllTextAsync(calleePath, callee);
+            string callerUri = ExtensionUri(new Uri(callerPath));
+            string calleeUri = ExtensionUri(new Uri(calleePath));
+            await using ServerSession session = new(directory);
+            JsonElement initialization = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { hover = new { contentFormat = hoverContentFormats } } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "SourceHover" } }
+            });
+            initialization.GetProperty("capabilities").TryGetProperty("hoverProvider", out _)
+                .Should()
+                .BeTrue("ordinary source hover is registered with the language server");
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = callerUri, languageId = "sushi", version = 1, text = caller } });
+            await session.Notify("textDocument/didOpen", new { textDocument = new { uri = calleeUri, languageId = "sushi", version = 1, text = callee } });
+
+            (int callLine, int callCharacter) = GetSourcePosition(caller, "Helper");
+            JsonElement callHover = await session.Request("textDocument/hover", new
+            {
+                textDocument = new { uri = callerUri },
+                position = new { line = callLine, character = callCharacter }
+            });
+            string callMarkdown = callHover.GetProperty("contents").GetProperty("value").GetString()!;
+            JsonElement callRange = callHover.GetProperty("range");
+            callRange.GetProperty("start").GetProperty("line").GetInt32().Should().Be(callLine);
+            callRange.GetProperty("start").GetProperty("character").GetInt32().Should().Be(callCharacter);
+            callRange.GetProperty("end").GetProperty("character").GetInt32().Should().Be(callCharacter + "Helper".Length);
+            callMarkdown
+                .Should()
+                .Contain("public int32 Helper(int32 input)")
+                .And.Contain("Adds one to its input.")
+                .And.Contain("The supplied value.")
+                .And.Contain("&lt;script&gt;")
+                .And.NotContain("<script>")
+                .And.Contain("#unsafe-link");
+
+            (int argumentLine, int argumentCharacter) = GetSourcePosition(caller, "input:");
+            JsonElement argumentHover = await session.Request("textDocument/hover", new
+            {
+                textDocument = new { uri = callerUri },
+                position = new { line = argumentLine, character = argumentCharacter }
+            });
+            argumentHover.GetProperty("contents").GetProperty("value").GetString()
+                .Should()
+                .Contain("parameter int32 input in Helper")
+                .And.Contain("The supplied value.")
+                .And.NotContain("Adds one to its input.");
+
+            string changedCallee = callee.Replace("Adds one to its input.", "Increments the supplied value.", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = calleeUri, version = 2 },
+                contentChanges = new[] { new { text = changedCallee } }
+            });
+            JsonElement updatedHover = await session.Request("textDocument/hover", new
+            {
+                textDocument = new { uri = callerUri },
+                position = new { line = callLine, character = callCharacter }
+            });
+            updatedHover.GetProperty("contents").GetProperty("value").GetString()
+                .Should()
+                .Contain("Increments the supplied value.")
+                .And.NotContain("Adds one to its input.");
+
+            int localOffset = caller.IndexOf("return result", StringComparison.Ordinal) + "return ".Length;
+            (int localLine, int localCharacter) = GetSourcePositionAtOffset(caller, localOffset);
+            JsonElement localHover = await session.Request("textDocument/hover", new
+            {
+                textDocument = new { uri = callerUri },
+                position = new { line = localLine, character = localCharacter }
+            });
+            localHover.GetProperty("contents").GetProperty("value").GetString()
+                .Should()
+                .Contain("local int32 result");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
 
     private static Task<JsonElement> InspectFunction(ServerSession session, string uri, string source, string functionName, string stage)
     {

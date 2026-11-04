@@ -1,5 +1,6 @@
 using Sushi.Analysis;
 using Sushi.Diagnostics;
+using Sushi.Documentation;
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -190,17 +191,149 @@ internal sealed class ProjectDiagnosticAnalyzer
     {
         SourceFileSyntax syntax = (SourceFileSyntax)source.Result.SyntaxTree.Root;
         List<BoundFunction> functions = [];
-        foreach (FunctionDeclarationSyntax declaration in syntax.FunctionDeclarations)
+        List<SourceSemanticOccurrence> occurrences = [];
+        IReadOnlyList<BoundFunction> signatures = source.Result.Functions;
+        Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = new(ReferenceEqualityComparer.Instance);
+        foreach (DocumentationBlock block in source.Result.DocumentationBlocks)
+        {
+            if (block.Declaration is SyntaxNode declaration)
+            {
+                documentationByDeclaration.Add(declaration, block);
+            }
+        }
+        for (int index = 0; index < syntax.FunctionDeclarations.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, source.Reporter, callables, cancellationToken);
+            FunctionDeclarationSyntax declaration = syntax.FunctionDeclarations[index];
+            documentationByDeclaration.TryGetValue(declaration, out DocumentationBlock? documentation);
+            BoundFunction signature = signatures[index];
+            AddFunctionDeclarationOccurrences(declaration, signature, documentation, occurrences);
+            FunctionBindResult result = FunctionDeclarationBinder.Bind(declaration, source.Reporter, callables, cancellationToken, documentation, captureSourceSemanticOccurrences: true);
             if (result.Function is not null)
             {
                 functions.Add(result.Function);
+                occurrences.AddRange(result.SemanticOccurrences);
             }
         }
 
-        source.Result = source.Result with { Functions = functions };
+        foreach (BoundActivity activity in source.Result.Activities)
+        {
+            documentationByDeclaration.TryGetValue(activity.Declaration, out DocumentationBlock? activityDocumentation);
+            SourceSemanticSymbol activitySymbol = new(activity.Declaration, SourceSemanticSymbolKind.Activity, 0,
+                activity.Name, null, null, activityDocumentation, null, activity.Accessibility);
+            occurrences.Add(new SourceSemanticOccurrence(activity.Declaration.Name.Span, activitySymbol));
+
+            foreach (ActivityMethodDeclarationSyntax methodDeclaration in activity.Declaration.Members.OfType<ActivityMethodDeclarationSyntax>())
+            {
+                BoundActivityMethod? method = methodDeclaration == activity.Entry.Declaration
+                    ? activity.Entry
+                    : methodDeclaration == activity.Stop?.Declaration ? activity.Stop : null;
+                if (method is null)
+                {
+                    continue;
+                }
+
+                documentationByDeclaration.TryGetValue(methodDeclaration, out DocumentationBlock? methodDocumentation);
+                BoundFunction? signature = CreateActivityMethodSignature(method, cancellationToken);
+                SourceSemanticSymbol methodSymbol = new(methodDeclaration, SourceSemanticSymbolKind.ActivityMethod, 0,
+                    method.Name, signature?.ReturnType, signature, methodDocumentation, activity.Name, method.Accessibility);
+                occurrences.Add(new SourceSemanticOccurrence(methodDeclaration.Name.Span, methodSymbol));
+                if (signature is not null)
+                {
+                    AddActivityMethodSignatureOccurrences(methodDeclaration, signature, methodDocumentation, method.Name, occurrences);
+                }
+            }
+        }
+
+        occurrences.Sort((left, right) => left.Span.Start.CompareTo(right.Span.Start));
+        source.Result = source.Result with { Functions = functions, SemanticOccurrences = Array.AsReadOnly(occurrences.ToArray()) };
+    }
+
+    private static BoundFunction? CreateActivityMethodSignature(BoundActivityMethod method, CancellationToken cancellationToken)
+    {
+        ActivityMethodDeclarationSyntax declaration = method.Declaration;
+        if (!FunctionDeclarationBinder.TryBindReturnType(declaration.ReturnType, out BoundType returnType))
+        {
+            return null;
+        }
+
+        List<BoundParameter> parameters = [];
+        HashSet<string> names = new(StringComparer.Ordinal);
+        foreach (ParameterSyntax parameter in declaration.Parameters)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string? name = IdentifierBinder.Bind(parameter.NameToken);
+            if (!FunctionDeclarationBinder.TryBindReturnType(parameter.TypeToken, out BoundType type)
+                || type is BoundType.Void || name is null || !names.Add(name))
+            {
+                return null;
+            }
+
+            parameters.Add(new BoundParameter(parameters.Count, name, type));
+        }
+
+        return new BoundFunction(method.Accessibility, method.Name, returnType, parameters, new BoundBlock([]));
+    }
+
+    private static void AddActivityMethodSignatureOccurrences(
+        ActivityMethodDeclarationSyntax declaration,
+        BoundFunction signature,
+        DocumentationBlock? documentation,
+        string containingName,
+        ICollection<SourceSemanticOccurrence> occurrences)
+    {
+        for (int index = 0; index < signature.Parameters.Count && index < declaration.Parameters.Count; index++)
+        {
+            BoundParameter parameter = signature.Parameters[index];
+            SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
+                parameter.Name, parameter.Type, signature, documentation, containingName);
+            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
+            AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, signature, occurrences);
+        }
+
+        AddTypeOccurrence(declaration.ReturnType, declaration, signature, occurrences);
+    }
+
+    private static void AddFunctionDeclarationOccurrences(
+        FunctionDeclarationSyntax declaration,
+        BoundFunction function,
+        DocumentationBlock? documentation,
+        ICollection<SourceSemanticOccurrence> occurrences)
+    {
+        SourceSemanticSymbol functionSymbol = new(declaration, SourceSemanticSymbolKind.Function, 0, function.Name,
+            function.ReturnType, function, documentation, null);
+        occurrences.Add(new SourceSemanticOccurrence(declaration.Name.Span, functionSymbol));
+
+        for (int index = 0; index < function.Parameters.Count && index < declaration.Parameters.Count; index++)
+        {
+            BoundParameter parameter = function.Parameters[index];
+            SourceSemanticSymbol parameterSymbol = new(declaration, SourceSemanticSymbolKind.Parameter, parameter.Index,
+                parameter.Name, parameter.Type, function, documentation, function.Name);
+            occurrences.Add(new SourceSemanticOccurrence(declaration.Parameters[index].NameToken.Span, parameterSymbol));
+            AddTypeOccurrence(declaration.Parameters[index].TypeToken, declaration, function, occurrences);
+        }
+
+        AddTypeOccurrence(declaration.ReturnType, declaration, function, occurrences);
+    }
+
+    private static void AddTypeOccurrence(
+        SyntaxToken token,
+        SyntaxNode declaration,
+        BoundFunction function,
+        ICollection<SourceSemanticOccurrence> occurrences)
+    {
+        if (token.IsSourceBacked && FunctionDeclarationBinder.TryBindReturnType(token, out BoundType type))
+        {
+            string name = type switch
+            {
+                BoundType.Int32 => "int32",
+                BoundType.Bool => "bool",
+                BoundType.Void => "void",
+                _ => throw new ArgumentOutOfRangeException(nameof(token))
+            };
+            occurrences.Add(new SourceSemanticOccurrence(token.Span,
+                new SourceSemanticSymbol(declaration, SourceSemanticSymbolKind.Type, 0, name, type, function, null, null)));
+        }
     }
 
     private static int CountContainingProjects(SourceState source, IReadOnlyList<ProjectContext> projects)

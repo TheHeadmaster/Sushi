@@ -45,7 +45,7 @@ internal static class IntegerUpdateBinder
         }
 
         string? name = IdentifierBinder.Bind(identifier.IdentifierToken);
-        BoundExpression? target = name is null ? null : locals?.Resolve(name);
+        BoundExpression? target = name is null ? null : locals?.Resolve(name, identifier.IdentifierToken.Span);
 
         if (target is null)
         {

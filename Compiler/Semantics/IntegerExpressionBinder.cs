@@ -104,7 +104,7 @@ internal static class IntegerExpressionBinder
         LocalBindingContext? locals)
     {
         string? name = IdentifierBinder.Bind(expression.IdentifierToken);
-        BoundExpression? reference = name is null ? null : locals?.Resolve(name);
+        BoundExpression? reference = name is null ? null : locals?.Resolve(name, expression.IdentifierToken.Span);
 
         if (reference is null && name is not null && locals is null)
         {

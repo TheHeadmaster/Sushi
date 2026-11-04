@@ -48,13 +48,14 @@ public static class DocumentationProcessor
         List<SourceSpan[]> lineGroups = GroupDocumentationLines(lexerResult, cancellationToken);
         SyntaxNode[] declarations = GetEligibleDeclarations(sourceFile, cancellationToken);
         List<DocumentationBlock> blocks = new(lineGroups.Count);
+        int declarationIndex = 0;
 
         foreach (SourceSpan[] lines in lineGroups)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
             SourceSpan span = new(sourceFile.Snapshot, lines[0].Start, lines[^1].End);
-            SyntaxNode? declaration = FindAttachedDeclaration(sourceFile.Snapshot, span, declarations, cancellationToken);
+            SyntaxNode? declaration = FindAttachedDeclaration(sourceFile.Snapshot, span, declarations, ref declarationIndex, cancellationToken);
             DocumentationContent content = DocumentationContentParser.Parse(sourceFile.Snapshot, lines, diagnosticReporter, cancellationToken);
             DocumentationBlock block = new(span, lines, declaration, content);
             blocks.Add(block);
@@ -127,22 +128,29 @@ public static class DocumentationProcessor
         SourceSnapshot snapshot,
         SourceSpan blockSpan,
         IReadOnlyList<SyntaxNode> declarations,
+        ref int declarationIndex,
         CancellationToken cancellationToken)
     {
         ReadOnlySpan<byte> source = snapshot.Bytes.Span;
 
-        foreach (SyntaxNode declaration in declarations)
+        while (declarationIndex < declarations.Count)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            SyntaxNode declaration = declarations[declarationIndex];
 
             if (declaration.Span.Start < blockSpan.End)
             {
+                declarationIndex++;
                 continue;
             }
 
-            return HasSingleLineBreakAndIndentation(source, blockSpan.End, declaration.Span.Start)
-                ? declaration
-                : null;
+            if (!HasSingleLineBreakAndIndentation(source, blockSpan.End, declaration.Span.Start))
+            {
+                return null;
+            }
+
+            declarationIndex++;
+            return declaration;
         }
 
         return null;
