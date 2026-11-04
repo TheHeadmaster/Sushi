@@ -191,7 +191,7 @@ internal static class SourceRenameValidation
                 }
 
                 OccurrenceKey key = new(Path.GetFullPath(analysis.Snapshot.Uri.LocalPath), start, end,
-                    occurrence.Symbol.Kind, occurrence.Symbol.Index,
+                    occurrence.Symbol.Kind,
                     definition?.Start ?? -1, definition?.End ?? -1,
                     definition is SourceSpan target ? Path.GetFullPath(target.Snapshot.Uri.LocalPath) : string.Empty);
                 expected.TryGetValue(key, out int count);
@@ -207,7 +207,7 @@ internal static class SourceRenameValidation
                 cancellationToken.ThrowIfCancellationRequested();
                 SourceSpan? definition = occurrence.Symbol.DefinitionSpan;
                 OccurrenceKey key = new(Path.GetFullPath(analysis.Snapshot.Uri.LocalPath), occurrence.Span.Start, occurrence.Span.End,
-                    occurrence.Symbol.Kind, occurrence.Symbol.Index,
+                    occurrence.Symbol.Kind,
                     definition?.Start ?? -1, definition?.End ?? -1,
                     definition is SourceSpan target ? Path.GetFullPath(target.Snapshot.Uri.LocalPath) : string.Empty);
                 actual.TryGetValue(key, out int count);
@@ -289,7 +289,7 @@ internal static class SourceRenameValidation
             foreach (SourceSemanticOccurrence occurrence in analysis.SemanticOccurrences)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (occurrence.Symbol.Kind == kind && occurrence.Symbol.Index == index
+                if (occurrence.Symbol.Kind == kind
                     && occurrence.Symbol.DefinitionSpan is SourceSpan candidateDefinition
                     && Path.GetFullPath(candidateDefinition.Snapshot.Uri.LocalPath) == Path.GetFullPath(definition.Snapshot.Uri.LocalPath)
                     && candidateDefinition.Start == definitionStart && candidateDefinition.End == definitionEnd)
@@ -367,7 +367,7 @@ internal static class SourceRenameValidation
 
     private static StringComparer PathComparer => OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
-    private readonly record struct OccurrenceKey(string Path, int Start, int End, SourceSemanticSymbolKind Kind, int Index,
+    private readonly record struct OccurrenceKey(string Path, int Start, int End, SourceSemanticSymbolKind Kind,
         int DefinitionStart, int DefinitionEnd, string DefinitionPath);
 
     private readonly record struct DiagnosticKey(string Path, int Code, DiagnosticSeverity Severity, int Start, int End);
