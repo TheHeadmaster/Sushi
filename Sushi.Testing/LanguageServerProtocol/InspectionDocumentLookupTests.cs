@@ -1617,6 +1617,11 @@ public class InspectionDocumentLookupTests
             (int builtInLine, int builtInCharacter) = GetUtf16SourcePosition(caller, "int32 Calculate");
             JsonElement builtIn = await RequestSourceDefinition(session, callerUri, builtInLine, builtInCharacter);
             builtIn.ValueKind.Should().Be(JsonValueKind.Null, "built-in types have no Sushi source declaration");
+            (int punctuationLine, int punctuationCharacter) = GetUtf16SourcePosition(caller, "return result;");
+            JsonElement punctuation = await RequestSourceDefinition(session, callerUri, punctuationLine, punctuationCharacter + "return result".Length);
+            punctuation.ValueKind.Should().Be(JsonValueKind.Null, "punctuation does not select a semantic occurrence");
+            JsonElement outOfRange = await RequestSourceDefinition(session, callerUri, 1000, 0);
+            outOfRange.ValueKind.Should().Be(JsonValueKind.Null, "invalid protocol positions have no target");
 
             string movedCaller = caller.Replace("public int32 Calculate", "/// Current source snapshot.\rpublic int32 Calculate", StringComparison.Ordinal);
             await session.Notify("textDocument/didChange", new

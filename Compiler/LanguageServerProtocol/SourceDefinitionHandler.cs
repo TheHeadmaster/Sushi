@@ -56,11 +56,11 @@ public sealed class SourceDefinitionHandler(WorkspaceOrchestrator workspace) : D
         cancellationToken.ThrowIfCancellationRequested();
         (int startLine, int startCharacter) = target.Snapshot.GetUtf16Position(target.Start);
         (int endLine, int endCharacter) = target.Snapshot.GetUtf16Position(target.End);
-        return new Location
+        return new LocationOrLocationLinks(new Location
         {
             Uri = DocumentUri.FromFileSystemPath(target.Snapshot.Uri.LocalPath),
             Range = new LSPRange(startLine, startCharacter, endLine, endCharacter)
-        };
+        });
     }
 
     /// <inheritdoc />
