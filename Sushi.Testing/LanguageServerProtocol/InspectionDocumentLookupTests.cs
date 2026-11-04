@@ -1910,6 +1910,217 @@ public class InspectionDocumentLookupTests
     }
 
     [Test]
+    public async Task InitializedServerShouldKeepStandaloneReferencesOutsideSiblingProjectDirectories()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Standalone References " + Guid.NewGuid().ToString("N"));
+        string projectDirectory = Path.Combine(directory, "Project");
+        string prefixedSiblingDirectory = Path.Combine(directory, "ProjectExtra");
+        string invalidProjectDirectory = Path.Combine(directory, "InvalidProject");
+        Directory.CreateDirectory(projectDirectory);
+        Directory.CreateDirectory(prefixedSiblingDirectory);
+        Directory.CreateDirectory(invalidProjectDirectory);
+        try
+        {
+            const string configuration = """
+                name = "UnrelatedProject"
+                assembly = "UnrelatedProject"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string projectSource = "package Example; namespace Example; public int32 Double(int32 value) { return value; }";
+            string standaloneSource = "package Example; namespace Example; public int32 Double(int32 value) { return value; } public int32 Caller() { return Double(1); }";
+            string invalidSource = "package Example; namespace Example; public int32 Hidden(int32 value) { return Hidden(value); }";
+            string projectPath = Path.Combine(projectDirectory, "Unrelated.susproj");
+            string projectSourcePath = Path.Combine(projectDirectory, "Math.sus");
+            string standalonePath = Path.Combine(prefixedSiblingDirectory, "Standalone.sus");
+            string invalidProjectPath = Path.Combine(invalidProjectDirectory, "Invalid.susproj");
+            string invalidSourcePath = Path.Combine(invalidProjectDirectory, "Broken.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            await File.WriteAllTextAsync(projectSourcePath, projectSource);
+            await File.WriteAllTextAsync(standalonePath, standaloneSource);
+            await File.WriteAllTextAsync(invalidProjectPath, "name = [invalid");
+            await File.WriteAllTextAsync(invalidSourcePath, invalidSource);
+
+            string standaloneUri = ExtensionUri(new Uri(standalonePath));
+            string invalidUri = ExtensionUri(new Uri(invalidSourcePath));
+            await using ServerSession session = new(directory);
+            _ = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { hover = new { contentFormat = hoverContentFormats } } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "StandaloneReferences" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri = standaloneUri, languageId = "sushi", version = 1, text = standaloneSource }
+            });
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri = invalidUri, languageId = "sushi", version = 1, text = invalidSource }
+            });
+
+            int selectedOffset = standaloneSource.LastIndexOf("Double", StringComparison.Ordinal);
+            (int line, int character) = GetSourcePositionAtOffset(standaloneSource, selectedOffset);
+            JsonElement standaloneReferences = await RequestSourceReferences(session, standaloneUri, line, character, true);
+            JsonElement[] locations = [.. standaloneReferences.EnumerateArray()];
+            locations.Should().HaveCount(2);
+            foreach (JsonElement location in locations)
+            {
+                AssertLocationUri(location, standaloneUri);
+            }
+
+            locations[0].GetProperty("range").GetProperty("start").GetProperty("character").GetInt32()
+                .Should().Be(standaloneSource.IndexOf("Double", StringComparison.Ordinal));
+            locations[1].GetProperty("range").GetProperty("start").GetProperty("character").GetInt32()
+                .Should().Be(selectedOffset);
+
+            int hiddenOffset = invalidSource.IndexOf("Hidden", StringComparison.Ordinal);
+            (int hiddenLine, int hiddenCharacter) = GetSourcePositionAtOffset(invalidSource, hiddenOffset);
+            JsonElement invalidProjectReferences = await RequestSourceReferences(session, invalidUri, hiddenLine, hiddenCharacter, true);
+            JsonElement[] invalidProjectLocations = invalidProjectReferences.ValueKind == JsonValueKind.Array
+                ? [.. invalidProjectReferences.EnumerateArray()]
+                : [];
+            (invalidProjectReferences.ValueKind is JsonValueKind.Null
+                || invalidProjectReferences.ValueKind == JsonValueKind.Array && invalidProjectLocations.Length == 0)
+                .Should()
+                .BeTrue("an invalid project cannot establish speculative reference ownership");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
+    public async Task InitializedServerShouldValidateUnopenedBomSourcesAgainstCanonicalProjectSnapshots()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "BOM References " + Guid.NewGuid().ToString("N"));
+        string sourcesDirectory = Path.Combine(directory, "Sources");
+        Directory.CreateDirectory(sourcesDirectory);
+        try
+        {
+            const string configuration = """
+                name = "BomReferences"
+                assembly = "BomReferences"
+                language-version = "1.0"
+                [build]
+                default = "debug"
+                sources = ["Sources/**/*.sus"]
+                [build.targets.debug]
+                type = "Sushi.MVP.Debug"
+                """;
+            string math = "package Example; namespace Example; public int32 Double(int32 value) { return value * 2; }";
+            string program = "package Example; namespace Example; public int32 Calculate(int32 value) { return Double(value); }";
+            string projectPath = Path.Combine(directory, "BomReferences.susproj");
+            string mathPath = Path.Combine(sourcesDirectory, "Math.sus");
+            string programPath = Path.Combine(sourcesDirectory, "Program.sus");
+            await File.WriteAllTextAsync(projectPath, configuration);
+            byte[] mathBytes = Encoding.UTF8.GetBytes(math);
+            byte[] mathBytesWithBom = [0xEF, 0xBB, 0xBF, .. mathBytes];
+            await File.WriteAllBytesAsync(mathPath, mathBytesWithBom);
+            await File.WriteAllTextAsync(programPath, program);
+
+            string projectUri = ExtensionUri(new Uri(projectPath));
+            string mathUri = ExtensionUri(new Uri(mathPath));
+            string programUri = ExtensionUri(new Uri(programPath));
+            await using ServerSession session = new(directory);
+            _ = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { textDocument = new { hover = new { contentFormat = hoverContentFormats } } },
+                workspaceFolders = new[] { new { uri = ExtensionUri(new Uri(directory)), name = "BomReferences" } }
+            });
+            await session.Notify("initialized", new { });
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri = programUri, languageId = "sushi", version = 1, text = program }
+            });
+
+            int callOffset = program.IndexOf("Double", StringComparison.Ordinal);
+            (int line, int character) = GetSourcePositionAtOffset(program, callOffset);
+            async Task<JsonElement> Request(bool includeDeclaration)
+                => await RequestSourceReferences(session, programUri, line, character, includeDeclaration);
+
+            JsonElement withDeclaration = await Request(includeDeclaration: true);
+            JsonElement[] declaredLocations = [.. withDeclaration.EnumerateArray()];
+            declaredLocations.Should().HaveCount(2);
+            AssertLocationUri(declaredLocations[0], mathUri);
+            AssertLocationUri(declaredLocations[1], programUri);
+            declaredLocations[0].GetProperty("range").GetProperty("start").GetProperty("character").GetInt32()
+                .Should().Be(math.IndexOf("Double", StringComparison.Ordinal), "the BOM is excluded from canonical source coordinates");
+
+            JsonElement referencesOnly = await Request(includeDeclaration: false);
+            JsonElement[] referencesWithoutDeclaration = [.. referencesOnly.EnumerateArray()];
+            referencesWithoutDeclaration.Should().ContainSingle();
+            AssertLocationUri(referencesWithoutDeclaration[0], programUri);
+            (await Request(includeDeclaration: true)).GetRawText().Should().Be(withDeclaration.GetRawText());
+
+            await File.WriteAllBytesAsync(mathPath, Encoding.UTF8.GetBytes(math));
+            (await Request(includeDeclaration: true)).GetRawText().Should().Be(withDeclaration.GetRawText(),
+                "removing only the initial BOM preserves canonical source identity");
+            await File.WriteAllBytesAsync(mathPath, mathBytesWithBom);
+            (await Request(includeDeclaration: true)).GetRawText().Should().Be(withDeclaration.GetRawText(),
+                "restoring only the initial BOM preserves canonical source identity");
+
+            string changedMath = math.Replace("Double", "Triple", StringComparison.Ordinal);
+            await File.WriteAllBytesAsync(mathPath, Encoding.UTF8.GetBytes(changedMath));
+            (await Request(includeDeclaration: true)).ValueKind.Should().Be(JsonValueKind.Null,
+                "a changed unopened source makes the captured analysis stale");
+            await session.Notify("workspace/didChangeWatchedFiles", new
+            {
+                changes = new[] { new { uri = mathUri, type = 2 } }
+            });
+            JsonElement changedReferences = await Request(includeDeclaration: true);
+            changedReferences.ValueKind.Should().Be(JsonValueKind.Array);
+            JsonElement[] changedLocations = [.. changedReferences.EnumerateArray()];
+            changedLocations.Should().BeEmpty();
+
+            await File.WriteAllBytesAsync(mathPath, mathBytesWithBom);
+            await session.Notify("workspace/didChangeWatchedFiles", new
+            {
+                changes = new[] { new { uri = mathUri, type = 2 } }
+            });
+            JsonElement restoredSourceReferences = await Request(includeDeclaration: true);
+            JsonElement[] restoredSourceLocations = [.. restoredSourceReferences.EnumerateArray()];
+            restoredSourceLocations.Should().HaveCount(2);
+
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri = projectUri, languageId = "susproj", version = 1, text = configuration }
+            });
+            string excludedMathConfiguration = configuration.Replace("Sources/**/*.sus", "Sources/Program.sus", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = projectUri, version = 2 },
+                contentChanges = new[] { new { text = excludedMathConfiguration } }
+            });
+            JsonElement excludedMemberReferences = await Request(includeDeclaration: true);
+            excludedMemberReferences.ValueKind.Should().Be(JsonValueKind.Array);
+            JsonElement[] excludedMemberLocations = [.. excludedMemberReferences.EnumerateArray()];
+            excludedMemberLocations.Should().BeEmpty();
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = projectUri, version = 3 },
+                contentChanges = new[] { new { text = configuration } }
+            });
+            JsonElement restoredReferences = await Request(includeDeclaration: true);
+            restoredReferences.ValueKind.Should().Be(JsonValueKind.Array);
+            JsonElement[] restoredLocations = [.. restoredReferences.EnumerateArray()];
+            restoredLocations.Should().HaveCount(2);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public async Task SourceHoverShouldFollowBoundLocalAndParameterIdentitiesAcrossSiblingScopes()
     {
         string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "Hover Local Identity " + Guid.NewGuid().ToString("N"));

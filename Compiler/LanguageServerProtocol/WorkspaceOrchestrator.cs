@@ -629,6 +629,18 @@ public sealed class WorkspaceOrchestrator : IDisposable
         return currentMembers.SetEquals(analyzedMembers);
     }
 
+    private static bool IsWithinDirectory(Uri uri, string directory)
+    {
+        string fullDirectory = Path.GetFullPath(directory);
+        string fullPath = Path.GetFullPath(uri.LocalPath);
+        string relative = Path.GetRelativePath(fullDirectory, fullPath);
+        StringComparison pathComparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return !Path.IsPathRooted(relative) && !relative.Equals("..", pathComparison)
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar, pathComparison);
+    }
+
     private static async Task<bool> IsStandaloneMembershipCurrent(SourceSemanticAnalysisSet analysisSet, CancellationToken cancellationToken)
     {
         string selectedPath = Path.GetFullPath(analysisSet.Selected.Snapshot.Uri.LocalPath);
@@ -687,13 +699,15 @@ public sealed class WorkspaceOrchestrator : IDisposable
         try
         {
             byte[] bytes = await File.ReadAllBytesAsync(snapshot.Uri.LocalPath, cancellationToken);
-            return snapshot.Bytes.Span.SequenceEqual(bytes);
+            SourceSnapshot diskSnapshot = SourceSnapshot.FromUtf8(snapshot.Uri, version: null, bytes);
+            return diskSnapshot.IsValidUtf8 == snapshot.IsValidUtf8
+                && snapshot.Bytes.Span.SequenceEqual(diskSnapshot.Bytes.Span);
         }
-        catch (FileNotFoundException)
+        catch (IOException)
         {
             return false;
         }
-        catch (DirectoryNotFoundException)
+        catch (UnauthorizedAccessException)
         {
             return false;
         }
