@@ -5,6 +5,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
+using Markdig;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
 using Newtonsoft.Json;
 using NUnit.Framework;
 using OmniSharp.Extensions.LanguageServer.Protocol;
@@ -1268,7 +1271,7 @@ public class InspectionDocumentLookupTests
                 type = "Sushi.MVP.Debug"
                 """;
             string caller = "package Example; namespace Example;\npublic int32 Caller(int32 value) { int32 result = Helper(input: value); return result; }";
-            string callee = "package Example; namespace Example;\n/// Adds one to its input. It uses **care** and `precision`.\n/// [guide](../guide.md) [web](https://example.com) [unsafe](JaVaScRiPt:alert(1))\n/// <script>alert(1)</script>\n/// <script\n/// onload=\"alert(1)\">alert(1)</script>\n/// @param input The supplied **value**.\n/// continued over another line.\n/// @return The incremented value.\npublic int32 Helper(int32 input) { return input + 1; }";
+            string callee = "package Example; namespace Example;\n/// Adds one to its input. It uses **care** and `precision`.\n/// [guide](../guide.md) [web](https://example.com) [unsafe](JaVaScRiPt:alert(1))\n/// <script>alert(1)</script>\n/// <script\n/// onload=\"alert(1)\">alert(1)</script>\n/// @param input The supplied **value**.\n/// continued over another **careful** line.\n/// @return The incremented **value**.\npublic int32 Helper(int32 input) { return input + 1; }";
             string projectPath = Path.Combine(directory, "SourceHover.susproj");
             string callerPath = Path.Combine(sourcesDirectory, "Caller.sus");
             string calleePath = Path.Combine(sourcesDirectory, "Helper.sus");
@@ -1298,25 +1301,35 @@ public class InspectionDocumentLookupTests
                 position = new { line = callLine, character = callCharacter }
             });
             string callMarkdown = callHover.GetProperty("contents").GetProperty("value").GetString()!;
+            callHover.GetProperty("contents").GetProperty("kind").GetString().Should().Be("markdown");
             JsonElement callRange = callHover.GetProperty("range");
             callRange.GetProperty("start").GetProperty("line").GetInt32().Should().Be(callLine);
             callRange.GetProperty("start").GetProperty("character").GetInt32().Should().Be(callCharacter);
             callRange.GetProperty("end").GetProperty("character").GetInt32().Should().Be(callCharacter + "Helper".Length);
             callMarkdown
                 .Should()
-                .Contain("public int32 Helper(int32 input)")
+                .Contain("```sushi")
+                .And.Contain("public int32 Helper(int32 input)")
                 .And.Contain("Adds one to its input.")
-                .And.Contain("The supplied <strong>value</strong>.")
-                .And.Contain("<strong>care</strong>")
-                .And.Contain("<code>precision</code>")
-                .And.Contain("<a href=\"../guide.md\"")
-                .And.Contain("<a href=\"https://example.com/")
-                .And.Contain("continued over another line.")
-                .And.Contain("&lt;script&gt;")
-                .And.NotContain("<script>")
-                .And.NotContain("#unsafe-link")
-                .And.NotContain("<a href=\"JaVaScRiPt:")
+                .And.Contain("The supplied **value**.")
+                .And.Contain("**care**")
+                .And.Contain("`precision`")
+                .And.Contain("[guide](<../guide.md>)")
+                .And.Contain("[web](<https://example.com/>)")
+                .And.Contain("continued over another **careful** line.")
+                .And.Contain("**Returns**")
+                .And.Contain("The incremented **value**.")
+                .And.NotContain("javascript:")
+                .And.NotContain("<a href=")
+                .And.NotContain("<strong>")
                 .And.NotContain("onload=\"");
+
+            MarkdownDocument callMarkdownSyntax = Markdown.Parse(callMarkdown, new MarkdownPipelineBuilder().Build());
+            callMarkdownSyntax.Descendants().OfType<LinkInline>().Where(link => !link.IsImage).Select(link => link.Url)
+                .Should()
+                .Equal("../guide.md", "https://example.com/");
+            callMarkdownSyntax.Descendants().OfType<HtmlInline>().Should().BeEmpty();
+            callMarkdownSyntax.Descendants().OfType<HtmlBlock>().Should().BeEmpty();
 
             (int argumentLine, int argumentCharacter) = GetSourcePosition(caller, "input:");
             JsonElement argumentHover = await session.Request("textDocument/hover", new
@@ -1327,7 +1340,8 @@ public class InspectionDocumentLookupTests
             argumentHover.GetProperty("contents").GetProperty("value").GetString()
                 .Should()
                 .Contain("parameter int32 input in Helper")
-                .And.Contain("The supplied <strong>value</strong>.")
+                .And.Contain("The supplied **value**.")
+                .And.Contain("continued over another **careful** line.")
                 .And.NotContain("Adds one to its input.");
 
             string changedCallee = callee.Replace("Adds one to its input.", "Increments the supplied value.", StringComparison.Ordinal);

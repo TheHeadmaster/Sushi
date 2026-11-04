@@ -1,7 +1,6 @@
 using Markdig;
-using Markdig.Renderers;
-using Markdig.Renderers.Html;
-using Markdig.Renderers.Html.Inlines;
+using Markdig.Renderers.Normalize;
+using Markdig.Renderers.Normalize.Inlines;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 using System.Globalization;
@@ -9,25 +8,29 @@ using System.Globalization;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Renders source-controlled documentation Markdown into inert, presentation-only HTML.
+/// Serializes source-controlled documentation as safe Markdown for LSP Hover responses.
 /// </summary>
 internal static class SourceHoverMarkdown
 {
-    private static readonly MarkdownPipeline pipeline = new MarkdownPipelineBuilder().DisableHtml().Build();
+    private static readonly MarkdownPipeline pipeline = new MarkdownPipelineBuilder().Build();
+    private static readonly char[] markdownPunctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".ToCharArray();
 
     /// <summary>
-    /// Parses Markdown with raw HTML disabled and renders only safe link destinations.
+    /// Normalizes Markdown syntax while making raw HTML and unsafe resources inert.
     /// </summary>
     /// <param name="markdown">Documentation Markdown captured from a source snapshot.</param>
-    /// <returns>HTML generated from the Markdown syntax tree, safe to include in LSP Markdown content.</returns>
+    /// <returns>Safe Markdown suitable for an LSP response that does not allow raw HTML.</returns>
     internal static string Render(string markdown)
     {
         ArgumentNullException.ThrowIfNull(markdown);
         MarkdownDocument document = Markdown.Parse(markdown, pipeline);
         using StringWriter writer = new(CultureInfo.InvariantCulture);
-        HtmlRenderer renderer = new(writer);
+        NormalizeRenderer renderer = new(writer, new NormalizeOptions { ExpandAutoLinks = true });
+        renderer.ObjectRenderers.Replace<NormalizeHtmlInlineRenderer>(new SafeHtmlInlineRenderer());
+        renderer.ObjectRenderers.Replace<HtmlBlockRenderer>(new SafeHtmlBlockRenderer());
         renderer.ObjectRenderers.Replace<LinkInlineRenderer>(new SafeLinkInlineRenderer());
         renderer.ObjectRenderers.Replace<AutolinkInlineRenderer>(new SafeAutolinkInlineRenderer());
+        renderer.ObjectRenderers.Replace<LinkReferenceDefinitionGroupRenderer>(new OmitLinkReferenceDefinitionsRenderer());
         renderer.Render(document);
         return writer.ToString();
     }
@@ -41,11 +44,16 @@ internal static class SourceHoverMarkdown
         }
 
         string normalized = DecodeDestination(destination);
-        string schemeCandidate = string.Concat(normalized
-            .Where(character => !char.IsControl(character) && !char.IsWhiteSpace(character) && character != '\\'));
-        if (Uri.TryCreate(schemeCandidate, UriKind.Absolute, out Uri? absoluteUri))
+        if (normalized.Length == 0 || normalized.Any(char.IsControl) || normalized.Any(char.IsWhiteSpace)
+            || normalized.IndexOfAny(['<', '>', '\\', '"', '\'', '`']) >= 0 || normalized.Contains('%', StringComparison.Ordinal))
         {
-            if (absoluteUri.Scheme is not ("http" or "https"))
+            return false;
+        }
+
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out Uri? absoluteUri))
+        {
+            if (!absoluteUri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && !absoluteUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -54,13 +62,7 @@ internal static class SourceHoverMarkdown
             return true;
         }
 
-        if (schemeCandidate.StartsWith("//", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        int colon = schemeCandidate.IndexOf(':', StringComparison.Ordinal);
-        if (colon > 0 && IsUriScheme(schemeCandidate.AsSpan(0, colon)))
+        if (normalized.StartsWith("//", StringComparison.Ordinal) || HasUriScheme(normalized))
         {
             return false;
         }
@@ -81,7 +83,7 @@ internal static class SourceHoverMarkdown
             }
             catch (UriFormatException)
             {
-                return decoded;
+                return string.Empty;
             }
 
             if (StringComparer.Ordinal.Equals(next, decoded))
@@ -95,16 +97,17 @@ internal static class SourceHoverMarkdown
         return decoded.Contains('%', StringComparison.Ordinal) ? string.Empty : decoded;
     }
 
-    private static bool IsUriScheme(ReadOnlySpan<char> value)
+    private static bool HasUriScheme(string destination)
     {
-        if (value.IsEmpty || !char.IsAsciiLetter(value[0]))
+        int colon = destination.IndexOf(':', StringComparison.Ordinal);
+        if (colon <= 0 || !char.IsAsciiLetter(destination[0]))
         {
             return false;
         }
 
-        for (int index = 1; index < value.Length; index++)
+        for (int index = 1; index < colon; index++)
         {
-            char character = value[index];
+            char character = destination[index];
             if (!char.IsAsciiLetterOrDigit(character) && character is not '+' and not '-' and not '.')
             {
                 return false;
@@ -114,48 +117,75 @@ internal static class SourceHoverMarkdown
         return true;
     }
 
-    private sealed class SafeLinkInlineRenderer : LinkInlineRenderer
+    private static string EscapeMarkdownLiteral(string value)
     {
-        protected override void Write(HtmlRenderer renderer, LinkInline link)
+        System.Text.StringBuilder escaped = new(value.Length * 2);
+        foreach (char character in value)
+        {
+            if (Array.IndexOf(markdownPunctuation, character) >= 0)
+            {
+                escaped.Append('\\');
+            }
+
+            escaped.Append(character);
+        }
+
+        return escaped.ToString();
+    }
+
+    private sealed class SafeHtmlInlineRenderer : NormalizeObjectRenderer<HtmlInline>
+    {
+        protected override void Write(NormalizeRenderer renderer, HtmlInline inline)
+            => renderer.Write(EscapeMarkdownLiteral(inline.Tag));
+    }
+
+    private sealed class SafeHtmlBlockRenderer : NormalizeObjectRenderer<HtmlBlock>
+    {
+        protected override void Write(NormalizeRenderer renderer, HtmlBlock block)
+            => renderer.Write(EscapeMarkdownLiteral(block.Lines.ToString()));
+    }
+
+    private sealed class SafeLinkInlineRenderer : NormalizeObjectRenderer<LinkInline>
+    {
+        protected override void Write(NormalizeRenderer renderer, LinkInline link)
         {
             string? destination = link.GetDynamicUrl?.Invoke() ?? link.Url;
-            if (link.IsImage || !renderer.EnableHtmlForInline || !TryGetSafeDestination(destination, out string safeDestination))
+            if (link.IsImage || !TryGetSafeDestination(destination, out string safeDestination))
             {
                 renderer.WriteChildren(link);
                 return;
             }
 
-            renderer.Write("<a href=\"");
-            renderer.WriteEscapeUrl(safeDestination);
-            renderer.Write('"');
-            if (!string.IsNullOrEmpty(link.Title))
-            {
-                renderer.Write(" title=\"");
-                renderer.WriteEscape(link.Title);
-                renderer.Write('"');
-            }
-
-            renderer.Write('>');
+            renderer.Write('[');
             renderer.WriteChildren(link);
-            renderer.Write("</a>");
+            renderer.Write("](<");
+            renderer.Write(safeDestination);
+            renderer.Write(">)");
         }
     }
 
-    private sealed class SafeAutolinkInlineRenderer : AutolinkInlineRenderer
+    private sealed class SafeAutolinkInlineRenderer : NormalizeObjectRenderer<AutolinkInline>
     {
-        protected override void Write(HtmlRenderer renderer, AutolinkInline link)
+        protected override void Write(NormalizeRenderer renderer, AutolinkInline link)
         {
-            if (link.IsEmail || !renderer.EnableHtmlForInline || !TryGetSafeDestination(link.Url, out string safeDestination))
+            if (!TryGetSafeDestination(link.Url, out string safeDestination))
             {
-                renderer.WriteEscape(link.Url);
+                renderer.Write(EscapeMarkdownLiteral(link.Url));
                 return;
             }
 
-            renderer.Write("<a href=\"");
-            renderer.WriteEscapeUrl(safeDestination);
-            renderer.Write("\">");
-            renderer.WriteEscape(link.Url);
-            renderer.Write("</a>");
+            renderer.Write('[');
+            renderer.Write(EscapeMarkdownLiteral(link.Url));
+            renderer.Write("](<");
+            renderer.Write(safeDestination);
+            renderer.Write(">)");
+        }
+    }
+
+    private sealed class OmitLinkReferenceDefinitionsRenderer : NormalizeObjectRenderer<LinkReferenceDefinitionGroup>
+    {
+        protected override void Write(NormalizeRenderer renderer, LinkReferenceDefinitionGroup group)
+        {
         }
     }
 }
