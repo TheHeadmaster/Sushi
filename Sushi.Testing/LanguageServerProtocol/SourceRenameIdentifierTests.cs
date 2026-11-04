@@ -30,6 +30,7 @@ public sealed class SourceRenameIdentifierTests
     [TestCase("123total")]
     [TestCase("total-value")]
     [TestCase("total value")]
+    [TestCase("\uFEFFtotal")]
     [TestCase("@ordinaryName")]
     [TestCase("@@return")]
     public void InvalidOrIncompleteIdentifierSpellingsShouldBeRejected(string spelling)
