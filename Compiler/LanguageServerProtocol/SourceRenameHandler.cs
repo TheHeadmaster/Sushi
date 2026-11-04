@@ -99,12 +99,7 @@ public sealed class SourceRenameHandler(WorkspaceOrchestrator workspace) : Renam
 
         WorkspaceEdit workspaceEdit = this.CreateWorkspaceEdit(edits, analysisSet, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        if (!await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken))
-        {
-            return await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken) ? workspaceEdit : null;
-        }
-
-        return workspaceEdit;
+        return await this.workspace.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken) ? workspaceEdit : null;
     }
 
     /// <inheritdoc />
