@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NUnit.Framework;
+using Sushi.Analysis;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.LanguageServerProtocol;
