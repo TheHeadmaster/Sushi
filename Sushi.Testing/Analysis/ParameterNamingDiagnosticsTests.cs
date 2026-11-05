@@ -68,19 +68,17 @@ public sealed class ParameterNamingDiagnosticsTests
     }
 
     [Test]
-    public async Task EscapedNamesShouldUseTheirSemanticSpellingAndDiscardShouldRemainUnaffected()
+    public async Task EscapedReservedParameterNamesShouldBindAfterUnescapingAndIgnoreDiscard()
     {
-        const string source = Header + "private void Run(int32 @arg, int32 @param2, int32 _) {}";
-        IReadOnlyList<SushiDiagnostic> diagnostics = (await Analyze(source)).Diagnostics;
-        SushiDiagnostic[] warnings = PlaceholderWarnings(diagnostics);
+        const string source = Header + "private void Run(int32 @return, int32 @public, int32 _) {}";
+        (SourceSnapshot Snapshot, SourceAnalysisResult Analysis, IReadOnlyList<SushiDiagnostic> Diagnostics) result = await Analyze(source);
 
-        warnings.Should().HaveCount(2);
-        warnings.Select(warning => DecodeSpan(warning.Span))
+        result.Analysis.Functions.Should().ContainSingle().Which.Parameters
+            .Select(parameter => parameter.Name)
             .Should()
-            .Equal("@arg", "@param2");
-        warnings.Select(warning => warning.DisplayName)
-            .Should()
-            .OnlyContain(name => name == "SUSW0022");
+            .Equal("return", "public", "_");
+        result.Diagnostics.Should().NotContain(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        PlaceholderWarnings(result.Diagnostics).Should().BeEmpty();
     }
 
     [TestCase("public")]
