@@ -55,7 +55,7 @@ internal static class DocumentationContentParser
                 continue;
             }
 
-            bool[] inlineCode = ParseInlineReferences(lines[index], content, references, ref inlineCodeDelimiterLength, cancellationToken);
+            bool[] inlineCode = ParseInlineReferences(lines, index, source, lines[index], content, references, ref inlineCodeDelimiterLength, cancellationToken);
             DirectiveCandidate? candidate = ParseDirective(lines[index], content, inlineCode, diagnosticReporter);
             candidates[index] = candidate;
         }
