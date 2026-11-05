@@ -473,7 +473,7 @@ internal sealed class ProjectDiagnosticAnalyzer
 
     private static bool TryBindDocumentationIdentifier(string spelling, CancellationToken cancellationToken, out SyntaxToken token)
     {
-        if (spelling.IndexOf('\uFEFF') >= 0)
+        if (spelling.Contains('\uFEFF', StringComparison.Ordinal))
         {
             token = default;
             return false;
@@ -505,7 +505,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             return false;
         }
 
-        int signatureStart = writtenTarget.IndexOf('(');
+        int signatureStart = writtenTarget.IndexOf('(', StringComparison.Ordinal);
         string qualifiedName = signatureStart < 0 ? writtenTarget : writtenTarget[..signatureStart];
         string[] components = qualifiedName.Split('.');
         if (components.Length == 0 || components.Any(string.IsNullOrWhiteSpace)
