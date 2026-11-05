@@ -20,6 +20,9 @@ public sealed class DocumentationReferenceResolutionTests
             namespace Example;
             /// {@link Calculate} and {@link Calculate()}.
             /// An unmatched ` delimiter precedes {@link Calculate}.
+            /// A matched multiline ` span starts here.
+            /// {@link Missing} is illustrative code.
+            /// and closes here ` before the next reference.
             public int32 Calculate() { return 1; }
             /// {@link Calculate(int32)} and {@link Example.Example.Calculate(int32) | calculation}.
             public int32 Calculate(int32 amount) { return amount; }
@@ -64,6 +67,8 @@ public sealed class DocumentationReferenceResolutionTests
         int unmatchedReferenceOffset = source.IndexOf("{@link Calculate}", source.IndexOf("An unmatched", StringComparison.Ordinal), StringComparison.Ordinal) + "{@link ".Length;
         analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
             && item.Span.Start == unmatchedReferenceOffset && item.Symbol.Name == "Calculate");
+        int multilineCodeReferenceOffset = source.IndexOf("{@link Missing}", StringComparison.Ordinal);
+        analysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Span.Start == multilineCodeReferenceOffset);
         int escapedBuiltInOffset = source.IndexOf("@int32()", source.IndexOf("{@link @return", StringComparison.Ordinal), StringComparison.Ordinal);
         analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
             && item.Span.Start == escapedBuiltInOffset && item.Symbol.Name == "int32");
@@ -103,26 +108,43 @@ public sealed class DocumentationReferenceResolutionTests
             package Example;
             namespace Math;
             public int32 Calculate(int32 value) { return value; }
+            package int32 PackageOnly(int32 value) { return value; }
             """);
         string caller = """
-            package Example;
+            package Caller;
             namespace Caller;
             /// {@link Example.Math.Calculate(int32) | calculation}
+            /// {@link Example.Math.PackageOnly(int32)}
             public int32 Use() { return 1; }
             """;
         await File.WriteAllTextAsync(callerPath, caller);
+        string samePackage = """
+            package Example;
+            namespace Client;
+            /// {@link Example.Math.PackageOnly(int32)}
+            public int32 UsePackageFunction() { return 1; }
+            """;
+        string samePackagePath = Path.Combine(directory, "SamePackage.sus");
+        await File.WriteAllTextAsync(samePackagePath, samePackage);
 
         try
         {
             SourceSnapshot project = SourceSnapshot.FromText(new Uri(projectPath), 1, await File.ReadAllTextAsync(projectPath));
             SourceSnapshot library = SourceSnapshot.FromText(new Uri(libraryPath), 1, await File.ReadAllTextAsync(libraryPath));
             SourceSnapshot calling = SourceSnapshot.FromText(new Uri(callerPath), 1, caller);
+            SourceSnapshot samePackageCalling = SourceSnapshot.FromText(new Uri(samePackagePath), 1, samePackage);
             IReadOnlyList<ProjectDiagnosticResult> results = await new ProjectDiagnosticAnalyzer().AnalyzeAsync(
-                [project, library, calling], null, CancellationToken.None);
+                [project, library, calling, samePackageCalling], null, CancellationToken.None);
             SourceAnalysisResult callerAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(callerPath)));
             callerAnalysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Symbol.Name == "Calculate")
                 .Should().ContainSingle(item => item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
+            callerAnalysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly");
+            SourceAnalysisResult samePackageAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
+                .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(samePackagePath)));
+            samePackageAnalysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly"
+                && item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
+            results.SelectMany(item => item.Reporter.ReportDiagnostics()).Select(item => item.DisplayName).Should().Contain("SUSW0014");
             results.SelectMany(item => item.Reporter.ReportDiagnostics())
                 .Where(item => item.DisplayName is "SUSW0012" or "SUSW0013" or "SUSW0014" or "SUSW0015")
                 .Should().BeEmpty();
