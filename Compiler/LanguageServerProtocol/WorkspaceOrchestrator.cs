@@ -10,6 +10,7 @@ using OmniSharpDiagnosticSeverity = OmniSharp.Extensions.LanguageServer.Protocol
 using LSPRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Workspace;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
 using Sushi.Lexing;
