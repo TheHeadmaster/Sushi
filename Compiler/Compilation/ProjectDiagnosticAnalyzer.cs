@@ -526,6 +526,9 @@ internal sealed class ProjectDiagnosticAnalyzer
         return true;
     }
 
+    private static bool QualifierMatches(SourceAnalysisResult source, string qualifier, CancellationToken cancellationToken)
+        => QualifierMatches(source, qualifier, source, cancellationToken);
+
     private static bool QualifierMatches(SourceAnalysisResult target, string qualifier, SourceAnalysisResult requester, CancellationToken cancellationToken)
     {
         string[] components = qualifier.Split('.');
