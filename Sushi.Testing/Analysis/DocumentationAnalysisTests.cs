@@ -671,6 +671,8 @@ public sealed class DocumentationAnalysisTests
             + "/// résumé {@link Calculate(int32) | calculation} and {@param value}\n"
             + "/// `{@link InlineCode}` \\{@link Escaped} {@link incomplete\n"
             + "/// ```sushi\n/// {@link FenceExample}\n/// ```\n"
+            + "/// @param value The value to calculate.\n"
+            + "/// @return The calculated result.\n"
             + "public int32 Calculate(int32 value) { return value; }";
         (SourceAnalysisResult result, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
         DocumentationBlock block = result.DocumentationBlocks.Should().ContainSingle().Subject;
