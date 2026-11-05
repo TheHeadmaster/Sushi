@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
 import {
+	createDocumentationScaffoldReplacementRange,
 	createDocumentationScaffoldSnippet,
 	DocumentationScaffoldRequestGate,
 	identifyThirdSlashTyping,
@@ -64,10 +65,14 @@ export function registerDocumentationScaffolds(context: vscode.ExtensionContext,
 				return;
 			}
 
+			const lineEnding = currentEditor.document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n';
 			const snippet = new vscode.SnippetString(createDocumentationScaffoldSnippet(
-				response.parameterNames, response.hasReturnDescription,
-				currentEditor.document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n'));
-			await currentEditor.insertSnippet(snippet, new vscode.Range(lineNumber, trigger.slashColumn, lineNumber, triggerCharacter));
+				response.parameterNames, response.hasReturnDescription, trigger.indentation, lineEnding));
+			const replacement = createDocumentationScaffoldReplacementRange(lineNumber, trigger.slashColumn);
+			await currentEditor.insertSnippet(snippet, new vscode.Range(
+				replacement.start.line, replacement.start.character, replacement.end.line, replacement.end.character), {
+					keepWhitespace: true, undoStopBefore: true, undoStopAfter: true
+				});
 		} catch (error) {
 			output.appendLine(`Documentation scaffold request failed: ${String(error)}`);
 		}

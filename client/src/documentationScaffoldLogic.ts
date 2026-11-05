@@ -10,6 +10,11 @@ export interface TripleSlashTyping {
 	readonly slashColumn: number;
 }
 
+export interface DocumentationScaffoldReplacementRange {
+	readonly start: { readonly line: number; readonly character: number };
+	readonly end: { readonly line: number; readonly character: number };
+}
+
 /** Identifies the single slash typed after an indentation-only pair of slashes. */
 export function identifyThirdSlashTyping(
 	typedText: string,
@@ -37,6 +42,7 @@ export function identifyThirdSlashTyping(
 export function createDocumentationScaffoldSnippet(
 	parameterNames: readonly string[],
 	hasReturnDescription: boolean,
+	indentation: string,
 	lineEnding: string
 ): string {
 	const lines = [`/// ${placeholder(1)}`];
@@ -52,7 +58,12 @@ export function createDocumentationScaffoldSnippet(
 		}
 	}
 
-	return lines.join(lineEnding);
+	const indentedLines = lines.map((line, index) => index === 0 ? line : indentation + line);
+	return `${indentedLines.join(lineEnding)}${lineEnding}$0`;
+}
+
+export function createDocumentationScaffoldReplacementRange(line: number, slashColumn: number): DocumentationScaffoldReplacementRange {
+	return { start: { line, character: slashColumn }, end: { line: line + 1, character: 0 } };
 }
 
 export class DocumentationScaffoldRequestGate {
