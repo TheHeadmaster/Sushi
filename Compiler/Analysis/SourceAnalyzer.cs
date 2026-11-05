@@ -71,6 +71,9 @@ public sealed class SourceAnalyzer : Analyzer
         cancellationToken.ThrowIfCancellationRequested();
 
         SourceFileSyntax sourceFile = (SourceFileSyntax)parserResult.Tree.Root;
+        ParameterNamingValidator.Validate(sourceFile, localDiagnostics, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
         IReadOnlyList<DocumentationBlock> documentationBlocks = DocumentationProcessor.Process(lexerResult, sourceFile, localDiagnostics, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 

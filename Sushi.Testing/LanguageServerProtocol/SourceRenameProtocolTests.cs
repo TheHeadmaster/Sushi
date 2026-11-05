@@ -120,6 +120,61 @@ public sealed class SourceRenameProtocolTests
         }
     }
 
+    [Test]
+    public async Task PlaceholderParameterWarningShouldFollowCurrentOpenDocumentVersion()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "Sushi.Testing", "ParameterDiagnostics " + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        string path = Path.Combine(directory, "Program.sus");
+        string uri = new Uri(path).AbsoluteUri;
+        const string source = "package Example;\nnamespace Example;\nprivate void Run(int32 arg1) {}";
+        const string editedSource = "package Example;\nnamespace Example;\nprivate void Run(int32 amount) {}";
+
+        try
+        {
+            await using LanguageServerSession session = new(directory);
+            _ = await session.Request("initialize", new
+            {
+                processId = (int?)null,
+                capabilities = new { },
+                workspaceFolders = new[] { new { uri = new Uri(directory).AbsoluteUri, name = "ParameterDiagnostics" } }
+            });
+            await session.Notify("initialized", new { });
+            await File.WriteAllTextAsync(path, source);
+            await session.Notify("textDocument/didOpen", new
+            {
+                textDocument = new { uri, languageId = "sushi", version = 1, text = source }
+            });
+
+            JsonElement opened = await session.WaitForNotification("textDocument/publishDiagnostics");
+            opened.GetProperty("version").GetInt32().Should().Be(1);
+            JsonElement initialWarning = opened.GetProperty("diagnostics").EnumerateArray()
+                .Should()
+                .ContainSingle(diagnostic => diagnostic.GetProperty("code").GetString() == "SUSW0022")
+                .Subject;
+            int parameterColumn = "private void Run(int32 ".Length;
+            initialWarning.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32().Should().Be(2);
+            initialWarning.GetProperty("range").GetProperty("start").GetProperty("character").GetInt32().Should().Be(parameterColumn);
+            initialWarning.GetProperty("range").GetProperty("end").GetProperty("character").GetInt32().Should().Be(parameterColumn + 4);
+
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri, version = 2 },
+                contentChanges = new[] { new { text = editedSource } }
+            });
+
+            JsonElement changed = await session.WaitForNotification("textDocument/publishDiagnostics");
+            changed.GetProperty("version").GetInt32().Should().Be(2);
+            changed.GetProperty("diagnostics").EnumerateArray()
+                .Should()
+                .NotContain(diagnostic => diagnostic.GetProperty("code").GetString() == "SUSW0022");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static JsonElement GetChangesForPath(JsonElement changes, string path)
     {
         JsonProperty[] matches = [.. changes.EnumerateObject().Where(item => IsSameFileUri(item.Name, path))];
@@ -181,6 +236,27 @@ public sealed class SourceRenameProtocolTests
             catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
             {
                 throw new TimeoutException($"Sending language server notification '{method}' timed out after {RequestTimeout}.", exception);
+            }
+        }
+
+        internal async Task<JsonElement> WaitForNotification(string method, CancellationToken cancellationToken = default)
+        {
+            using CancellationTokenSource timeout = CreateTimeout(RequestTimeout, cancellationToken);
+            try
+            {
+                while (true)
+                {
+                    JsonElement message = await this.ReadMessage(method, timeout.Token);
+                    if (message.TryGetProperty("method", out JsonElement receivedMethod)
+                        && receivedMethod.GetString() == method)
+                    {
+                        return message.GetProperty("params").Clone();
+                    }
+                }
+            }
+            catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Waiting for language server notification '{method}' timed out after {RequestTimeout}.", exception);
             }
         }
 

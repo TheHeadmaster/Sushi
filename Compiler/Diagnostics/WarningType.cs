@@ -21,5 +21,6 @@ public enum WarningType
     UnresolvedDocumentationReference = 12,
     AmbiguousDocumentationReference = 13,
     InaccessibleDocumentationReference = 14,
-    UnknownDocumentationReferenceParameter = 15
+    UnknownDocumentationReferenceParameter = 15,
+    PlaceholderParameterName = 22
 }

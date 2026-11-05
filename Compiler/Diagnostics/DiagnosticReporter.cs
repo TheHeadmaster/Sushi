@@ -68,7 +68,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [WarningType.UnresolvedDocumentationReference] = "Explicit semantic documentation reference does not resolve to an eligible symbol.",
         [WarningType.AmbiguousDocumentationReference] = "Explicit semantic documentation reference resolves ambiguously.",
         [WarningType.InaccessibleDocumentationReference] = "Explicit semantic documentation reference names a symbol that is inaccessible in its authored context.",
-        [WarningType.UnknownDocumentationReferenceParameter] = "Inline {@param} reference does not name a parameter of the declaration owning the documentation block."
+        [WarningType.UnknownDocumentationReferenceParameter] = "Inline {@param} reference does not name a parameter of the declaration owning the documentation block.",
+        [WarningType.PlaceholderParameterName] = "Parameter name appears to be a placeholder. Consider a more descriptive identifier."
     };
 
     /// <inheritdoc />
