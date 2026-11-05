@@ -103,7 +103,7 @@ internal static class DocumentationContentParser
     private static bool[] ParseInlineReferences(Line line, ReadOnlySpan<byte> content,
         ICollection<DocumentationReference> references, ref int inlineCodeDelimiterLength, CancellationToken cancellationToken)
     {
-        bool[] inlineCode = MarkInlineCode(content, ref inlineCodeDelimiterLength, cancellationToken);
+        bool[] inlineCode = MarkInlineCode(content, lines, index, source, ref inlineCodeDelimiterLength, cancellationToken);
         for (int index = 0; index < content.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -271,7 +271,7 @@ internal static class DocumentationContentParser
             null, [], null, false, wellFormed);
     }
 
-    private static bool[] MarkInlineCode(ReadOnlySpan<byte> content, ref int openDelimiterLength, CancellationToken cancellationToken)
+    private static bool[] MarkInlineCode(ReadOnlySpan<byte> content, IReadOnlyList<Line> lines, int lineIndex, ReadOnlySpan<byte> source, ref int openDelimiterLength, CancellationToken cancellationToken)
     {
         bool[] marked = new bool[content.Length];
         int position = 0;
@@ -304,9 +304,15 @@ internal static class DocumentationContentParser
             int closing = FindMatchingBacktickRun(content, runEnd, runLength, cancellationToken);
             if (closing < 0)
             {
-                Array.Fill(marked, true, position, content.Length - position);
-                openDelimiterLength = runLength;
-                break;
+                if (HasMatchingBacktickRun(lines, lineIndex + 1, source, runLength, cancellationToken))
+                {
+                    Array.Fill(marked, true, position, content.Length - position);
+                    openDelimiterLength = runLength;
+                    break;
+                }
+
+                position = runEnd;
+                continue;
             }
 
             int closingEnd = FindBacktickRunEnd(content, closing, cancellationToken);
@@ -315,6 +321,26 @@ internal static class DocumentationContentParser
         }
 
         return marked;
+    }
+
+    private static bool HasMatchingBacktickRun(
+        IReadOnlyList<Line> lines,
+        int startLine,
+        ReadOnlySpan<byte> source,
+        int expectedLength,
+        CancellationToken cancellationToken)
+    {
+        for (int candidateLine = startLine; candidateLine < lines.Count; candidateLine++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ReadOnlySpan<byte> candidateContent = GetBytes(source, lines[candidateLine].Content);
+            if (FindMatchingBacktickRun(candidateContent, 0, expectedLength, cancellationToken) >= 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int FindMatchingBacktickRun(ReadOnlySpan<byte> content, int start, int expectedLength, CancellationToken cancellationToken)
