@@ -104,7 +104,7 @@ internal static class DocumentationContentParser
         Line line, ReadOnlySpan<byte> content, ICollection<DocumentationReference> references,
         ref int inlineCodeDelimiterLength, CancellationToken cancellationToken)
     {
-        bool[] inlineCode = MarkInlineCode(content, lines, index, source, ref inlineCodeDelimiterLength, cancellationToken);
+        bool[] inlineCode = MarkInlineCode(content, lines, lineIndex, source, ref inlineCodeDelimiterLength, cancellationToken);
         for (int index = 0; index < content.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
