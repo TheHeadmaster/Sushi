@@ -12,6 +12,20 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - name: Install TypeScript dependencies
+      run: npm ci
+    - name: Generate syntax grammars
+      run: npm run generate:syntax
+    - name: Compile VS Code extension
+      run: npm run compile
+    - name: Lint
+      run: npm run lint
+    - name: Test inspection and extension behavior
+      run: npm run test:inspection
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:

@@ -164,6 +164,12 @@ public sealed class FunctionDeclarationBinder
                 continue;
             }
 
+            if (name is "_")
+            {
+                parameters.Add(new BoundParameter(parameters.Count, name, type));
+                continue;
+            }
+
             if (!names.Add(name))
             {
                 diagnosticReporter.GenerateError(ErrorType.DuplicateParameter, declaration.NameToken.Span);

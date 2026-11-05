@@ -266,7 +266,7 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
             this.cancellationToken.ThrowIfCancellationRequested();
 
             SyntaxToken type = this.ParseParameterType(diagnosticReporter);
-            SyntaxToken name = this.ParseNameComponent("Expected parameter name.", skipUnknown: false, diagnosticReporter);
+            SyntaxToken name = this.ParseParameterName(diagnosticReporter);
             parameters.Add(new ParameterSyntax(type, name));
 
             if (this.cursor.TryConsumePunctuation((byte)',', out LexToken comma))
@@ -305,6 +305,22 @@ internal sealed class DeclarationParser(ParserCursor cursor, CancellationToken c
 
         return (parameters, separators);
     }
+
+    private SyntaxToken ParseParameterName(IDiagnosticReporter diagnosticReporter)
+    {
+        if (this.cursor.TryPeek(out LexToken token)
+            && token.Type is LexTokenType.Unknown
+            && IsDiscardSpelling(token))
+        {
+            this.cursor.TryAdvance(out LexToken discard);
+            return new SyntaxToken(SyntaxType.IdentifierToken, discard);
+        }
+
+        return this.ParseNameComponent("Expected parameter name.", skipUnknown: false, diagnosticReporter);
+    }
+
+    private bool IsDiscardSpelling(LexToken token)
+        => this.cursor.Snapshot.Bytes.Span[token.Span.Start..token.Span.End].SequenceEqual("_"u8);
 
     private SyntaxToken ParseParameterType(IDiagnosticReporter diagnosticReporter)
     {

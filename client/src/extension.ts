@@ -1,6 +1,7 @@
 import * as net from 'net';
 import * as path from 'path';
 import { registerInspection } from './inspection';
+import { registerDocumentationScaffolds } from './documentationScaffolds';
 import {
 	ExtensionContext,
 	ExtensionMode
@@ -36,6 +37,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 	);
 
 	registerInspection(context, client);
+	registerDocumentationScaffolds(context, client);
 	await client.start();
 }
 

@@ -153,8 +153,18 @@ internal static class DocumentationValidator
             if (!parameter.TypeToken.IsSourceBacked
                 || IdentifierBinder.Bind(parameter.TypeToken) is not ("int32" or "bool")
                 || !parameter.NameToken.IsSourceBacked
-                || IdentifierBinder.Bind(parameter.NameToken) is not string name
-                || !declaredParameters.TryAdd(name, parameter.NameToken))
+                || IdentifierBinder.Bind(parameter.NameToken) is not string name)
+            {
+                declaredParameters.Clear();
+                return false;
+            }
+
+            if (name is "_")
+            {
+                continue;
+            }
+
+            if (!declaredParameters.TryAdd(name, parameter.NameToken))
             {
                 declaredParameters.Clear();
                 return false;
