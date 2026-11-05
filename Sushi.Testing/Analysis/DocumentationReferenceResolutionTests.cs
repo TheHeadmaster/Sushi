@@ -39,7 +39,7 @@ public sealed class DocumentationReferenceResolutionTests
         SourceSnapshot snapshot = SourceSnapshot.FromText(new Uri("file:///DocumentationReferences.sus"), 1, source);
         IReadOnlyList<ProjectDiagnosticResult> results = await new ProjectDiagnosticAnalyzer().AnalyzeAsync(
             [snapshot], null, CancellationToken.None);
-        SourceAnalysisResult analysis = results.Select(item => item.Analysis).OfType<Sushi.Analysis.SourceAnalysisResult>().Single();
+        SourceAnalysisResult analysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>().Single();
         IReadOnlyList<SushiDiagnostic> diagnostics = results.Single().Reporter.ReportDiagnostics();
 
         analysis.SemanticOccurrences.Where(item => !item.IsDeclaration)
@@ -112,7 +112,7 @@ public sealed class DocumentationReferenceResolutionTests
             SourceSnapshot calling = SourceSnapshot.FromText(new Uri(callerPath), 1, caller);
             IReadOnlyList<ProjectDiagnosticResult> results = await new ProjectDiagnosticAnalyzer().AnalyzeAsync(
                 [project, library, calling], null, CancellationToken.None);
-            SourceAnalysisResult callerAnalysis = results.Select(item => item.Analysis).OfType<Sushi.Analysis.SourceAnalysisResult>()
+            SourceAnalysisResult callerAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(callerPath)));
             callerAnalysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Symbol.Name == "Calculate")
                 .Should().ContainSingle(item => item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
