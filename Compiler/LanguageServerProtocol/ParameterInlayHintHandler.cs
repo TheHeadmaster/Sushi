@@ -88,6 +88,14 @@ public sealed class ParameterInlayHintHandler(WorkspaceOrchestrator workspace) :
     }
 
     /// <inheritdoc />
+    public override Task<InlayHint> Handle(InlayHint request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(request);
+        return Task.FromResult(request);
+    }
+
+    /// <inheritdoc />
     protected override InlayHintRegistrationOptions CreateRegistrationOptions(InlayHintClientCapabilities capability, ClientCapabilities clientCapabilities)
         => new()
         {
