@@ -139,15 +139,16 @@ public sealed class DocumentationReferenceResolutionTests
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(callerPath)));
             callerAnalysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Symbol.Name == "Calculate")
                 .Should().ContainSingle(item => item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
+            int inaccessibleReferenceOffset = caller.IndexOf("PackageOnly", StringComparison.Ordinal);
+            SourceDefinitionResolver.Resolve(callerAnalysis, inaccessibleReferenceOffset, CancellationToken.None).Should().BeNull();
             callerAnalysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly");
             SourceAnalysisResult samePackageAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(samePackagePath)));
             samePackageAnalysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly"
                 && item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
-            results.SelectMany(item => item.Reporter.ReportDiagnostics()).Select(item => item.DisplayName).Should().Contain("SUSW0014");
             results.SelectMany(item => item.Reporter.ReportDiagnostics())
                 .Where(item => item.DisplayName is "SUSW0012" or "SUSW0013" or "SUSW0014" or "SUSW0015")
-                .Should().BeEmpty();
+                .Should().ContainSingle(item => item.DisplayName == "SUSW0014");
         }
         finally
         {
