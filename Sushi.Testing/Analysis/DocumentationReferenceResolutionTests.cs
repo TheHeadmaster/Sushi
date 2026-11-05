@@ -19,6 +19,7 @@ public sealed class DocumentationReferenceResolutionTests
             package Example;
             namespace Example;
             /// {@link Calculate} and {@link Calculate()}.
+            /// An unmatched ` delimiter precedes {@link Calculate}.
             public int32 Calculate() { return 1; }
             /// {@link Calculate(int32)} and {@link Example.Example.Calculate(int32) | calculation}.
             public int32 Calculate(int32 amount) { return amount; }
@@ -60,6 +61,9 @@ public sealed class DocumentationReferenceResolutionTests
         int linkTargetOffset = source.IndexOf("Calculate", source.IndexOf("{@link Calculate(int32)", StringComparison.Ordinal), StringComparison.Ordinal);
         analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
             && item.Span.Start == linkTargetOffset && item.Symbol.Name == "Calculate");
+        int unmatchedReferenceOffset = source.IndexOf("{@link Calculate}", source.IndexOf("An unmatched", StringComparison.Ordinal), StringComparison.Ordinal) + "{@link ".Length;
+        analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
+            && item.Span.Start == unmatchedReferenceOffset && item.Symbol.Name == "Calculate");
         int escapedBuiltInOffset = source.IndexOf("@int32()", source.IndexOf("{@link @return", StringComparison.Ordinal), StringComparison.Ordinal);
         analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
             && item.Span.Start == escapedBuiltInOffset && item.Symbol.Name == "int32");
