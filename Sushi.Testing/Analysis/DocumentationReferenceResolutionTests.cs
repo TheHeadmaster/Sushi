@@ -68,6 +68,8 @@ public sealed class DocumentationReferenceResolutionTests
         analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
             && item.Span.Start == escapedBuiltInOffset && item.Symbol.Name == "int32");
 
+        analysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name is "Missing" or "Hidden");
+
         diagnostics.Select(item => item.DisplayName)
             .Should().Contain("SUSW0013")
             .And.Contain("SUSW0014")
