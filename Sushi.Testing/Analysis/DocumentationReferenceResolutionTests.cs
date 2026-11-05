@@ -152,7 +152,7 @@ public sealed class DocumentationReferenceResolutionTests
                 WorkspaceEdit? rename = await new SourceRenameHandler(workspace).Handle(new RenameParams
                 {
                     TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(callerPath) },
-                    Position = new Position(2, caller.IndexOf("PackageOnly", StringComparison.Ordinal)),
+                    Position = new Position(3, caller.Split('\n')[3].IndexOf("PackageOnly", StringComparison.Ordinal)),
                     NewName = "Renamed"
                 }, CancellationToken.None);
                 rename.Should().BeNull();
