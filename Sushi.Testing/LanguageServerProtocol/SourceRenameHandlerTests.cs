@@ -125,6 +125,10 @@ public sealed class SourceRenameHandlerTests
         const string caller = "package Example; namespace Math;\n/// {@link Calculate(int32)} is used here.\npublic int32 Caller() { return Calculate(1); }";
         try
         {
+            await File.WriteAllTextAsync(projectPath, project);
+            await File.WriteAllTextAsync(definitionPath, definition);
+            await File.WriteAllTextAsync(callerPath, caller);
+
             using WorkspaceOrchestrator workspace = new();
             await workspace.OpenDocument(new Uri(projectPath), 1, project, CancellationToken.None);
             await workspace.OpenDocument(new Uri(definitionPath), 1, definition, CancellationToken.None);
