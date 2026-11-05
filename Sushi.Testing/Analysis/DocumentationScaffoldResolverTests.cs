@@ -29,8 +29,8 @@ public sealed class DocumentationScaffoldResolverTests
     [TestCase("protected")]
     public async Task CallableScaffoldsShouldNotDependOnAccessibility(string access)
     {
-        SourceAnalysisResult analysis = await Analyze($"package Example;\n///\n{access} void Run() {{}}");
-        DocumentationScaffold? scaffold = DocumentationScaffoldResolver.Resolve(analysis, 1, 3, CancellationToken.None);
+        SourceAnalysisResult analysis = await Analyze($"package Example;\nnamespace Example;\n///\n{access} void Run() {{}}");
+        DocumentationScaffold? scaffold = DocumentationScaffoldResolver.Resolve(analysis, 2, 3, CancellationToken.None);
 
         scaffold.Should().NotBeNull();
         scaffold!.ParameterNames.Should().BeEmpty();
