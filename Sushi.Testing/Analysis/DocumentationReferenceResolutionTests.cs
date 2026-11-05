@@ -26,9 +26,10 @@ public sealed class DocumentationReferenceResolutionTests
             /// and closes here ` before the next reference.
             /// An unmatched ` delimiter precedes {@link Calculate}.
             public int32 Calculate() { return 1; }
-            /// {@link Calculate(int32)} and {@link Example.Example.Calculate(int32) | calculation}.
-            public int32 Calculate(int32 amount) { return amount; }
-            /// {@link Calculate}
+            /// {@link Convert(int32)} and {@link Example.Example.Convert(int32) | calculation}.
+            public int32 Convert(int32 amount) { return amount; }
+            public int32 Convert() { return 1; }
+            /// {@link Convert}
             public int32 Ambiguous() { return 1; }
             private int32 Hidden() { return 1; }
             /// {@link Hidden}
@@ -58,16 +59,16 @@ public sealed class DocumentationReferenceResolutionTests
         analysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Span.Snapshot == snapshot)
             .Any(item => item.Symbol.Name == "int32").Should().BeTrue();
 
-        int declarationOffset = source.IndexOf("Calculate(int32 amount)", StringComparison.Ordinal);
+        int declarationOffset = source.IndexOf("Convert(int32 amount)", StringComparison.Ordinal);
         SourceHoverResult? hover = SourceHoverResolver.Resolve(analysis, declarationOffset, CancellationToken.None);
         hover.Should().NotBeNull();
-        hover!.Markdown.Should().Contain("Calculate(int32)")
+        hover!.Markdown.Should().Contain("Convert(int32)")
             .And.Contain("calculation")
             .And.NotContain("{@link");
 
-        int linkTargetOffset = source.IndexOf("Calculate", source.IndexOf("{@link Calculate(int32)", StringComparison.Ordinal), StringComparison.Ordinal);
+        int linkTargetOffset = source.IndexOf("Convert", source.IndexOf("{@link Convert(int32)", StringComparison.Ordinal), StringComparison.Ordinal);
         analysis.SemanticOccurrences.Any(item => !item.IsDeclaration
-            && item.Span.Start == linkTargetOffset && item.Symbol.Name == "Calculate").Should().BeTrue();
+            && item.Span.Start == linkTargetOffset && item.Symbol.Name == "Convert").Should().BeTrue();
         int unmatchedReferenceOffset = source.IndexOf("{@link Calculate}", source.IndexOf("An unmatched", StringComparison.Ordinal), StringComparison.Ordinal) + "{@link ".Length;
         analysis.SemanticOccurrences.Any(item => !item.IsDeclaration
             && item.Span.Start == unmatchedReferenceOffset && item.Symbol.Name == "Calculate").Should().BeTrue();
