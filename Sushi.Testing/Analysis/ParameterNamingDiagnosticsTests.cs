@@ -18,7 +18,7 @@ public sealed class ParameterNamingDiagnosticsTests
     [Test]
     public async Task RecognizedPlaceholderNamesShouldProduceOneWarningInSourceOrder()
     {
-        string[] names = ["arg", "arg0", "arg1", "arg123", "param", "param0", "param2", "param99", "param123", "foo", "temp"];
+        string[] names = ["arg", "arg0", "arg1", "arg123", "arg999999999999999999999999999999999999", "param", "param0", "param2", "param99", "param123", "foo", "temp"];
         string parameters = string.Join(", ", names.Select(name => $"int32 {name}"));
         string source = Header + $"private void Run({parameters}) {{}}";
         (SourceSnapshot snapshot, SourceAnalysisResult analysis, IReadOnlyList<SushiDiagnostic> diagnostics) = await Analyze(source);
@@ -60,7 +60,6 @@ public sealed class ParameterNamingDiagnosticsTests
     [TestCase("Arg1")]
     [TestCase("ARG1")]
     [TestCase("Param2")]
-    [TestCase("arg999999999999999999999999999999999999")]
     public async Task OtherIdentifierSpellingsShouldNotProducePlaceholderWarnings(string name)
     {
         IReadOnlyList<SushiDiagnostic> diagnostics = (await Analyze(Header + $"private void Run(int32 {name}) {{}}")).Diagnostics;
@@ -135,7 +134,8 @@ public sealed class ParameterNamingDiagnosticsTests
         SourceSnapshot snapshot = analyzed.Snapshot;
         IReadOnlyList<SushiDiagnostic> diagnostics = analyzed.Diagnostics;
         SushiDiagnostic[] warnings = PlaceholderWarnings(diagnostics);
-        int[] expectedStarts = ["arg1", "param2"]
+        string[] names = ["arg1", "param2"];
+        int[] expectedStarts = names
             .Select(name => ByteOffset(source, source.IndexOf(name, StringComparison.Ordinal)))
             .ToArray();
 
