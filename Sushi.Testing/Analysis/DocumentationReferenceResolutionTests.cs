@@ -21,10 +21,10 @@ public sealed class DocumentationReferenceResolutionTests
             package Example;
             namespace Example;
             /// {@link Calculate} and {@link Calculate()}.
-            /// An unmatched ` delimiter precedes {@link Calculate}.
             /// A matched multiline ` span starts here.
             /// {@link Missing} is illustrative code.
             /// and closes here ` before the next reference.
+            /// An unmatched ` delimiter precedes {@link Calculate}.
             public int32 Calculate() { return 1; }
             /// {@link Calculate(int32)} and {@link Example.Example.Calculate(int32) | calculation}.
             public int32 Calculate(int32 amount) { return amount; }
@@ -49,12 +49,14 @@ public sealed class DocumentationReferenceResolutionTests
         SourceAnalysisResult analysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>().Single();
         IReadOnlyList<SushiDiagnostic> diagnostics = results.Single().Reporter.ReportDiagnostics();
 
-        analysis.SemanticOccurrences.Where(item => !item.IsDeclaration)
-            .Where(item => item.Span.Snapshot == snapshot)
-            .Should().Contain(item => item.Symbol.Name == "Calculate" && item.Symbol.CompilerSymbol is not null)
-            .And.Contain(item => item.Symbol.Name == "own" && item.Symbol.Kind is SourceSemanticSymbolKind.Parameter)
-            .And.Contain(item => item.Symbol.Name == "return")
-            .And.Contain(item => item.Symbol.Name == "int32");
+        analysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Span.Snapshot == snapshot)
+            .Any(item => item.Symbol.Name == "Calculate" && item.Symbol.CompilerSymbol is not null).Should().BeTrue();
+        analysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Span.Snapshot == snapshot)
+            .Any(item => item.Symbol.Name == "own" && item.Symbol.Kind == SourceSemanticSymbolKind.Parameter).Should().BeTrue();
+        analysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Span.Snapshot == snapshot)
+            .Any(item => item.Symbol.Name == "return").Should().BeTrue();
+        analysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Span.Snapshot == snapshot)
+            .Any(item => item.Symbol.Name == "int32").Should().BeTrue();
 
         int declarationOffset = source.IndexOf("Calculate(int32 amount)", StringComparison.Ordinal);
         SourceHoverResult? hover = SourceHoverResolver.Resolve(analysis, declarationOffset, CancellationToken.None);
@@ -64,18 +66,18 @@ public sealed class DocumentationReferenceResolutionTests
             .And.NotContain("{@link");
 
         int linkTargetOffset = source.IndexOf("Calculate", source.IndexOf("{@link Calculate(int32)", StringComparison.Ordinal), StringComparison.Ordinal);
-        analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
-            && item.Span.Start == linkTargetOffset && item.Symbol.Name == "Calculate");
+        analysis.SemanticOccurrences.Any(item => !item.IsDeclaration
+            && item.Span.Start == linkTargetOffset && item.Symbol.Name == "Calculate").Should().BeTrue();
         int unmatchedReferenceOffset = source.IndexOf("{@link Calculate}", source.IndexOf("An unmatched", StringComparison.Ordinal), StringComparison.Ordinal) + "{@link ".Length;
-        analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
-            && item.Span.Start == unmatchedReferenceOffset && item.Symbol.Name == "Calculate");
+        analysis.SemanticOccurrences.Any(item => !item.IsDeclaration
+            && item.Span.Start == unmatchedReferenceOffset && item.Symbol.Name == "Calculate").Should().BeTrue();
         int multilineCodeReferenceOffset = source.IndexOf("{@link Missing}", StringComparison.Ordinal);
-        analysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Span.Start == multilineCodeReferenceOffset);
+        analysis.SemanticOccurrences.Any(item => !item.IsDeclaration && item.Span.Start == multilineCodeReferenceOffset).Should().BeFalse();
         int escapedBuiltInOffset = source.IndexOf("@int32()", source.IndexOf("{@link @return", StringComparison.Ordinal), StringComparison.Ordinal);
-        analysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration
-            && item.Span.Start == escapedBuiltInOffset && item.Symbol.Name == "int32");
+        analysis.SemanticOccurrences.Any(item => !item.IsDeclaration
+            && item.Span.Start == escapedBuiltInOffset && item.Symbol.Name == "int32").Should().BeTrue();
 
-        analysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name is "Missing" or "Hidden");
+        analysis.SemanticOccurrences.Any(item => !item.IsDeclaration && (item.Symbol.Name == "Missing" || item.Symbol.Name == "Hidden")).Should().BeFalse();
 
         diagnostics.Select(item => item.DisplayName)
             .Should().Contain("SUSW0013")
@@ -85,7 +87,7 @@ public sealed class DocumentationReferenceResolutionTests
 
         analysis.SemanticOccurrences
             .Where(item => item.Symbol.Name == "Calculate" && !item.IsDeclaration)
-            .Should().Contain(item => item.Span.Snapshot.Text.AsSpan(item.Span.Start, item.Span.Length).StartsWith("Calculate", StringComparison.Ordinal));
+            .Any(item => item.Span.Snapshot.Text.Substring(item.Span.Start, item.Span.Length).StartsWith("Calculate", StringComparison.Ordinal)).Should().BeTrue();
     }
 
     [Test]
@@ -139,8 +141,10 @@ public sealed class DocumentationReferenceResolutionTests
                 [project, library, calling, samePackageCalling], null, CancellationToken.None);
             SourceAnalysisResult callerAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(callerPath)));
-            callerAnalysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Symbol.Name == "Calculate")
-                .Should().ContainSingle(item => item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
+            callerAnalysis.SemanticOccurrences.Where(item => !item.IsDeclaration && item.Symbol.Name == "Calculate"
+                && item.Symbol.DefinitionSpan.HasValue
+                && item.Symbol.DefinitionSpan.Value.Snapshot.Uri.IsSamePath(new Uri(libraryPath)))
+                .Should().ContainSingle();
             int inaccessibleReferenceOffset = caller.IndexOf("PackageOnly", StringComparison.Ordinal);
             SourceDefinitionResolver.Resolve(callerAnalysis, inaccessibleReferenceOffset, CancellationToken.None).Should().BeNull();
             using (WorkspaceOrchestrator workspace = new())
@@ -157,11 +161,12 @@ public sealed class DocumentationReferenceResolutionTests
                 }, CancellationToken.None);
                 rename.Should().BeNull();
             }
-            callerAnalysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly");
+            callerAnalysis.SemanticOccurrences.Any(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly").Should().BeFalse();
             SourceAnalysisResult samePackageAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(samePackagePath)));
-            samePackageAnalysis.SemanticOccurrences.Should().Contain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly"
-                && item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
+            samePackageAnalysis.SemanticOccurrences.Any(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly"
+                && item.Symbol.DefinitionSpan.HasValue
+                && item.Symbol.DefinitionSpan.Value.Snapshot.Uri.IsSamePath(new Uri(libraryPath))).Should().BeTrue();
             results.SelectMany(item => item.Reporter.ReportDiagnostics())
                 .Where(item => item.DisplayName is "SUSW0012" or "SUSW0013" or "SUSW0014" or "SUSW0015")
                 .Should().ContainSingle(item => item.DisplayName == "SUSW0014");
