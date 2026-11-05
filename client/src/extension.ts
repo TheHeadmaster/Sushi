@@ -2,9 +2,11 @@ import * as net from 'net';
 import * as path from 'path';
 import { registerInspection } from './inspection';
 import { registerDocumentationScaffolds } from './documentationScaffolds';
+import { normalizeParameterInlayHintMode } from './parameterInlayHintConfiguration';
 import {
 	ExtensionContext,
-	ExtensionMode
+	ExtensionMode,
+	workspace
 } from 'vscode';
 
 import {
@@ -38,7 +40,21 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
 	registerInspection(context, client);
 	registerDocumentationScaffolds(context, client);
+	context.subscriptions.push(workspace.onDidChangeConfiguration(event => {
+		if (event.affectsConfiguration('sushi.parameterInlayHints.mode')) {
+			updateParameterInlayHintMode();
+		}
+	}));
 	await client.start();
+	updateParameterInlayHintMode();
+}
+
+function updateParameterInlayHintMode(): void {
+	const configuredMode = workspace.getConfiguration('sushi.parameterInlayHints').get<unknown>('mode', 'selective');
+	const mode = normalizeParameterInlayHintMode(configuredMode);
+	void client?.sendNotification('workspace/didChangeConfiguration', {
+		settings: { sushi: { parameterInlayHints: { mode } } }
+	});
 }
 
 export function deactivate(): Thenable<void> | undefined {

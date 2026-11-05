@@ -262,6 +262,16 @@ internal static class PackageInvocationBinder
         if (locals is not null)
         {
             locals.RecordCallableOccurrence(target.IdentifierToken.Span, selected);
+            for (int argumentIndex = 0; argumentIndex < invocation.Arguments.Count; argumentIndex++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                CallArgumentSyntax argument = invocation.Arguments[argumentIndex];
+                BoundParameter parameter = targetParameters[arguments[argumentIndex].ParameterIndex];
+                bool isDirectIdentifierMatch = argument.Expression is IdentifierExpressionSyntax identifier
+                    && StringComparer.Ordinal.Equals(IdentifierBinder.Bind(identifier.IdentifierToken), parameter.Name);
+                locals.RecordParameterHint(argument.Expression.Span, selected, parameter, argument.IsNamed, isDirectIdentifierMatch);
+            }
+
             foreach (CallArgumentSyntax argument in invocation.Arguments)
             {
                 if (argument.Name is not SyntaxToken label)

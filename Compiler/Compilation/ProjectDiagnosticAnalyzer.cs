@@ -194,6 +194,7 @@ internal sealed class ProjectDiagnosticAnalyzer
         SourceFileSyntax syntax = (SourceFileSyntax)source.Result.SyntaxTree.Root;
         List<BoundFunction> functions = [];
         List<SourceSemanticOccurrence> occurrences = [];
+        List<BoundParameterHint> parameterHints = [];
         IReadOnlyList<BoundFunction> signatures = source.Result.Functions;
         Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = new(ReferenceEqualityComparer.Instance);
         foreach (DocumentationBlock block in source.Result.DocumentationBlocks)
@@ -215,6 +216,7 @@ internal sealed class ProjectDiagnosticAnalyzer
             {
                 functions.Add(result.Function);
                 occurrences.AddRange(result.SemanticOccurrences);
+                parameterHints.AddRange(result.SemanticParameterHints);
             }
         }
 
@@ -252,10 +254,12 @@ internal sealed class ProjectDiagnosticAnalyzer
         AddDocumentationReferenceOccurrences(source.Result, callables, catalog, occurrences, source.Reporter, cancellationToken);
 
         occurrences.Sort((left, right) => left.Span.Start.CompareTo(right.Span.Start));
+        parameterHints.Sort((left, right) => left.ArgumentSpan.Start.CompareTo(right.ArgumentSpan.Start));
         source.Result = source.Result with
         {
             Functions = functions,
             SemanticOccurrences = Array.AsReadOnly(occurrences.ToArray()),
+            ParameterHints = Array.AsReadOnly(parameterHints.ToArray()),
             SemanticProjectUri = projectUri
         };
     }

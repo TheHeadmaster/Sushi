@@ -84,7 +84,7 @@ public sealed class FunctionDeclarationBinder
         }
 
         return new FunctionBindResult(new BoundFunction(signature.Accessibility, signature.Name, signature.ReturnType,
-            signature.Parameters, body), locals.GetDeclarationSpans(), locals.GetOccurrences());
+            signature.Parameters, body), locals.GetDeclarationSpans(), locals.GetOccurrences(), locals.GetParameterHints());
     }
 
     /// <summary>

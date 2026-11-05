@@ -42,6 +42,11 @@ public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree S
     internal IReadOnlyList<SourceSemanticOccurrence> SemanticOccurrences { get; init; } = [];
 
     /// <summary>
+    /// Gets compiler-resolved argument-to-parameter mappings captured for this source snapshot.
+    /// </summary>
+    internal IReadOnlyList<BoundParameterHint> ParameterHints { get; init; } = [];
+
+    /// <summary>
     /// Gets the project whose callable catalog resolved this file, or null when it was analyzed as a standalone source.
     /// </summary>
     internal Uri? SemanticProjectUri { get; init; }

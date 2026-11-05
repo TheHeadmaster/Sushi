@@ -53,8 +53,8 @@ public sealed class SourceRenameProtocolTests
                 processId = (int?)null,
                 capabilities = new
                 {
-                    textDocument = new { rename = new { prepareSupport = true } },
-                    workspace = new { workspaceEdit = new { documentChanges = supportsDocumentChanges } }
+                    textDocument = new { rename = new { prepareSupport = true }, inlayHint = new { } },
+                    workspace = new { workspaceEdit = new { documentChanges = supportsDocumentChanges }, inlayHint = new { refreshSupport = true } }
                 },
                 workspaceFolders = new[] { new { uri = new Uri(directory).AbsoluteUri, name = "RenameProtocol" } }
             });
@@ -70,6 +70,43 @@ public sealed class SourceRenameProtocolTests
             {
                 textDocument = new { uri = declarationUri, languageId = "sushi", version = 3, text = declaration }
             });
+
+            initialize.GetProperty("capabilities").TryGetProperty("inlayHintProvider", out _).Should().BeTrue();
+            JsonElement inlayHints = await session.Request("textDocument/inlayHint", new
+            {
+                textDocument = new { uri },
+                range = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = source.Length } }
+            });
+            JsonElement[] crossFileHints = [.. inlayHints.EnumerateArray()];
+            crossFileHints.Should().HaveCount(1);
+            crossFileHints[0].GetProperty("label").GetString().Should().Be("value:");
+            crossFileHints[0].GetProperty("kind").GetInt32().Should().Be(2);
+            crossFileHints[0].GetProperty("position").GetProperty("character").GetInt32()
+                .Should().Be(source.IndexOf("Double(1)", StringComparison.Ordinal) + "Double(".Length);
+
+            string updatedDeclaration = declaration.Replace("value", "amount", StringComparison.Ordinal);
+            await session.Notify("textDocument/didChange", new
+            {
+                textDocument = new { uri = declarationUri, version = 4 },
+                contentChanges = new[] { new { text = updatedDeclaration } }
+            });
+            JsonElement refreshedHints = await session.Request("textDocument/inlayHint", new
+            {
+                textDocument = new { uri },
+                range = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = source.Length } }
+            });
+            refreshedHints[0].GetProperty("label").GetString().Should().Be("amount:");
+
+            await session.Notify("workspace/didChangeConfiguration", new
+            {
+                settings = new { sushi = new { parameterInlayHints = new { mode = "off" } } }
+            });
+            JsonElement disabledHints = await session.Request("textDocument/inlayHint", new
+            {
+                textDocument = new { uri },
+                range = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = source.Length } }
+            });
+            disabledHints.GetArrayLength().Should().Be(0);
 
             int selected = source.IndexOf("Double", StringComparison.Ordinal);
             JsonElement prepared = await session.Request("textDocument/prepareRename", new

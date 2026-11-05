@@ -218,6 +218,31 @@ internal sealed class LocalBindingContext
     }
 
     /// <summary>
+    /// Records the selected parameter mapping for a source-backed invocation argument.
+    /// </summary>
+    /// <param name="span">The argument expression's exact source range.</param>
+    /// <param name="callable">The uniquely selected callable.</param>
+    /// <param name="parameter">The parameter selected by compiler binding.</param>
+    /// <param name="isNamedArgument">Whether the source already labels this argument.</param>
+    /// <param name="isDirectIdentifierMatch">Whether a direct identifier exactly names the selected parameter.</param>
+    public void RecordParameterHint(SourceSpan span, PackageCallable callable, BoundParameter parameter, bool isNamedArgument, bool isDirectIdentifierMatch)
+    {
+        if (this.owner is null || callable.Declaration is null || span.Start >= span.End)
+        {
+            return;
+        }
+
+        this.parameterHints.Add(new BoundParameterHint(span, callable, parameter, isNamedArgument, isDirectIdentifierMatch));
+    }
+
+    /// <summary>
+    /// Returns captured argument-to-parameter mappings in binding order.
+    /// </summary>
+    /// <returns>An immutable snapshot of semantic parameter hints.</returns>
+    public IReadOnlyList<BoundParameterHint> GetParameterHints()
+        => Array.AsReadOnly(this.parameterHints.ToArray());
+
+    /// <summary>
     /// Returns resolved source occurrences in binding order.
     /// </summary>
     /// <returns>An immutable snapshot of semantic occurrences.</returns>

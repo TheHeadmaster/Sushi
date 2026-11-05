@@ -24,13 +24,18 @@ public sealed record FunctionBindResult
     internal IReadOnlyList<SourceSemanticOccurrence> SemanticOccurrences { get; }
 
     /// <summary>
+    /// Gets compiler-resolved invocation argument mappings captured during body binding.
+    /// </summary>
+    internal IReadOnlyList<BoundParameterHint> SemanticParameterHints { get; }
+
+    /// <summary>
     /// Creates a binding result without local declaration provenance.
     /// </summary>
     /// <param name="function">
     /// The bound function, or null when binding did not succeed.
     /// </param>
     public FunctionBindResult(BoundFunction? function)
-        : this(function, new Dictionary<int, SourceSpan>(), [])
+        : this(function, new Dictionary<int, SourceSpan>(), [], [])
     {
     }
 
@@ -43,13 +48,14 @@ public sealed record FunctionBindResult
     /// <param name="localDefinitions">
     /// Source-name spans captured as the binder declared each function local.
     /// </param>
-    internal FunctionBindResult(BoundFunction? function, IReadOnlyDictionary<int, SourceSpan> localDefinitions, IReadOnlyList<SourceSemanticOccurrence>? semanticOccurrences = null)
+    internal FunctionBindResult(BoundFunction? function, IReadOnlyDictionary<int, SourceSpan> localDefinitions, IReadOnlyList<SourceSemanticOccurrence>? semanticOccurrences = null, IReadOnlyList<BoundParameterHint>? semanticParameterHints = null)
     {
         ArgumentNullException.ThrowIfNull(localDefinitions);
         ArgumentNullException.ThrowIfNull(semanticOccurrences);
         this.Function = function;
         this.LocalDefinitions = new ReadOnlyDictionary<int, SourceSpan>(localDefinitions.ToDictionary(item => item.Key, item => item.Value));
         this.SemanticOccurrences = Array.AsReadOnly(semanticOccurrences.ToArray());
+        this.SemanticParameterHints = Array.AsReadOnly((semanticParameterHints ?? []).ToArray());
     }
 
     /// <summary>

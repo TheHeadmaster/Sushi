@@ -53,6 +53,8 @@ public sealed class WorkspaceOrchestrator : IDisposable
 
     private long cachedSemanticAnalysisGeneration = -1;
 
+    private int parameterInlayHintMode = (int)ParameterInlayHintMode.Selective;
+
     private IReadOnlyList<SourceAnalysisResult>? cachedSemanticAnalyses;
 
     /// <summary>
@@ -514,6 +516,47 @@ public sealed class WorkspaceOrchestrator : IDisposable
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Gets the currently configured parameter inlay hint mode.
+    /// </summary>
+    internal ParameterInlayHintMode ParameterInlayHintMode
+        => (ParameterInlayHintMode)Volatile.Read(ref this.parameterInlayHintMode);
+
+    /// <summary>
+    /// Changes parameter hint presentation and requests a standard LSP refresh when the mode changes.
+    /// </summary>
+    /// <param name="mode">The newly selected presentation mode.</param>
+    /// <param name="cancellationToken">Cancels the client refresh request.</param>
+    internal Task SetParameterInlayHintModeAsync(ParameterInlayHintMode mode, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        int previous = Interlocked.Exchange(ref this.parameterInlayHintMode, (int)mode);
+        ILanguageServerFacade? languageServer = this.languageServer;
+        if (previous != (int)mode && languageServer is not null)
+        {
+            languageServer.Workspace.SendInlayHintRefresh(new InlayHintRefreshParams());
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Gets the current project-aware source analysis for parameter inlay hints.
+    /// </summary>
+    /// <param name="documentUri">The source document whose invocation arguments are requested.</param>
+    /// <param name="cancellationToken">Cancels semantic analysis and freshness validation.</param>
+    /// <returns>The analysis when its source and project context remain current.</returns>
+    internal async Task<SourceSemanticAnalysisSet?> GetParameterInlayHintAnalysisSet(Uri documentUri, CancellationToken cancellationToken)
+    {
+        SourceSemanticAnalysisSet? analysisSet = await this.GetSourceReferenceAnalysisSet(documentUri, cancellationToken);
+        if (analysisSet is null || !await this.IsCurrentSourceAnalysisSetAsync(analysisSet, cancellationToken))
+        {
+            return null;
+        }
+
+        return analysisSet;
     }
 
     /// <summary>
