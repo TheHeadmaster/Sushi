@@ -386,7 +386,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 List<ProjectCallable> sameName = [.. catalog.Where(item =>
                     StringComparer.Ordinal.Equals(item.Callable.Function.Name, targetName))];
                 List<ProjectCallable> qualifiedCandidates = reference.TargetQualifier is string qualifier
-                    ? [.. sameName.Where(item => QualifierMatches(item.Source, qualifier, cancellationToken))]
+                    ? [.. sameName.Where(item => QualifierMatches(item.Source, qualifier, source, cancellationToken))]
                     : [.. sameName.Where(item => ProjectCallableCatalog.BelongsToSameScope(item.Source, source))];
                 List<ProjectCallable> signatureCandidates = [.. qualifiedCandidates.Where(item =>
                     SignatureMatches(item.Callable.Function, reference, cancellationToken))];
@@ -440,7 +440,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 }
 
                 List<ProjectCallable> accessibleCandidates = [.. signatureCandidates.Where(item =>
-                    item.Callable.Function.Accessibility is not (Accessibility.Private or Accessibility.Protected)
+                    IsAccessibleDocumentationTarget(source, item.Source, item.Callable.Function.Accessibility)
                     && (reference.TargetQualifier is not null || visibleCallables.Contains(item.Callable)))];
                 if (accessibleCandidates.Count == 0)
                 {
@@ -526,7 +526,7 @@ internal sealed class ProjectDiagnosticAnalyzer
         return true;
     }
 
-    private static bool QualifierMatches(SourceAnalysisResult source, string qualifier, CancellationToken cancellationToken)
+    private static bool QualifierMatches(SourceAnalysisResult target, string qualifier, SourceAnalysisResult requester, CancellationToken cancellationToken)
     {
         string[] components = qualifier.Split('.');
         if (components.Length == 0 || components.Any(string.IsNullOrWhiteSpace))
@@ -547,10 +547,11 @@ internal sealed class ProjectDiagnosticAnalyzer
         }
 
         string writtenQualifier = string.Join(".", names);
-        string fullName = string.Join(".", new[] { source.Package?.QualifiedName, source.Namespace?.QualifiedName }
+        string fullName = string.Join(".", new[] { target.Package?.QualifiedName, target.Namespace?.QualifiedName }
             .Where(item => !string.IsNullOrWhiteSpace(item)));
+        bool samePackage = StringComparer.Ordinal.Equals(target.Package?.QualifiedName, requester.Package?.QualifiedName);
         return StringComparer.Ordinal.Equals(writtenQualifier, fullName)
-            || StringComparer.Ordinal.Equals(writtenQualifier, source.Namespace?.QualifiedName);
+            || (samePackage && StringComparer.Ordinal.Equals(writtenQualifier, target.Namespace?.QualifiedName));
     }
 
     private static bool SignatureMatches(BoundFunction? callable, DocumentationReference reference, CancellationToken cancellationToken)
