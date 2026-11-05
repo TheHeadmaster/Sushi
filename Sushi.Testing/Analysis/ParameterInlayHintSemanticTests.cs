@@ -18,7 +18,7 @@ public sealed class ParameterInlayHintSemanticTests
             namespace Example;
             public int32 Add(int32 left, int32 right) { return left + right; }
             public void Place(int32 x, int32 y) {}
-            public void Start(int32 x) { Place(y: 20, x: 10); Add(x, Add(1, 2)); }
+            public int32 Start(int32 x) { Place(y: 20, x: 10); return Add(x, Add(1, 2)); }
             """;
         SourceSnapshot snapshot = SourceSnapshot.FromText(new Uri("file:///ParameterHints.sus"), 1, source);
         IReadOnlyList<ProjectDiagnosticResult> results = await new ProjectDiagnosticAnalyzer().AnalyzeAsync([snapshot], null, CancellationToken.None);

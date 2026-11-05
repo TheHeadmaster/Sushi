@@ -15,6 +15,7 @@ internal sealed class LocalBindingContext
     private readonly Stack<Dictionary<string, BoundLocal>> scopes = new();
     private readonly Dictionary<int, SourceSpan> declarations = [];
     private readonly List<SourceSemanticOccurrence> occurrences = [];
+    private readonly List<BoundParameterHint> parameterHints = [];
     private readonly Dictionary<int, SourceSemanticSymbol> localSymbols = [];
     private readonly FunctionDeclarationSyntax? owner;
     private readonly BoundFunction? function;
