@@ -330,11 +330,28 @@ internal static class DocumentationContentParser
         int expectedLength,
         CancellationToken cancellationToken)
     {
-        for (int candidateLine = startLine; candidateLine < lines.Count; candidateLine++)
+        Fence? fence = null;
+        for (int lineIndex = startLine; lineIndex < lines.Count; lineIndex++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ReadOnlySpan<byte> candidateContent = GetBytes(source, lines[candidateLine].Content);
-            if (FindMatchingBacktickRun(candidateContent, 0, expectedLength, cancellationToken) >= 0)
+            ReadOnlySpan<byte> content = GetBytes(source, lines[lineIndex].Content);
+            if (fence is Fence openFence)
+            {
+                if (IsClosingFence(content, openFence))
+                {
+                    fence = null;
+                }
+
+                continue;
+            }
+
+            if (TryReadFence(content, out Fence newFence))
+            {
+                fence = newFence;
+                continue;
+            }
+
+            if (FindMatchingBacktickRun(content, 0, expectedLength, cancellationToken) >= 0)
             {
                 return true;
             }
