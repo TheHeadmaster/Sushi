@@ -49,6 +49,6 @@ public sealed class ParameterInlayHintSemanticTests
         SourceAnalysisResult analysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>().Single();
 
         analysis.ParameterHints.Should().BeEmpty();
-        results.Single().Reporter.ReportDiagnostics().Should().Contain(item => item.Severity is Sushi.Diagnostics.DiagnosticSeverity.Error);
+        results.Single().Reporter.ReportDiagnostics().Should().Contain(item => item.Severity == Sushi.Diagnostics.DiagnosticSeverity.Error);
     }
 }
