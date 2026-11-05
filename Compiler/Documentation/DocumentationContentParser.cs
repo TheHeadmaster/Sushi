@@ -100,8 +100,9 @@ internal static class DocumentationContentParser
         return new DocumentationContent(new DocumentationText(snapshot, proseLines), directives, references);
     }
 
-    private static bool[] ParseInlineReferences(Line line, ReadOnlySpan<byte> content,
-        ICollection<DocumentationReference> references, ref int inlineCodeDelimiterLength, CancellationToken cancellationToken)
+    private static bool[] ParseInlineReferences(IReadOnlyList<Line> lines, int lineIndex, ReadOnlySpan<byte> source,
+        Line line, ReadOnlySpan<byte> content, ICollection<DocumentationReference> references,
+        ref int inlineCodeDelimiterLength, CancellationToken cancellationToken)
     {
         bool[] inlineCode = MarkInlineCode(content, lines, index, source, ref inlineCodeDelimiterLength, cancellationToken);
         for (int index = 0; index < content.Length; index++)
