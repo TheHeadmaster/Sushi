@@ -1,5 +1,7 @@
 using FluentAssertions;
 using NUnit.Framework;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Sushi.Analysis;
 using Sushi.Compilation;
 using Sushi.Diagnostics;
@@ -141,6 +143,20 @@ public sealed class DocumentationReferenceResolutionTests
                 .Should().ContainSingle(item => item.Symbol.DefinitionSpan?.Snapshot.Uri.IsSamePath(new Uri(libraryPath)) is true);
             int inaccessibleReferenceOffset = caller.IndexOf("PackageOnly", StringComparison.Ordinal);
             SourceDefinitionResolver.Resolve(callerAnalysis, inaccessibleReferenceOffset, CancellationToken.None).Should().BeNull();
+            using (WorkspaceOrchestrator workspace = new())
+            {
+                await workspace.OpenDocument(new Uri(projectPath), 1, await File.ReadAllTextAsync(projectPath), CancellationToken.None);
+                await workspace.OpenDocument(new Uri(libraryPath), 1, await File.ReadAllTextAsync(libraryPath), CancellationToken.None);
+                await workspace.OpenDocument(new Uri(callerPath), 1, caller, CancellationToken.None);
+                await workspace.OpenDocument(new Uri(samePackagePath), 1, samePackage, CancellationToken.None);
+                WorkspaceEdit? rename = await new SourceRenameHandler(workspace).Handle(new RenameParams
+                {
+                    TextDocument = new TextDocumentIdentifier { Uri = DocumentUri.FromFileSystemPath(callerPath) },
+                    Position = new Position(2, caller.IndexOf("PackageOnly", StringComparison.Ordinal)),
+                    NewName = "Renamed"
+                }, CancellationToken.None);
+                rename.Should().BeNull();
+            }
             callerAnalysis.SemanticOccurrences.Should().NotContain(item => !item.IsDeclaration && item.Symbol.Name == "PackageOnly");
             SourceAnalysisResult samePackageAnalysis = results.Select(item => item.Analysis).OfType<SourceAnalysisResult>()
                 .Single(item => item.Snapshot.Uri.IsSamePath(new Uri(samePackagePath)));
