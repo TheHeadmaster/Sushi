@@ -170,7 +170,7 @@ internal static class SourceHoverResolver
             cancellationToken.ThrowIfCancellationRequested();
             if (index > 0)
             {
-                rendered.Append('\\n');
+                rendered.Append('\n');
             }
 
             SourceSpan line = text.Lines[index];
