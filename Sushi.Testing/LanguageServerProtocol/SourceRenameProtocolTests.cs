@@ -132,7 +132,7 @@ public sealed class SourceRenameProtocolTests
                 JsonElement mathEdit = documentEdits.Single(item => IsSameFileUri(item.GetProperty("textDocument").GetProperty("uri").GetString(), declarationPath));
                 JsonElement unopenedEdit = documentEdits.Single(item => IsSameFileUri(item.GetProperty("textDocument").GetProperty("uri").GetString(), unopenedPath));
                 programEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(7);
-                mathEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(3);
+                mathEdit.GetProperty("textDocument").GetProperty("version").GetInt32().Should().Be(4);
                 unopenedEdit.GetProperty("textDocument").GetProperty("version").ValueKind.Should().Be(JsonValueKind.Null);
                 programEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
                 mathEdit.GetProperty("edits").GetArrayLength().Should().Be(1);
