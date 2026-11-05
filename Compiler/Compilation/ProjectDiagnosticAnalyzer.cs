@@ -557,6 +557,19 @@ internal sealed class ProjectDiagnosticAnalyzer
             || (samePackage && StringComparer.Ordinal.Equals(writtenQualifier, target.Namespace?.QualifiedName));
     }
 
+    private static bool IsAccessibleDocumentationTarget(
+        SourceAnalysisResult requester,
+        SourceAnalysisResult target,
+        Accessibility accessibility)
+        => accessibility switch
+        {
+            Accessibility.Public or Accessibility.Internal => true,
+            Accessibility.Package => StringComparer.Ordinal.Equals(
+                requester.Package?.QualifiedName, target.Package?.QualifiedName),
+            Accessibility.Private or Accessibility.Protected => false,
+            _ => false
+        };
+
     private static bool SignatureMatches(BoundFunction? callable, DocumentationReference reference, CancellationToken cancellationToken)
     {
         if (!reference.HasExplicitSignature)
