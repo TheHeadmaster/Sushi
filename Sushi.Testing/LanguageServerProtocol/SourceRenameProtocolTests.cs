@@ -79,7 +79,7 @@ public sealed class SourceRenameProtocolTests
             });
             JsonElement[] crossFileHints = [.. inlayHints.EnumerateArray()];
             crossFileHints.Should().HaveCount(1);
-            crossFileHints[0].GetProperty("label").GetString().Should().Be("value:");
+            GetInlayHintLabelText(crossFileHints[0]).Should().Be("value:");
             crossFileHints[0].GetProperty("kind").GetInt32().Should().Be(2);
             crossFileHints[0].GetProperty("position").GetProperty("character").GetInt32()
                 .Should().Be(source.IndexOf("Double(1)", StringComparison.Ordinal) + "Double(".Length);
@@ -95,7 +95,7 @@ public sealed class SourceRenameProtocolTests
                 textDocument = new { uri },
                 range = new { start = new { line = 0, character = 0 }, end = new { line = 0, character = source.Length } }
             });
-            refreshedHints[0].GetProperty("label").GetString().Should().Be("amount:");
+            GetInlayHintLabelText(refreshedHints[0]).Should().Be("amount:");
 
             await session.Notify("workspace/didChangeConfiguration", new
             {
@@ -210,6 +210,17 @@ public sealed class SourceRenameProtocolTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    private static string GetInlayHintLabelText(JsonElement hint)
+    {
+        JsonElement label = hint.GetProperty("label");
+        return label.ValueKind switch
+        {
+            JsonValueKind.String => label.GetString()!,
+            JsonValueKind.Array => string.Concat(label.EnumerateArray().Select(part => part.GetProperty("value").GetString())),
+            _ => throw new InvalidOperationException($"Unexpected inlay hint label kind: {label.ValueKind}.")
+        };
     }
 
     private static JsonElement GetChangesForPath(JsonElement changes, string path)
