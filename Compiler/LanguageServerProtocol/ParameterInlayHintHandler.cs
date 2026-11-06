@@ -3,7 +3,9 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Client.Capabilities;
 using OmniSharp.Extensions.LanguageServer.Protocol.Document;
 using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 using Sushi.Analysis;
+using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
+using Sushi.Source;
 
 namespace Sushi.LanguageServerProtocol;
 
@@ -70,10 +72,26 @@ public sealed class ParameterInlayHintHandler(WorkspaceOrchestrator workspace) :
             }
 
             (int line, int character) = analysis.Snapshot.GetUtf16Position(hint.ArgumentSpan.Start);
+            Location? parameterLocation = CreateParameterLocation(hint);
+            StringOrInlayHintLabelParts label = parameterLocation is null
+                ? new StringOrInlayHintLabelParts(hint.Parameter.Name + ":")
+                : new StringOrInlayHintLabelParts(new[]
+                {
+                    new InlayHintLabelPart
+                    {
+                        Value = hint.Parameter.Name + ":",
+                        Tooltip = new MarkupContent
+                        {
+                            Kind = MarkupKind.Markdown,
+                            Value = SourceHoverResolver.FormatParameterTooltip(hint.Parameter, hint.Callable, cancellationToken)
+                        },
+                        Location = parameterLocation
+                    }
+                });
             hints.Add(new InlayHint
             {
                 Position = new Position(line, character),
-                Label = hint.Parameter.Name + ":",
+                Label = label,
                 Kind = InlayHintKind.Parameter,
                 PaddingRight = true
             });
@@ -85,6 +103,52 @@ public sealed class ParameterInlayHintHandler(WorkspaceOrchestrator workspace) :
         }
 
         return new InlayHintContainer(hints);
+    }
+
+    private static Location? CreateParameterLocation(BoundParameterHint hint)
+    {
+        if (hint.Callable.Declaration is not FunctionDeclarationSyntax declaration
+            || hint.Parameter.Index < 0
+            || hint.Parameter.Index >= declaration.Parameters.Count
+            || hint.Parameter.Index >= hint.Callable.Function.Parameters.Count
+            || hint.Callable.Function.Parameters[hint.Parameter.Index] != hint.Parameter)
+        {
+            return null;
+        }
+
+        ParameterSyntax parameter = declaration.Parameters[hint.Parameter.Index];
+        SyntaxToken nameToken = parameter.NameToken;
+        SourceSpan definition = nameToken.Span;
+        SourceSnapshot snapshot = definition.Snapshot;
+        if (!nameToken.IsSourceBacked
+            || !snapshot.IsValidUtf8
+            || !ReferenceEquals(snapshot, declaration.Span.Snapshot)
+            || !StringComparer.Ordinal.Equals(IdentifierBinder.Bind(nameToken), hint.Parameter.Name)
+            || definition.Start < 0
+            || definition.Start >= definition.End
+            || definition.End > snapshot.SourceLength)
+        {
+            return null;
+        }
+
+        try
+        {
+            (int startLine, int startCharacter) = snapshot.GetUtf16Position(definition.Start);
+            (int endLine, int endCharacter) = snapshot.GetUtf16Position(definition.End);
+            return new Location
+            {
+                Uri = DocumentUri.FromFileSystemPath(snapshot.Uri.LocalPath),
+                Range = new OmniSharp.Extensions.LanguageServer.Protocol.Models.Range(startLine, startCharacter, endLine, endCharacter)
+            };
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <inheritdoc />

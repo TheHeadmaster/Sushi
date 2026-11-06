@@ -34,6 +34,57 @@ internal static class SourceHoverResolver
     }
 
 
+    /// <summary>
+    /// Formats the selected parameter's declaration signature and attached documentation for an inlay-hint tooltip.
+    /// </summary>
+    /// <param name="parameter">The parameter selected by compiler binding.</param>
+    /// <param name="callable">The callable whose declaration owns the parameter and documentation.</param>
+    /// <param name="cancellationToken">Cancels documentation rendering.</param>
+    /// <returns>Markdown containing the parameter signature and its valid unique description when available.</returns>
+    internal static string FormatParameterTooltip(BoundParameter parameter, PackageCallable callable, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(parameter);
+        ArgumentNullException.ThrowIfNull(callable);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        List<string> sections = [$"```sushi\nparameter {GetTypeName(parameter.Type)} {parameter.Name} in {callable.Name}\n```"];
+        DocumentationBlock? documentation = callable.Documentation;
+        if (documentation is not null && !ReferenceEquals(documentation.Snapshot, callable.Declaration.Span.Snapshot))
+        {
+            documentation = null;
+        }
+
+        string? description = FormatParameterDocumentation(documentation, parameter.Name, cancellationToken);
+        if (description is not null)
+        {
+            sections.Add(description);
+        }
+
+        return string.Join("\n\n", sections);
+    }
+
+    private static string? FormatParameterDocumentation(
+        DocumentationBlock? documentation,
+        string parameterName,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (documentation is null)
+        {
+            return null;
+        }
+
+        DocumentationDirective[] matches = [.. documentation.Content.Directives.Where(item =>
+            item.Kind is DocumentationDirectiveKind.Parameter
+            && StringComparer.Ordinal.Equals(item.ParameterName, parameterName))];
+        if (matches.Length != 1 || string.IsNullOrWhiteSpace(matches[0].Description.Text))
+        {
+            return null;
+        }
+
+        return SanitizeMarkdown(RenderDocumentationText(matches[0].Description, documentation.Content, cancellationToken));
+    }
+
     private static string? Format(SourceSemanticSymbol symbol, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -91,14 +142,12 @@ internal static class SourceHoverResolver
                 }
             }
         }
-        else if (documentation is not null && symbol.Kind is SourceSemanticSymbolKind.Parameter)
+        else if (symbol.Kind is SourceSemanticSymbolKind.Parameter)
         {
-            DocumentationDirective[] parameterDirectives = [.. documentation.Content.Directives.Where(item =>
-                item.Kind is DocumentationDirectiveKind.Parameter && StringComparer.Ordinal.Equals(item.ParameterName, symbol.Name))];
-            DocumentationDirective? parameter = parameterDirectives.Length == 1 ? parameterDirectives[0] : null;
-            if (parameter is not null && !string.IsNullOrWhiteSpace(parameter.Description.Text))
+            string? parameterDocumentation = FormatParameterDocumentation(documentation, symbol.Name, cancellationToken);
+            if (parameterDocumentation is not null)
             {
-                sections.Add(SanitizeMarkdown(RenderDocumentationText(parameter.Description, documentation.Content, cancellationToken)));
+                sections.Add(parameterDocumentation);
             }
         }
 
