@@ -26,16 +26,32 @@ jobs:
       run: npm run lint
     - name: Test inspection and extension behavior
       run: npm run test:inspection
-    - name: Restore pinned LLVM-MinGW
-      shell: pwsh
-      run: |
-        $toolchainRoot = Join-Path $env:GITHUB_WORKSPACE ".tools/llvm-mingw"
-        ./tools/RestoreLlvmMingw.ps1 -DestinationRoot $toolchainRoot
-        "SUSHI_NATIVE_TOOLCHAIN_ROOT=$toolchainRoot" >> $env:GITHUB_ENV
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
+    - name: Build pinned LLVM-MinGW NuGet package for the consumer job
+      shell: pwsh
+      run: ./tools/NewLlvmMingwNuGetPackage.ps1 -PackageOutputDirectory artifacts/nuget
+    - name: Configure CI local NuGet source and block release downloads
+      shell: pwsh
+      run: |
+        $feed = Join-Path $env:GITHUB_WORKSPACE "artifacts/nuget"
+        dotnet nuget add source $feed --name SushiNativeToolchain
+        if ($LASTEXITCODE -ne 0) {
+          throw "Could not configure the validated local NuGet package source."
+        }
+        $env:SUSHI_BLOCK_UPSTREAM_TOOLCHAIN_DOWNLOADS = "1"
+        try {
+          ./tools/RestoreLlvmMingw.ps1
+          throw "The upstream restore helper did not honor the consumer-download block."
+        }
+        catch {
+          if ($_.Exception.Message -notmatch "blocked for consumer") {
+            throw
+          }
+        }
+        "SUSHI_BLOCK_UPSTREAM_TOOLCHAIN_DOWNLOADS=1" >> $env:GITHUB_ENV
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
