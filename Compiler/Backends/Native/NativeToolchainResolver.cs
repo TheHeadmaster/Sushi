@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Sushi.Backends.Native;
 
 /// <summary>
-/// Resolves the compiler driver from the bundled Windows toolchain or the existing non-Windows PATH setup.
+/// Resolves the Windows toolchain from an explicit override, published distribution, or restored NuGet package; non-Windows hosts retain PATH lookup.
 /// </summary>
 internal static class NativeToolchainResolver
 {
