@@ -26,6 +26,7 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
     /// Handles the orchestration and plumbing of diagnostics publishing and source document tracking.
     /// </summary>
     private readonly WorkspaceOrchestrator workspace = new();
+
     /// <summary>
     /// Runs the language server.
     /// </summary>
@@ -94,6 +95,7 @@ public sealed class SushiLanguageService(MVPProjectCompiler projectCompiler)
             .WithHandler<ParameterInlayHintHandler>()
             .WithHandler<ParameterInlayHintConfigurationHandler>()
             .WithHandler<SourceSignatureHelpHandler>()
+            .WithHandler<SourceCompletionHandler>()
             .WithHandler<SourceDefinitionHandler>()
             .WithHandler<SourceReferencesHandler>()
             .WithHandler<SourceRenameHandler>()

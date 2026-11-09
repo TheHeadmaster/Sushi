@@ -1,0 +1,17 @@
+﻿package Example;
+namespace Example;
+
+public int32 CalculateDamage(int32 damage)
+{
+    return damage;
+}
+
+public int32 CalculateHealth(int32 health)
+{
+    return health;
+}
+
+public int32 Start()
+{
+    return CalculateDamage(30);
+}
