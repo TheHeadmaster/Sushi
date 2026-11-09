@@ -5,6 +5,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if ($env:SUSHI_BLOCK_UPSTREAM_TOOLCHAIN_DOWNLOADS -eq "1") {
+    throw "LLVM-MinGW upstream archive download is blocked for consumer restore/build/test/publish operations."
+}
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $manifestPath = Join-Path $repositoryRoot "tools/llvm-mingw.json"
 
@@ -58,7 +61,7 @@ try {
         }
     }
 
-    Write-Host "Downloading pinned LLVM-MinGW $($manifest.version) from $($manifest.archiveUrl)"
+    Write-Host "Package creation: downloading pinned LLVM-MinGW $($manifest.version) from $($manifest.archiveUrl)"
     Invoke-WebRequest -Uri $manifest.archiveUrl -OutFile $archivePath
     $actualHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     $expectedHash = ([string] $manifest.sha256).ToLowerInvariant()
