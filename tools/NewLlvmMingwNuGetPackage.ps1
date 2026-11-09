@@ -35,7 +35,12 @@ if ($LASTEXITCODE -ne 0) {
     throw "LLVM-MinGW NuGet packaging failed with exit code $LASTEXITCODE."
 }
 
-$packagePath = Join-Path $PackageOutputDirectory "$($manifest.packageId).$($manifest.packageVersion).nupkg"
+$versionComponents = @(([string] $manifest.packageVersion).Split("."))
+while ($versionComponents.Count -lt 3) {
+    $versionComponents += "0"
+}
+$normalizedPackageVersion = $versionComponents -join "."
+$packagePath = Join-Path $PackageOutputDirectory "$($manifest.packageId).$normalizedPackageVersion.nupkg"
 if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
     throw "NuGet packaging did not produce the expected package: $packagePath"
 }
@@ -49,9 +54,9 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
 try {
     $requiredEntries = @(
-        "contentFiles/any/any/toolchain/bin/clang.exe",
-        "contentFiles/any/any/toolchain/bin/ld.lld.exe",
-        "contentFiles/any/any/toolchain/x86_64-w64-mingw32/lib/crt2.o",
+        "toolchain/bin/clang.exe",
+        "toolchain/bin/ld.lld.exe",
+        "toolchain/x86_64-w64-mingw32/lib/crt2.o",
         "THIRD-PARTY-NOTICES.md"
     )
     foreach ($entryName in $requiredEntries) {
@@ -59,7 +64,7 @@ try {
             throw "The generated NuGet package is missing required entry $entryName."
         }
     }
-    if (-not ($archive.Entries | Where-Object { $_.FullName -match 'contentFiles/any/any/toolchain/.+(LICENSE|COPYING|NOTICE)' })) {
+    if (-not ($archive.Entries | Where-Object { $_.FullName -match 'toolchain/.+(LICENSE|COPYING|NOTICE)' })) {
         throw "The package does not retain the upstream license and notice files."
     }
 }
