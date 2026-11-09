@@ -42,20 +42,14 @@ internal static class SourceCompletionResolver
             return null;
         }
 
-        FunctionDeclarationSyntax? owner = source.FunctionDeclarations.FirstOrDefault(function =>
-            function.Body.OpenBraceToken.IsSourceBacked
-            && function.Body.OpenBraceToken.Span.End <= offset
-            && (function.Body.CloseBraceToken.IsSourceBacked
-                ? offset <= function.Body.CloseBraceToken.Span.Start
-                : offset <= function.Body.Span.End));
-
-        if (owner is null)
+        IReadOnlyList<LexToken> tokens = analysis.SyntaxTree.LexerResult.Tokens;
+        if (!TryFindIdentifier(tokens, snapshot, offset, cancellationToken, out SourceSpan replacement, out string prefix))
         {
             return null;
         }
 
-        IReadOnlyList<LexToken> tokens = analysis.SyntaxTree.LexerResult.Tokens;
-        if (!TryFindIdentifier(tokens, snapshot, offset, cancellationToken, out SourceSpan replacement, out string prefix))
+        FunctionDeclarationSyntax? owner = FindEnclosingFunction(source, replacement, offset, cancellationToken);
+        if (owner is null)
         {
             return null;
         }
@@ -78,9 +72,17 @@ internal static class SourceCompletionResolver
             }
         }
 
+        // An unfinished statement may have caused the parser to synthesize
+        // the function's closing brace at the start of the identifier.
+        // Use that boundary for lexical-scope traversal without changing
+        // the authoritative source snapshot or its grammar.
+        int scopeOffset = owner.Body.CloseBraceToken.IsMissing
+            ? Math.Min(offset, owner.Body.CloseBraceToken.Span.Start)
+            : offset;
+
         SourceCompletionBinding[] bindings =
         [
-            .. SourceCompletionScopeResolver.Resolve(analysis, owner, offset, cancellationToken)
+            .. SourceCompletionScopeResolver.Resolve(analysis, owner, scopeOffset, cancellationToken)
                 .Where(binding => binding.Name.StartsWith(prefix, StringComparison.Ordinal))
         ];
 
@@ -89,6 +91,50 @@ internal static class SourceCompletionResolver
         return selectedFunctions.Length == 0 && bindings.Length == 0
             ? null
             : new SourceCompletionResult(replacement, selectedFunctions, bindings);
+    }
+
+    private static FunctionDeclarationSyntax? FindEnclosingFunction(
+        SourceFileSyntax source, SourceSpan identifier, int offset, CancellationToken cancellationToken)
+    {
+        foreach (FunctionDeclarationSyntax function in source.FunctionDeclarations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            BlockSyntax body = function.Body;
+            if (!body.OpenBraceToken.IsSourceBacked || body.OpenBraceToken.Span.End > identifier.Start)
+            {
+                continue;
+            }
+
+            if (body.CloseBraceToken.IsSourceBacked)
+            {
+                if (offset <= body.CloseBraceToken.Span.Start)
+                {
+                    return function;
+                }
+
+                continue;
+            }
+
+            if (offset <= body.CloseBraceToken.Span.Start)
+            {
+                return function;
+            }
+
+            // The parser intentionally leaves unsupported statements
+            // unconsumed. Recover completion only on the first unparsed
+            // identifier at the missing-brace boundary, never on arbitrary
+            // later source or declarations outside the function.
+            if (body.CloseBraceToken.IsMissing
+                && body.CloseBraceToken.Span.Start == identifier.Start
+                && source.UnparsedContentSpan is SourceSpan unparsed
+                && unparsed.Start == identifier.Start)
+            {
+                return function;
+            }
+        }
+
+        return null;
     }
 
     private static bool TryFindIdentifier(
