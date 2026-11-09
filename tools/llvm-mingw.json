@@ -7,5 +7,7 @@
   "hostArchitecture": "x86_64",
   "targetArchitecture": "x86_64",
   "runtime": "ucrt",
-  "targetTriple": "x86_64-w64-windows-gnu"
+  "targetTriple": "x86_64-w64-windows-gnu",
+  "packageId": "Sushi.NativeToolchain.LlvmMingw.WinX64",
+  "packageVersion": "20260616"
 }
