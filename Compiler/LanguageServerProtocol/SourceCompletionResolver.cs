@@ -8,29 +8,24 @@ using Sushi.Source;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Discovers compiler-visible symbols matching an identifier being edited
-/// inside a package-level Sushi function body.
+/// Discovers compiler-visible symbols matching a typed identifier or an
+/// empty, type-constrained expression position within a package function.
 /// </summary>
 internal static class SourceCompletionResolver
 {
     /// <summary>
-    /// Resolves function and local-binding completion using the current
-    /// source snapshot and the compiler's visible callable catalog.
+    /// Resolves compiler-backed function, parameter, and local completion
+    /// using the current source snapshot and expression context.
     /// </summary>
-    /// <param name="analysis">
-    /// The project-aware analysis of the current source snapshot.
-    /// </param>
-    /// <param name="offset">
-    /// The cursor position in canonical UTF-8 byte coordinates.
-    /// </param>
-    /// <param name="cancellationToken">
-    /// Cancels source inspection and candidate selection.
-    /// </param>
+    /// <param name="analysis">The current project-aware source analysis.</param>
+    /// <param name="offset">The cursor's canonical UTF-8 byte position.</param>
+    /// <param name="cancellationToken">Cancels source inspection and binding.</param>
     /// <returns>
-    /// The identifier replacement span and matching candidates, or null
-    /// when completion is unsupported at this position.
+    /// Matching candidates and their replacement range, or null when
+    /// completion is unsupported at the requested position.
     /// </returns>
-    internal static SourceCompletionResult? Resolve(SourceAnalysisResult analysis, int offset, CancellationToken cancellationToken)
+    internal static SourceCompletionResult? Resolve(
+        SourceAnalysisResult analysis, int offset, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(analysis);
         cancellationToken.ThrowIfCancellationRequested();
@@ -43,13 +38,39 @@ internal static class SourceCompletionResolver
         }
 
         IReadOnlyList<LexToken> tokens = analysis.SyntaxTree.LexerResult.Tokens;
-        if (!TryFindIdentifier(tokens, snapshot, offset, cancellationToken, out SourceSpan replacement, out string prefix))
+        bool hasIdentifier = TryFindIdentifier(tokens, snapshot, offset, cancellationToken,
+            out SourceSpan replacement, out string prefix);
+
+        if (!hasIdentifier)
+        {
+            replacement = new SourceSpan(snapshot, offset, offset);
+            prefix = string.Empty;
+
+            if (!HasPotentialEmptyExpressionContext(tokens, snapshot, offset, cancellationToken))
+            {
+                return null;
+            }
+        }
+
+        FunctionDeclarationSyntax? owner = FindEnclosingFunction(
+            source, replacement, offset, cancellationToken);
+
+        if (owner is null)
         {
             return null;
         }
 
-        FunctionDeclarationSyntax? owner = FindEnclosingFunction(source, replacement, offset, cancellationToken);
-        if (owner is null)
+        int scopeOffset = owner.Body.CloseBraceToken.IsMissing
+            ? Math.Min(offset, owner.Body.CloseBraceToken.Span.Start)
+            : offset;
+
+        IReadOnlyList<SourceCompletionBinding> visibleBindings =
+            SourceCompletionScopeResolver.Resolve(analysis, owner, scopeOffset, cancellationToken);
+
+        BoundType? expectedType = SourceCompletionExpressionContextResolver.Resolve(
+            analysis, owner, replacement.Start, visibleBindings, cancellationToken);
+
+        if (!hasIdentifier && expectedType is null)
         {
             return null;
         }
@@ -61,7 +82,8 @@ internal static class SourceCompletionResolver
             cancellationToken.ThrowIfCancellationRequested();
 
             if (!callable.Name.StartsWith(prefix, StringComparison.Ordinal)
-                || !HasReliableDeclaration(callable))
+                || !HasReliableDeclaration(callable)
+                || expectedType is BoundType required && callable.Function.ReturnType != required)
             {
                 continue;
             }
@@ -72,18 +94,11 @@ internal static class SourceCompletionResolver
             }
         }
 
-        // An unfinished statement may have caused the parser to synthesize
-        // the function's closing brace at the start of the identifier.
-        // Use that boundary for lexical-scope traversal without changing
-        // the authoritative source snapshot or its grammar.
-        int scopeOffset = owner.Body.CloseBraceToken.IsMissing
-            ? Math.Min(offset, owner.Body.CloseBraceToken.Span.Start)
-            : offset;
-
         SourceCompletionBinding[] bindings =
         [
-            .. SourceCompletionScopeResolver.Resolve(analysis, owner, scopeOffset, cancellationToken)
-                .Where(binding => binding.Name.StartsWith(prefix, StringComparison.Ordinal))
+            .. visibleBindings.Where(binding =>
+                binding.Name.StartsWith(prefix, StringComparison.Ordinal)
+                && (expectedType is null || binding.Type == expectedType.Value))
         ];
 
         PackageCallable[] selectedFunctions = [.. candidates.Values.OfType<PackageCallable>()];
@@ -91,6 +106,63 @@ internal static class SourceCompletionResolver
         return selectedFunctions.Length == 0 && bindings.Length == 0
             ? null
             : new SourceCompletionResult(replacement, selectedFunctions, bindings);
+    }
+
+    private static bool HasPotentialEmptyExpressionContext(
+        IReadOnlyList<LexToken> tokens, SourceSnapshot snapshot,
+        int offset, CancellationToken cancellationToken)
+    {
+        ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
+
+        foreach (LexToken token in tokens)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (token.Span.Start > offset)
+            {
+                break;
+            }
+
+            if (token.Span.Start <= offset && offset < token.Span.End
+                && token.Type is (LexTokenType.LineComment or LexTokenType.DocumentationLineComment
+                    or LexTokenType.BlockComment or LexTokenType.Unknown))
+            {
+                return false;
+            }
+
+            if (token.Span.Start < offset && offset < token.Span.End && !IsTrivia(token))
+            {
+                return false;
+            }
+        }
+
+        for (int index = tokens.Count - 1; index >= 0; index--)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            LexToken token = tokens[index];
+            if (token.Span.End > offset || IsTrivia(token))
+            {
+                continue;
+            }
+
+            if (token.Type is LexTokenType.Keyword)
+            {
+                return offset > token.Span.End
+                    && bytes[token.Span.Start..token.Span.End].SequenceEqual("return"u8);
+            }
+
+            if (token.Type is LexTokenType.Operator)
+            {
+                return true;
+            }
+
+            return token.Type is LexTokenType.Punctuation
+                && token.Span.Length == 1
+                && bytes[token.Span.Start] is (byte)'(' or (byte)',' or (byte)':';
+        }
+
+        return false;
     }
 
     private static FunctionDeclarationSyntax? FindEnclosingFunction(
@@ -121,10 +193,9 @@ internal static class SourceCompletionResolver
                 return function;
             }
 
-            // The parser intentionally leaves unsupported statements
-            // unconsumed. Recover completion only on the first unparsed
-            // identifier at the missing-brace boundary, never on arbitrary
-            // later source or declarations outside the function.
+            // The parser leaves unsupported statement starts unconsumed.
+            // Completion can recover at that exact boundary without changing
+            // the grammar or claiming later source belongs to this function.
             if (body.CloseBraceToken.IsMissing
                 && body.CloseBraceToken.Span.Start == identifier.Start
                 && source.UnparsedContentSpan is SourceSpan unparsed
@@ -252,18 +323,12 @@ internal static class SourceCompletionResolver
 }
 
 /// <summary>
-/// Contains a source-backed completion replacement range and the matching
-/// functions and local bindings established for the editor position.
+/// Contains an identifier or insertion-point replacement span and the
+/// compiler-visible functions and bindings available for completion.
 /// </summary>
-/// <param name="Replacement">
-/// The complete identifier being edited.
-/// </param>
-/// <param name="Candidates">
-/// Unambiguous compiler-visible package functions.
-/// </param>
-/// <param name="Bindings">
-/// Visible function parameters and initialized locals.
-/// </param>
+/// <param name="Replacement">The source span replaced when completion is accepted.</param>
+/// <param name="Candidates">Unambiguous matching package functions.</param>
+/// <param name="Bindings">Matching parameters and initialized locals.</param>
 internal sealed record SourceCompletionResult(
     SourceSpan Replacement,
     IReadOnlyList<PackageCallable> Candidates,

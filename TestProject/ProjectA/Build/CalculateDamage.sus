@@ -1,18 +1,10 @@
 ﻿package Example;
 namespace Example;
 
-public int32 Calculate(int32 amount)
+public int32 Calculate(int32 amount, bool enabled)
 {
-    int32 multiplier = 2;
-    int32 result = amount * multiplier;
+    int32 result = amount * 2;
+    bool ready = enabled;
 
-    if (true)
-    {
-        int32 inside = result;
-        return inside;
-    }
-
-    int32 newValue = amount + multiplier;
-
-    return result - newValue;
+    return Calculate(amount, true);
 }
