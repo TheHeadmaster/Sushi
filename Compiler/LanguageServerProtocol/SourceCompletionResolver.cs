@@ -1,5 +1,4 @@
-﻿
-using System.Text;
+﻿using System.Text;
 using Sushi.Analysis;
 using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
@@ -9,14 +8,14 @@ using Sushi.Source;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Discovers compiler-visible package functions matching an identifier being
-/// edited inside a Sushi function body.
+/// Discovers compiler-visible symbols matching an identifier being edited
+/// inside a package-level Sushi function body.
 /// </summary>
 internal static class SourceCompletionResolver
 {
     /// <summary>
-    /// Resolves function-name completion without binding an unfinished
-    /// expression or selecting an unsupported overload.
+    /// Resolves function and local-binding completion using the current
+    /// source snapshot and the compiler's visible callable catalog.
     /// </summary>
     /// <param name="analysis">
     /// The project-aware analysis of the current source snapshot.
@@ -25,11 +24,11 @@ internal static class SourceCompletionResolver
     /// The cursor position in canonical UTF-8 byte coordinates.
     /// </param>
     /// <param name="cancellationToken">
-    /// Cancels token inspection and candidate selection.
+    /// Cancels source inspection and candidate selection.
     /// </param>
     /// <returns>
-    /// The replacement span and visible candidates, or null when completion
-    /// cannot be established reliably.
+    /// The identifier replacement span and matching candidates, or null
+    /// when completion is unsupported at this position.
     /// </returns>
     internal static SourceCompletionResult? Resolve(SourceAnalysisResult analysis, int offset, CancellationToken cancellationToken)
     {
@@ -43,14 +42,14 @@ internal static class SourceCompletionResolver
             return null;
         }
 
-        bool insideBody = source.FunctionDeclarations.Any(function =>
+        FunctionDeclarationSyntax? owner = source.FunctionDeclarations.FirstOrDefault(function =>
             function.Body.OpenBraceToken.IsSourceBacked
             && function.Body.OpenBraceToken.Span.End <= offset
             && (function.Body.CloseBraceToken.IsSourceBacked
                 ? offset <= function.Body.CloseBraceToken.Span.Start
                 : offset <= function.Body.Span.End));
 
-        if (!insideBody)
+        if (owner is null)
         {
             return null;
         }
@@ -79,8 +78,17 @@ internal static class SourceCompletionResolver
             }
         }
 
-        PackageCallable[] selected = [.. candidates.Values.OfType<PackageCallable>()];
-        return selected.Length == 0 ? null : new SourceCompletionResult(replacement, selected);
+        SourceCompletionBinding[] bindings =
+        [
+            .. SourceCompletionScopeResolver.Resolve(analysis, owner, offset, cancellationToken)
+                .Where(binding => binding.Name.StartsWith(prefix, StringComparison.Ordinal))
+        ];
+
+        PackageCallable[] selectedFunctions = [.. candidates.Values.OfType<PackageCallable>()];
+
+        return selectedFunctions.Length == 0 && bindings.Length == 0
+            ? null
+            : new SourceCompletionResult(replacement, selectedFunctions, bindings);
     }
 
     private static bool TryFindIdentifier(
@@ -139,19 +147,20 @@ internal static class SourceCompletionResolver
     private static bool HasReliableDeclaration(PackageCallable callable)
     {
         SyntaxToken name = callable.Declaration.Name;
+
         return name.IsSourceBacked
             && StringComparer.Ordinal.Equals(IdentifierBinder.Bind(name), callable.Name);
     }
 
     private static bool IsTypeDeclarationPrefix(LexToken token, ReadOnlySpan<byte> bytes)
     {
-        // Built-in type names are not uniformly classified as keywords.
         if (token.Type is not (LexTokenType.Keyword or LexTokenType.Identifier))
         {
             return false;
         }
 
         ReadOnlySpan<byte> spelling = bytes[token.Span.Start..token.Span.End];
+
         return spelling.SequenceEqual("int32"u8)
             || spelling.SequenceEqual("bool"u8)
             || spelling.SequenceEqual("void"u8);
@@ -197,13 +206,19 @@ internal static class SourceCompletionResolver
 }
 
 /// <summary>
-/// Contains the exact identifier replacement span and compiler-visible
-/// functions selected for one source completion request.
+/// Contains a source-backed completion replacement range and the matching
+/// functions and local bindings established for the editor position.
 /// </summary>
 /// <param name="Replacement">
-/// The complete source-backed identifier to replace when a suggestion is accepted.
+/// The complete identifier being edited.
 /// </param>
 /// <param name="Candidates">
-/// Unambiguous visible functions ordered by semantic name.
+/// Unambiguous compiler-visible package functions.
 /// </param>
-internal sealed record SourceCompletionResult(SourceSpan Replacement, IReadOnlyList<PackageCallable> Candidates);
+/// <param name="Bindings">
+/// Visible function parameters and initialized locals.
+/// </param>
+internal sealed record SourceCompletionResult(
+    SourceSpan Replacement,
+    IReadOnlyList<PackageCallable> Candidates,
+    IReadOnlyList<SourceCompletionBinding> Bindings);

@@ -11,8 +11,8 @@ using LSPRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Provides project-aware package-function completion for ordinary Sushi
-/// source documents using compiler-established callable visibility.
+/// Provides compiler-backed completion for package functions, parameters,
+/// and initialized locals in ordinary Sushi source documents.
 /// </summary>
 /// <param name="workspace">
 /// The workspace supplying current source snapshots and semantic analysis.
@@ -86,14 +86,14 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
         (int endLine, int endCharacter) = snapshot.GetUtf16Position(resolved.Replacement.End);
 
         LSPRange replacement = new(startLine, startCharacter, endLine, endCharacter);
-        List<CompletionItem> items = [];
+        SortedDictionary<string, CompletionItem> items = new(StringComparer.Ordinal);
 
         foreach (PackageCallable callable in resolved.Candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string spelling = GetSourceSpelling(callable);
-            items.Add(new CompletionItem
+            string spelling = GetFunctionSpelling(callable);
+            items.TryAdd(callable.Name, new CompletionItem
             {
                 Label = spelling,
                 Kind = CompletionItemKind.Function,
@@ -108,10 +108,30 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
             });
         }
 
-        return new CompletionList(items, isIncomplete: false);
+        foreach (SourceCompletionBinding binding in resolved.Bindings)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string category = binding.Kind is SourceCompletionBindingKind.Parameter ? "parameter" : "local";
+            items[binding.Name] = new CompletionItem
+            {
+                Label = binding.Spelling,
+                Kind = CompletionItemKind.Variable,
+                Detail = $"{category} {GetTypeName(binding.Type)} {binding.Name}",
+                FilterText = binding.Name,
+                SortText = binding.Name,
+                TextEdit = new TextEdit
+                {
+                    Range = replacement,
+                    NewText = binding.Spelling
+                }
+            };
+        }
+
+        return new CompletionList(items.Values, isIncomplete: false);
     }
 
-    private static string GetSourceSpelling(PackageCallable callable)
+    private static string GetFunctionSpelling(PackageCallable callable)
         => callable.Declaration.Name.Type is SyntaxType.EscapedIdentifierToken
             ? "@" + callable.Name
             : callable.Name;
