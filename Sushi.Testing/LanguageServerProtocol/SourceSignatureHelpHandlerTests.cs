@@ -51,6 +51,85 @@ public sealed class SourceSignatureHelpHandlerTests
         });
     }
 
+    [TestCase("Move(x: 20, y: 30)", "Move(x: 20, ", 1)]
+    [TestCase("Move(y: 20, x: 30)", "Move(y: 20, ", 0)]
+    [TestCase("Move(x: 20, y: 30)", "Move(x: 20, y", 1)]
+    [TestCase("Move(y: 20, x: 30)", "Move(y: 20, x", 0)]
+    public async Task NamedArgumentEditingShouldHighlightTheOnlyRemainingParameter(string invocation, string prefix, int expectedParameter)
+    {
+        string source = $$"""
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { {{invocation}}; }
+            """;
+
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, prefix), CancellationToken.None);
+
+            help
+                .Should()
+                .NotBeNull();
+
+            help!.Signatures.Single().Label
+                .Should()
+                .Be("void Move(int32 x, int32 y)");
+
+            help.ActiveParameter
+                .Should()
+                .Be(expectedParameter);
+        });
+    }
+
+    [Test]
+    public async Task MultipleRemainingParametersShouldNotBeGuessedAfterANamedArgument()
+    {
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y, int32 z) {}
+            public void Start() { Move(x: 20, y: 30, z: 40); }
+            """;
+
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(x: 20, "), CancellationToken.None);
+
+            help
+                .Should()
+                .NotBeNull();
+
+            help!.ActiveParameter
+                .Should()
+                .BeNull();
+        });
+    }
+
+    [Test]
+    public async Task UnknownParameterNamePrefixShouldNotSelectTheRemainingParameter()
+    {
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(x: 20, z); }
+            """;
+
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(x: 20, z"), CancellationToken.None);
+
+            help
+                .Should()
+                .NotBeNull();
+
+            help!.ActiveParameter
+                .Should()
+                .BeNull();
+        });
+    }
+
     [Test]
     public async Task NestedCallsShouldSelectTheInnermostCallable()
     {
@@ -114,242 +193,272 @@ public sealed class SourceSignatureHelpHandlerTests
         });
     }
 
-[TestCase("Move(", 0)]
-[TestCase("Move(10, ", 1)]
-[TestCase("Move(10, 20", 1)]
-public async Task EditingAnInvocationShouldTrackTheCurrentPositionalParameter(string prefix, int expectedParameter)
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(10, 20); }
-        """;
-
-    await WithSource(source, async (handler, uri) =>
+    [TestCase("Move(", 0)]
+    [TestCase("Move(10, ", 1)]
+    [TestCase("Move(10, 20", 1)]
+    public async Task EditingAnInvocationShouldTrackTheCurrentPositionalParameter(string prefix, int expectedParameter)
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, prefix), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(10, 20); }
+            """;
 
-        help.Should().NotBeNull();
-        help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
-        help.ActiveParameter.Should().Be(expectedParameter);
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, prefix), CancellationToken.None);
 
-[TestCase("Move(", 0)]
-[TestCase("Move(10, ", 1)]
-public async Task UnterminatedCallsShouldRetainAnUnambiguousSignature(string unfinishedCall, int expectedParameter)
-{
-    string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() {
-        """ + " " + unfinishedCall;
+            help.Should().NotBeNull();
+            help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
+            help.ActiveParameter.Should().Be(expectedParameter);
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [TestCase("Move(", 0)]
+    [TestCase("Move(10, ", 1)]
+    public async Task UnterminatedCallsShouldRetainAnUnambiguousSignature(string unfinishedCall, int expectedParameter)
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, unfinishedCall), CancellationToken.None);
+        string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() {
+            """ + " " + unfinishedCall;
 
-        help.Should().NotBeNull();
-        help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
-        help.ActiveParameter.Should().Be(expectedParameter);
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, unfinishedCall), CancellationToken.None);
 
-[Test]
-public async Task ParenthesizedArgumentsShouldNotAdvanceTheOuterParameter()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public int32 Sum(int32 first, int32 second) { return first + second; }
-        public int32 Start() { return Sum((1 + 2), Sum(3, 4)); }
-        """;
+            help.Should().NotBeNull();
+            help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
+            help.ActiveParameter.Should().Be(expectedParameter);
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [TestCase("Move(x: 20, ", 1)]
+    [TestCase("Move(y: 20, ", 0)]
+    public async Task UnterminatedNamedCallsShouldHighlightTheOnlyRemainingParameter(string unfinishedCall, int expectedParameter)
     {
-        SignatureHelp? grouped = await handler.Handle(At(source, uri, "Sum((1 + "), CancellationToken.None);
-        SignatureHelp? inner = await handler.Handle(At(source, uri, "Sum(3, "), CancellationToken.None);
-        SignatureHelp? outer = await handler.Handle(At(source, uri, "Sum(3, 4)"), CancellationToken.None);
+        string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() {
+            """ + " " + unfinishedCall;
 
-        grouped!.ActiveParameter.Should().Be(0);
-        inner!.ActiveParameter.Should().Be(1);
-        outer!.ActiveParameter.Should().Be(1);
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, unfinishedCall), CancellationToken.None);
 
-[Test]
-public async Task CommentsShouldNotCountTheirCommasOrExposeSignatureHelpInsideTheComment()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(10, /* first, second */ 20); }
-        """;
+            help
+                .Should()
+                .NotBeNull();
 
-    await WithSource(source, async (handler, uri) =>
+            help!.ActiveParameter
+                .Should()
+                .Be(expectedParameter);
+        });
+    }
+
+    [Test]
+    public async Task ParenthesizedArgumentsShouldNotAdvanceTheOuterParameter()
     {
-        SignatureHelp? insideComment = await handler.Handle(
-            At(source, uri, "Move(10, /* first,"), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public int32 Sum(int32 first, int32 second) { return first + second; }
+            public int32 Start() { return Sum((1 + 2), Sum(3, 4)); }
+            """;
 
-        SignatureHelp? afterComment = await handler.Handle(
-            At(source, uri, "Move(10, /* first, second */ "), CancellationToken.None);
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? grouped = await handler.Handle(At(source, uri, "Sum((1 + "), CancellationToken.None);
+            SignatureHelp? inner = await handler.Handle(At(source, uri, "Sum(3, "), CancellationToken.None);
+            SignatureHelp? outer = await handler.Handle(At(source, uri, "Sum(3, 4)"), CancellationToken.None);
 
-        insideComment.Should().BeNull();
-        afterComment.Should().NotBeNull();
-        afterComment!.ActiveParameter.Should().Be(1);
-    });
-}
+            grouped!.ActiveParameter.Should().Be(0);
+            inner!.ActiveParameter.Should().Be(1);
+            outer!.ActiveParameter.Should().Be(1);
+        });
+    }
 
-[Test]
-public async Task DuplicateNamedArgumentShouldNotClaimASecondValidParameterMapping()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(x: 10, x: 20); }
-        """;
-
-    await WithSource(source, async (handler, uri) =>
+    [Test]
+    public async Task CommentsShouldNotCountTheirCommasOrExposeSignatureHelpInsideTheComment()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Move(x: 10, x: "), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(10, /* first, second */ 20); }
+            """;
 
-        help.Should().NotBeNull();
-        help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
-        help.ActiveParameter.Should().BeNull();
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? insideComment = await handler.Handle(
+                At(source, uri, "Move(10, /* first,"), CancellationToken.None);
 
-[Test]
-public async Task PositionalArgumentAfterNamedArgumentShouldNotClaimAParameterMapping()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(y: 20, 10); }
-        """;
+            SignatureHelp? afterComment = await handler.Handle(
+                At(source, uri, "Move(10, /* first, second */ "), CancellationToken.None);
 
-    await WithSource(source, async (handler, uri) =>
+            insideComment.Should().BeNull();
+            afterComment.Should().NotBeNull();
+            afterComment!.ActiveParameter.Should().Be(1);
+        });
+    }
+
+    [Test]
+    public async Task DuplicateNamedArgumentShouldNotClaimASecondValidParameterMapping()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Move(y: 20, "), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(x: 10, x: 20); }
+            """;
 
-        help.Should().NotBeNull();
-        help!.ActiveParameter.Should().BeNull();
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(x: 10, x: "), CancellationToken.None);
 
-[Test]
-public async Task IncompleteNamedArgumentShouldSelectItsDeclaredParameter()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(y: 20, x: ); }
-        """;
+            help.Should().NotBeNull();
+            help!.Signatures.Single().Label.Should().Be("void Move(int32 x, int32 y)");
+            help.ActiveParameter.Should().BeNull();
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [Test]
+    public async Task PositionalArgumentAfterNamedArgumentShouldNotClaimAParameterMapping()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Move(y: 20, x: "), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(y: 20, 10); }
+            """;
 
-        help.Should().NotBeNull();
-        help!.ActiveParameter.Should().Be(0);
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(y: 20, 10"), CancellationToken.None);
 
-[Test]
-public async Task ZeroParameterCallableShouldHaveNoActiveParameter()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Ping() {}
-        public void Start() { Ping(); }
-        """;
+            help
+                .Should()
+                .NotBeNull();
 
-    await WithSource(source, async (handler, uri) =>
+            help!.ActiveParameter
+                .Should()
+                .BeNull();
+        });
+    }
+
+    [Test]
+    public async Task IncompleteNamedArgumentShouldSelectItsDeclaredParameter()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Ping("), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(y: 20, x: ); }
+            """;
 
-        help.Should().NotBeNull();
-        help!.Signatures.Single().Label.Should().Be("void Ping()");
-        help.ActiveParameter.Should().BeNull();
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(y: 20, x: "), CancellationToken.None);
 
-[Test]
-public async Task ClosedInvocationShouldNotContinueProvidingSignatureHelp()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(10, 20); }
-        """;
+            help.Should().NotBeNull();
+            help!.ActiveParameter.Should().Be(0);
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [Test]
+    public async Task ZeroParameterCallableShouldHaveNoActiveParameter()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Move(10, 20)"), CancellationToken.None);
-        help.Should().BeNull();
-    });
-}
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Ping() {}
+            public void Start() { Ping(); }
+            """;
 
-[Test]
-public async Task UnknownNestedCallShouldNotFallBackToTheOuterCallable()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(Unknown(10, 20), 30); }
-        """;
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Ping("), CancellationToken.None);
 
-    await WithSource(source, async (handler, uri) =>
+            help.Should().NotBeNull();
+            help!.Signatures.Single().Label.Should().Be("void Ping()");
+            help.ActiveParameter.Should().BeNull();
+        });
+    }
+
+    [Test]
+    public async Task ClosedInvocationShouldNotContinueProvidingSignatureHelp()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Unknown(10, "), CancellationToken.None);
-        help.Should().BeNull();
-    });
-}
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(10, 20); }
+            """;
 
-[Test]
-public async Task InterruptedInvocationShouldNotLeakIntoTheNextStatement()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { Move(10, ; int32 count = 1; }
-        """;
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(10, 20)"), CancellationToken.None);
+            help.Should().BeNull();
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [Test]
+    public async Task UnknownNestedCallShouldNotFallBackToTheOuterCallable()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "int32 count"), CancellationToken.None);
-        help.Should().BeNull();
-    });
-}
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(Unknown(10, 20), 30); }
+            """;
 
-[Test]
-public async Task Utf16CursorPositionsShouldResolveAfterMultibyteCommentText()
-{
-    const string source = """
-        package Example;
-        namespace Example;
-        public void Move(int32 x, int32 y) {}
-        public void Start() { /* 🍣 */ Move(10, 20); }
-        """;
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Unknown(10, "), CancellationToken.None);
+            help.Should().BeNull();
+        });
+    }
 
-    await WithSource(source, async (handler, uri) =>
+    [Test]
+    public async Task InterruptedInvocationShouldNotLeakIntoTheNextStatement()
     {
-        SignatureHelp? help = await handler.Handle(At(source, uri, "Move(10, "), CancellationToken.None);
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { Move(10, ; int32 count = 1; }
+            """;
 
-        help.Should().NotBeNull();
-        help!.ActiveParameter.Should().Be(1);
-    });
-}
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "int32 count"), CancellationToken.None);
+            help.Should().BeNull();
+        });
+    }
+
+    [Test]
+    public async Task Utf16CursorPositionsShouldResolveAfterMultibyteCommentText()
+    {
+        const string source = """
+            package Example;
+            namespace Example;
+            public void Move(int32 x, int32 y) {}
+            public void Start() { /* 🍣 */ Move(10, 20); }
+            """;
+
+        await WithSource(source, async (handler, uri) =>
+        {
+            SignatureHelp? help = await handler.Handle(At(source, uri, "Move(10, "), CancellationToken.None);
+
+            help.Should().NotBeNull();
+            help!.ActiveParameter.Should().Be(1);
+        });
+    }
 
     private static SignatureHelpParams At(string source, Uri uri, string precedingText)
     {

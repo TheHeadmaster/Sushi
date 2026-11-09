@@ -246,12 +246,35 @@ internal static class SourceSignatureHelpResolver
             return parameterIndex >= 0 && !supplied.Contains(parameterIndex) ? parameterIndex : null;
         }
 
-        if (namedSeen || nextPositional >= parameters.Count || supplied.Contains(nextPositional))
+        if (!namedSeen)
+        {
+            return nextPositional < parameters.Count && !supplied.Contains(nextPositional)
+                ? nextPositional
+                : null;
+        }
+
+        int? remainingParameter = FindSoleUnsuppliedParameter(parameters, supplied);
+        if (remainingParameter is null)
         {
             return null;
         }
 
-        return nextPositional;
+        int first = NextSignificant(tokens, argumentStart, end);
+        if (first < 0)
+        {
+            return remainingParameter;
+        }
+
+        if (!IsIdentifier(tokens[first]) || NextSignificant(tokens, first + 1, end) >= 0)
+        {
+            return null;
+        }
+
+        string? identifier = GetIdentifierName(tokens[first]);
+        return identifier is not null
+            && parameters[remainingParameter.Value].Name.StartsWith(identifier, StringComparison.Ordinal)
+                ? remainingParameter
+                : null;
     }
 
     private static bool TryCommitArgument(
@@ -278,6 +301,28 @@ internal static class SourceSignatureHelpResolver
         }
 
         return supplied.Add(nextPositional++);
+    }
+
+    private static int? FindSoleUnsuppliedParameter(IReadOnlyList<BoundParameter> parameters, HashSet<int> supplied)
+    {
+        int? remaining = null;
+
+        for (int index = 0; index < parameters.Count; index++)
+        {
+            if (supplied.Contains(index))
+            {
+                continue;
+            }
+
+            if (remaining is not null)
+            {
+                return null;
+            }
+
+            remaining = index;
+        }
+
+        return remaining;
     }
 
     private static int FindParameterIndex(IReadOnlyList<BoundParameter> parameters, string name)
@@ -377,6 +422,10 @@ internal static class SourceSignatureHelpResolver
 /// Represents a uniquely selected compiler-visible signature and the parameter
 /// reliably identified at the current editor position.
 /// </summary>
-/// <param name="Callable">The selected function declaration.</param>
-/// <param name="ActiveParameter">The declared parameter index, or null when no mapping is established.</param>
+/// <param name="Callable">
+/// The selected function declaration.
+/// </param>
+/// <param name="ActiveParameter">
+/// The declared parameter index, or null when no mapping is established.
+/// </param>
 internal sealed record SourceSignatureHelpResult(PackageCallable Callable, int? ActiveParameter);
