@@ -76,6 +76,28 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
+    public void RestoredNuGetToolchainShouldBeSelectedWhenTheDistributionIsNotBundled()
+    {
+        string directory = CreateTemporaryDirectory();
+
+        try
+        {
+            string packageRoot = Path.Combine(directory, "nuget cache", "toolchain");
+            CreateCompleteToolchain(packageRoot);
+
+            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, null, Path.Combine(directory, "Sushi"), packageRoot);
+
+            toolchain.RootPath.Should().Be(Path.GetFullPath(packageRoot));
+            toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(packageRoot, "bin", "clang.exe")));
+            toolchain.IsBundled.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
     public void ExplicitToolchainOverrideShouldTakePrecedenceOverBundledToolchain()
     {
         string directory = CreateTemporaryDirectory();
@@ -123,7 +145,7 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
-    public void MissingBundledToolchainShouldExplainHowToRestoreIt()
+    public void MissingToolchainShouldExplainHowNuGetRestoreProvidesIt()
     {
         string directory = CreateTemporaryDirectory();
 
@@ -133,7 +155,7 @@ public sealed class NativeToolchainResolverTests
 
             resolve.Should()
                 .Throw<InvalidOperationException>()
-                .WithMessage("*tools/RestoreLlvmMingw.ps1*");
+                .WithMessage("*dotnet restore*");
         }
         finally
         {
