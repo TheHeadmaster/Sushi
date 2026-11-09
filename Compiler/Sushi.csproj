@@ -20,7 +20,7 @@
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
-        <PackageReference Include="Sushi.NativeToolchain.LlvmMingw.WinX64" Version="20260616" GeneratePathProperty="true" />
+        <PackageReference Include="Sushi.NativeToolchain.LlvmMingw.WinX64" Version="20260616" GeneratePathProperty="true" Condition="'$(RuntimeIdentifier)' == 'win-x64'" />
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
@@ -31,10 +31,10 @@
         <PackageReference Include="Markdig" Version="1.5.1" />
         <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     </ItemGroup>
-<PropertyGroup>
+<PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
         <SushiLlvmMingwPackageRoot>$(PkgSushi_NativeToolchain_LlvmMingw_WinX64)\contentFiles\any\any\toolchain</SushiLlvmMingwPackageRoot>
     </PropertyGroup>
-    <ItemGroup>
+    <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
             <_Parameter1>SushiNativeToolchainPackageRoot</_Parameter1>
             <_Parameter2>$(SushiLlvmMingwPackageRoot)</_Parameter2>
