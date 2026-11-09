@@ -7,19 +7,27 @@ using Sushi.Source;
 namespace Sushi.LanguageServerProtocol;
 
 /// <summary>
-/// Locates an invocation at an editor position using source tokens and the
-/// compiler-established set of visible callable signatures.
+/// Resolves signature help from source tokens and compiler-visible callable
+/// signatures, including calls whose arguments cannot yet be bound.
 /// </summary>
 internal static class SourceSignatureHelpResolver
 {
     /// <summary>
-    /// Resolves the innermost active invocation without requiring its
-    /// arguments or enclosing function body to bind successfully.
+    /// Finds the innermost active invocation and its reliably identifiable
+    /// parameter without attempting to resolve an overload or bind expressions.
     /// </summary>
-    /// <param name="analysis">Analysis of the authoritative source snapshot.</param>
-    /// <param name="offset">The cursor's UTF-8 byte offset.</param>
-    /// <param name="cancellationToken">Cancels lexical position inspection.</param>
-    /// <returns>The unique visible callable and active parameter, if established.</returns>
+    /// <param name="analysis">
+    /// The current analyzed source snapshot.
+    /// </param>
+    /// <param name="offset">
+    /// The cursor's canonical UTF-8 byte offset.
+    /// </param>
+    /// <param name="cancellationToken">
+    /// Cancels source inspection.
+    /// </param>
+    /// <returns>
+    /// Signature information, or null when no unique callable is established.
+    /// </returns>
     internal static SourceSignatureHelpResult? Resolve(SourceAnalysisResult analysis, int offset, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(analysis);
@@ -27,9 +35,15 @@ internal static class SourceSignatureHelpResolver
 
         SourceSnapshot snapshot = analysis.Snapshot;
         if (!snapshot.IsValidUtf8 || offset < 0 || offset > snapshot.SourceLength
-            || analysis.SyntaxTree.Root is not SourceFileSyntax source
-            || !source.FunctionDeclarations.Any(function =>
-                function.Body.Span.Start <= offset && offset <= function.Body.Span.End))
+            || analysis.SyntaxTree.Root is not SourceFileSyntax source)
+        {
+            return null;
+        }
+
+        FunctionDeclarationSyntax? owner = source.FunctionDeclarations.FirstOrDefault(function =>
+            function.Body.Span.Start <= offset && offset <= function.Body.Span.End);
+
+        if (owner is null)
         {
             return null;
         }
@@ -40,55 +54,32 @@ internal static class SourceSignatureHelpResolver
             return null;
         }
 
-        List<int> openParentheses = [];
-        ReadOnlySpan<byte> bytes = snapshot.Bytes.Span;
+        List<OpenDelimiter> delimiters = FindOpenDelimiters(tokens, snapshot.Bytes.Span, offset, cancellationToken);
 
-        for (int index = 0; index < tokens.Count; index++)
+        for (int index = delimiters.Count - 1; index >= 0; index--)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            LexToken token = tokens[index];
 
-            if (token.Span.End > offset)
-            {
-                break;
-            }
-
-            if (token.Type is not LexTokenType.Punctuation || token.Span.Length != 1)
+            OpenDelimiter delimiter = delimiters[index];
+            if (delimiter.Character != (byte)'(')
             {
                 continue;
             }
 
-            switch (bytes[token.Span.Start])
-            {
-                case (byte)'(':
-                    openParentheses.Add(index);
-                    break;
-                case (byte)')' when openParentheses.Count > 0:
-                    openParentheses.RemoveAt(openParentheses.Count - 1);
-                    break;
-            }
-        }
-
-        for (int index = openParentheses.Count - 1; index >= 0; index--)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            int openingIndex = openParentheses[index];
-            int targetIndex = PreviousSignificant(tokens, openingIndex - 1);
+            int targetIndex = PreviousSignificant(tokens, delimiter.TokenIndex - 1);
             if (targetIndex < 0 || !IsIdentifier(tokens[targetIndex]))
             {
                 continue;
             }
 
             LexToken target = tokens[targetIndex];
-            int beforeTarget = PreviousSignificant(tokens, targetIndex - 1);
-
-            if (beforeTarget >= 0 && IsPunctuation(tokens[beforeTarget], bytes, (byte)'.'))
+            if (target.Span.Start < owner.Body.OpenBraceToken.Span.End)
             {
-                return null;
+                continue;
             }
 
-            if (source.FunctionDeclarations.Any(declaration => declaration.Name.Span.Start == target.Span.Start))
+            int previousIndex = PreviousSignificant(tokens, targetIndex - 1);
+            if (previousIndex >= 0 && IsPunctuation(tokens[previousIndex], snapshot.Bytes.Span, (byte)'.'))
             {
                 return null;
             }
@@ -108,27 +99,20 @@ internal static class SourceSignatureHelpResolver
             }
 
             PackageCallable callable = candidates[0];
-            int? activeParameter = FindActiveParameter(tokens, openingIndex, offset, callable.Function.Parameters, cancellationToken);
+            int? activeParameter = FindActiveParameter(tokens, delimiter.TokenIndex, offset, callable.Function.Parameters, cancellationToken);
+
             return new SourceSignatureHelpResult(callable, activeParameter);
         }
 
         return null;
     }
 
-    private static int? FindActiveParameter(
-        IReadOnlyList<LexToken> tokens,
-        int openingIndex,
-        int offset,
-        IReadOnlyList<BoundParameter> parameters,
-        CancellationToken cancellationToken)
+    private static List<OpenDelimiter> FindOpenDelimiters(
+        IReadOnlyList<LexToken> tokens, ReadOnlySpan<byte> bytes, int offset, CancellationToken cancellationToken)
     {
-        ReadOnlySpan<byte> bytes = tokens[openingIndex].Span.Snapshot.Bytes.Span;
-        int segmentStart = openingIndex + 1;
-        int nesting = 0;
-        int positionalIndex = 0;
-        bool namedSeen = false;
+        List<OpenDelimiter> delimiters = [];
 
-        for (int index = segmentStart; index < tokens.Count; index++)
+        for (int index = 0; index < tokens.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -143,70 +127,174 @@ internal static class SourceSignatureHelpResolver
                 continue;
             }
 
-            byte punctuation = bytes[token.Span.Start];
+            byte character = bytes[token.Span.Start];
 
-            if (punctuation is (byte)'(' or (byte)'[' or (byte)'{')
+            switch (character)
             {
-                nesting++;
-            }
-            else if (punctuation is (byte)')' or (byte)']' or (byte)'}')
-            {
-                if (nesting > 0)
-                {
-                    nesting--;
-                }
-            }
-            else if (punctuation == (byte)',' && nesting == 0)
-            {
-                string? name = GetNamedArgument(tokens, segmentStart, index, bytes);
+                case (byte)'(' or (byte)'[' or (byte)'{':
+                    delimiters.Add(new OpenDelimiter(character, index));
+                    break;
 
-                if (name is not null)
-                {
-                    namedSeen = true;
-                    if (!parameters.Any(parameter => StringComparer.Ordinal.Equals(parameter.Name, name)))
-                    {
-                        return null;
-                    }
-                }
-                else
-                {
-                    if (namedSeen)
-                    {
-                        return null;
-                    }
+                case (byte)')' or (byte)']' or (byte)'}':
+                    CloseDelimiter(delimiters, character);
+                    break;
 
-                    positionalIndex++;
-                }
-
-                segmentStart = index + 1;
+                case (byte)';':
+                    DiscardInterruptedGroups(delimiters);
+                    break;
             }
         }
 
-        int segmentEnd = segmentStart;
-        while (segmentEnd < tokens.Count && tokens[segmentEnd].Span.End <= offset)
+        return delimiters;
+    }
+
+    private static void CloseDelimiter(List<OpenDelimiter> delimiters, byte closing)
+    {
+        byte opening = closing switch
         {
-            segmentEnd++;
+            (byte)')' => (byte)'(',
+            (byte)']' => (byte)'[',
+            (byte)'}' => (byte)'{',
+            _ => throw new ArgumentOutOfRangeException(nameof(closing))
+        };
+
+        int matchingIndex = delimiters.FindLastIndex(item => item.Character == opening);
+        if (matchingIndex < 0)
+        {
+            delimiters.Clear();
+            return;
         }
 
-        string? currentName = GetNamedArgument(tokens, segmentStart, segmentEnd, bytes);
+        delimiters.RemoveRange(matchingIndex, delimiters.Count - matchingIndex);
+    }
 
+    private static void DiscardInterruptedGroups(List<OpenDelimiter> delimiters)
+    {
+        int containingBlock = delimiters.FindLastIndex(item => item.Character == (byte)'{');
+        int start = containingBlock + 1;
+
+        if (start < delimiters.Count)
+        {
+            delimiters.RemoveRange(start, delimiters.Count - start);
+        }
+    }
+
+    private static int? FindActiveParameter(
+        IReadOnlyList<LexToken> tokens, int openingIndex, int offset,
+        IReadOnlyList<BoundParameter> parameters, CancellationToken cancellationToken)
+    {
+        ReadOnlySpan<byte> bytes = tokens[openingIndex].Span.Snapshot.Bytes.Span;
+        HashSet<int> supplied = [];
+        List<byte> nestedDelimiters = [];
+
+        int nextPositional = 0;
+        int argumentStart = openingIndex + 1;
+        bool namedSeen = false;
+
+        int end = argumentStart;
+        while (end < tokens.Count && tokens[end].Span.End <= offset)
+        {
+            end++;
+        }
+
+        for (int index = argumentStart; index < end; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            LexToken token = tokens[index];
+            if (token.Type is not LexTokenType.Punctuation || token.Span.Length != 1)
+            {
+                continue;
+            }
+
+            byte character = bytes[token.Span.Start];
+
+            switch (character)
+            {
+                case (byte)'(' or (byte)'[' or (byte)'{':
+                    nestedDelimiters.Add(character);
+                    break;
+
+                case (byte)')' or (byte)']' or (byte)'}':
+                    if (nestedDelimiters.Count == 0 || !DelimitersMatch(nestedDelimiters[^1], character))
+                    {
+                        return null;
+                    }
+
+                    nestedDelimiters.RemoveAt(nestedDelimiters.Count - 1);
+                    break;
+
+                case (byte)';' when nestedDelimiters.Count == 0:
+                    return null;
+
+                case (byte)',' when nestedDelimiters.Count == 0:
+                    if (!TryCommitArgument(tokens, argumentStart, index, bytes, parameters,
+                        supplied, ref nextPositional, ref namedSeen))
+                    {
+                        return null;
+                    }
+
+                    argumentStart = index + 1;
+                    break;
+            }
+        }
+
+        string? currentName = GetNamedArgument(tokens, argumentStart, end, bytes);
         if (currentName is not null)
         {
-            BoundParameter? namedParameter = parameters.FirstOrDefault(parameter =>
-                StringComparer.Ordinal.Equals(parameter.Name, currentName));
-
-            return namedParameter?.Index;
+            int parameterIndex = FindParameterIndex(parameters, currentName);
+            return parameterIndex >= 0 && !supplied.Contains(parameterIndex) ? parameterIndex : null;
         }
 
-        if (namedSeen)
+        if (namedSeen || nextPositional >= parameters.Count || supplied.Contains(nextPositional))
         {
             return null;
         }
 
-        return positionalIndex < parameters.Count ? positionalIndex : null;
+        return nextPositional;
     }
 
-    private static string? GetNamedArgument(IReadOnlyList<LexToken> tokens, int start, int end, ReadOnlySpan<byte> bytes)
+    private static bool TryCommitArgument(
+        IReadOnlyList<LexToken> tokens, int start, int end, ReadOnlySpan<byte> bytes,
+        IReadOnlyList<BoundParameter> parameters, HashSet<int> supplied,
+        ref int nextPositional, ref bool namedSeen)
+    {
+        if (NextSignificant(tokens, start, end) < 0)
+        {
+            return false;
+        }
+
+        string? name = GetNamedArgument(tokens, start, end, bytes);
+        if (name is not null)
+        {
+            namedSeen = true;
+            int parameterIndex = FindParameterIndex(parameters, name);
+            return parameterIndex >= 0 && supplied.Add(parameterIndex);
+        }
+
+        if (namedSeen || nextPositional >= parameters.Count)
+        {
+            return false;
+        }
+
+        return supplied.Add(nextPositional++);
+    }
+
+    private static int FindParameterIndex(IReadOnlyList<BoundParameter> parameters, string name)
+    {
+        for (int index = 0; index < parameters.Count; index++)
+        {
+            if (StringComparer.Ordinal.Equals(parameters[index].Name, name))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static string? GetNamedArgument(
+        IReadOnlyList<LexToken> tokens, int start, int end, ReadOnlySpan<byte> bytes)
     {
         int first = NextSignificant(tokens, start, end);
         if (first < 0 || !IsIdentifier(tokens[first]))
@@ -219,6 +307,15 @@ internal static class SourceSignatureHelpResolver
             ? GetIdentifierName(tokens[first])
             : null;
     }
+
+    private static bool DelimitersMatch(byte opening, byte closing)
+        => opening switch
+        {
+            (byte)'(' => closing == (byte)')',
+            (byte)'[' => closing == (byte)']',
+            (byte)'{' => closing == (byte)'}',
+            _ => false
+        };
 
     private static string? GetIdentifierName(LexToken token)
     {
@@ -272,12 +369,14 @@ internal static class SourceSignatureHelpResolver
         => tokens.Any(token =>
             token.Span.Start < offset && offset < token.Span.End
             && token.Type is LexTokenType.LineComment or LexTokenType.DocumentationLineComment or LexTokenType.BlockComment);
+
+    private readonly record struct OpenDelimiter(byte Character, int TokenIndex);
 }
 
 /// <summary>
-/// Represents a uniquely selected signature and the declared parameter
-/// corresponding to the argument currently being edited.
+/// Represents a uniquely selected compiler-visible signature and the parameter
+/// reliably identified at the current editor position.
 /// </summary>
-/// <param name="Callable">The compiler-visible function declaration.</param>
-/// <param name="ActiveParameter">The declared parameter index, if identifiable.</param>
+/// <param name="Callable">The selected function declaration.</param>
+/// <param name="ActiveParameter">The declared parameter index, or null when no mapping is established.</param>
 internal sealed record SourceSignatureHelpResult(PackageCallable Callable, int? ActiveParameter);

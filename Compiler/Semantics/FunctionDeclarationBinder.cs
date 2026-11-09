@@ -61,7 +61,7 @@ public sealed class FunctionDeclarationBinder
         FunctionBindResult signatureResult = BindSignature(declaration, diagnosticReporter, cancellationToken);
         BoundFunction? signature = signatureResult.Function;
 
-        if (signature is null)
+        if (signature is null || !declaration.Body.CloseBraceToken.IsSourceBacked)
         {
             return new FunctionBindResult(null);
         }
@@ -113,8 +113,7 @@ public sealed class FunctionDeclarationBinder
             || !TryBindReturnType(declaration.ReturnType, out BoundType returnType)
             || !declaration.OpenParenthesisToken.IsSourceBacked
             || !declaration.CloseParenthesisToken.IsSourceBacked
-            || !declaration.Body.OpenBraceToken.IsSourceBacked
-            || !declaration.Body.CloseBraceToken.IsSourceBacked)
+            || !declaration.Body.OpenBraceToken.IsSourceBacked)
         {
             return new FunctionBindResult(null);
         }

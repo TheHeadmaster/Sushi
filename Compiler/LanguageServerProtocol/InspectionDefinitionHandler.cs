@@ -46,6 +46,7 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
         {
             return new InspectionDefinitionResponse { Error = "The inspection document identity or cursor position is invalid." };
         }
+        
         Uri requestedUri = request.DocumentUri.ToUri();
         InspectionArtifact? originArtifact = artifacts.Find(request.ArtifactId, requestedUri.AbsoluteUri);
         if (originArtifact is null || originArtifact.Result.Document is null)
@@ -176,7 +177,7 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
 
             throw;
         }
-        
+
         return new InspectionDefinitionResponse
         {
             Found = true,

@@ -1,0 +1,7 @@
+﻿package Example;
+namespace Example;
+
+public void Move(int32 x, int32 y) {}
+public void Start(int32 x, int32 y) {
+    Move(x: 20, y: 20);
+}
