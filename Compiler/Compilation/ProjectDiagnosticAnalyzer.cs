@@ -133,52 +133,80 @@ internal sealed class ProjectDiagnosticAnalyzer
         foreach (ProjectContext project in selectedProjects)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             SourceState[] members = [.. project.Members.Select(snapshot => sourceStates[snapshot])];
-            if (members.Any(source => source.Reporter.HasErrors()))
-            {
-                continue;
-            }
+            bool hasSourceErrors = members.Any(source => source.Reporter.HasErrors());
 
             IDiagnosticReporter catalogDiagnostics = new DiagnosticReporter();
             IReadOnlyList<ProjectCallable> catalog = ProjectCallableCatalog.Collect(
                 [.. members.Select(source => source.Result)], catalogDiagnostics, cancellationToken);
+
             if (catalogDiagnostics.HasErrors())
             {
-                RouteCatalogDiagnostics(members, catalogDiagnostics.ReportDiagnostics());
+                if (!hasSourceErrors)
+                {
+                    RouteCatalogDiagnostics(members, catalogDiagnostics.ReportDiagnostics());
+                }
+
                 continue;
             }
 
             foreach (SourceState source in members)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (CountContainingProjects(source, projects) != 1 || IsWithinInvalidProject(source.Result.Snapshot.Uri, invalidProjectDirectories))
+
+                if (CountContainingProjects(source, projects) != 1
+                    || IsWithinInvalidProject(source.Result.Snapshot.Uri, invalidProjectDirectories))
                 {
                     continue;
                 }
 
-                BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), catalog, project.ProjectUri, cancellationToken);
+                IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken);
+
+                source.Result = source.Result with
+                {
+                    VisibleCallables = Array.AsReadOnly(visible.ToArray()),
+                    SemanticProjectUri = project.ProjectUri
+                };
+
+                if (!hasSourceErrors)
+                {
+                    BindBodies(source, visible, catalog, project.ProjectUri, cancellationToken);
+                }
             }
         }
 
         foreach (SourceState source in sources)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             int membershipCount = CountContainingProjects(source, projects);
-            if (membershipCount != 0 || source.Reporter.HasErrors()
-                || IsWithinInvalidProject(source.Result.Snapshot.Uri, invalidProjectDirectories))
+            if (membershipCount != 0 || IsWithinInvalidProject(source.Result.Snapshot.Uri, invalidProjectDirectories))
             {
                 continue;
             }
 
+            bool hasSourceErrors = source.Reporter.HasErrors();
             IDiagnosticReporter catalogDiagnostics = new DiagnosticReporter();
             IReadOnlyList<ProjectCallable> catalog = ProjectCallableCatalog.Collect([source.Result], catalogDiagnostics, cancellationToken);
+
             if (catalogDiagnostics.HasErrors())
             {
-                source.Reporter.CommitReporter(catalogDiagnostics);
+                if (!hasSourceErrors)
+                {
+                    source.Reporter.CommitReporter(catalogDiagnostics);
+                }
+
                 continue;
             }
 
-            BindBodies(source, ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken), catalog, null, cancellationToken);
+            IReadOnlyList<PackageCallable> visible = ProjectCallableCatalog.SelectVisible(source.Result, catalog, cancellationToken);
+            source.Result = source.Result with { VisibleCallables = Array.AsReadOnly(visible.ToArray()) };
+
+            if (!hasSourceErrors)
+            {
+                BindBodies(source, visible, catalog, null, cancellationToken);
+            }
         }
 
         foreach (SourceState source in sources)
@@ -196,7 +224,8 @@ internal sealed class ProjectDiagnosticAnalyzer
         List<SourceSemanticOccurrence> occurrences = [];
         List<BoundParameterHint> parameterHints = [];
         IReadOnlyList<BoundFunction> signatures = source.Result.Functions;
-        Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = new(ReferenceEqualityComparer.Instance);
+        Dictionary<SyntaxNode, DocumentationBlock> documentationByDeclaration = [with(ReferenceEqualityComparer.Instance)];
+
         foreach (DocumentationBlock block in source.Result.DocumentationBlocks)
         {
             if (block.Declaration is SyntaxNode declaration)
@@ -204,6 +233,7 @@ internal sealed class ProjectDiagnosticAnalyzer
                 documentationByDeclaration.Add(declaration, block);
             }
         }
+
         for (int index = 0; index < syntax.FunctionDeclarations.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -263,8 +293,6 @@ internal sealed class ProjectDiagnosticAnalyzer
             SemanticProjectUri = projectUri
         };
     }
-
-
 
     internal static void AnalyzeDocumentationReferences(
         SourceAnalysisResult source,
@@ -499,7 +527,6 @@ internal sealed class ProjectDiagnosticAnalyzer
             identifiers[0]);
         return true;
     }
-
 
     private static bool HasLexicallyValidQualifiedTarget(DocumentationReference reference, CancellationToken cancellationToken)
     {

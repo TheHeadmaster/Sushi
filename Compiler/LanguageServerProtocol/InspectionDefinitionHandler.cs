@@ -106,6 +106,7 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
                     {
                         artifacts.Release(registeredId);
                     }
+
                     throw;
                 }
                 catch (InspectionInputException exception)
@@ -133,8 +134,10 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
                 {
                     artifacts.Release(targetArtifact.Id);
                 }
+
                 return new InspectionDefinitionResponse { Error = "The target representation does not contain the requested semantic definition." };
             }
+
             targetDefinition = actualDefinition;
         }
         else
@@ -156,6 +159,7 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
             {
                 artifacts.Release(targetArtifact.Id);
             }
+
             return new InspectionDefinitionResponse { Error = "The inspection metadata contains an invalid generated-text range." };
         }
 
@@ -169,8 +173,10 @@ public sealed class InspectionDefinitionHandler(CompilerInspectionService inspec
             {
                 artifacts.Release(targetArtifact.Id);
             }
+
             throw;
         }
+        
         return new InspectionDefinitionResponse
         {
             Found = true,

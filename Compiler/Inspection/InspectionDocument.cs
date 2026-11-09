@@ -87,7 +87,7 @@ public sealed class InspectionDocument
                 throw new ArgumentException("Symbol metadata must correspond to a definition owned by this function.", nameof(symbolMetadata));
             }
 
-            bool valid = (item.Key.Kind is (InspectionSymbolKind.Local or InspectionSymbolKind.Temporary)
+            bool valid = (item.Key.Kind is InspectionSymbolKind.Local or InspectionSymbolKind.Temporary
                     && value is InspectionValueMetadata typedValue && typedValue.Type is not IRType.Void && !string.IsNullOrEmpty(typedValue.DisplayName))
                 || (item.Key.Kind is InspectionSymbolKind.BasicBlock && stage is InspectionStage.LoweredIR
                     && value is InspectionBasicBlockMetadata block && !string.IsNullOrEmpty(block.Label));

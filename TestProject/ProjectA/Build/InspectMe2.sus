@@ -1,0 +1,10 @@
+﻿package Example;
+namespace Example;
+
+/// The new documentation.
+/// @param input the new input.
+/// @return the old value.
+public int32 InspectMe2(int32 input)
+{
+    return input * 2;
+}

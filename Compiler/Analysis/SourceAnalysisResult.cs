@@ -47,6 +47,13 @@ public record SourceAnalysisResult(SourceSnapshot Snapshot, ConcreteSyntaxTree S
     internal IReadOnlyList<BoundParameterHint> ParameterHints { get; init; } = [];
 
     /// <summary>
+    /// Gets callable signatures visible from this source under the compiler's
+    /// package, namespace, and accessibility rules.
+    /// This metadata remains available when body binding cannot complete.
+    /// </summary>
+    internal IReadOnlyList<PackageCallable> VisibleCallables { get; init; } = [];
+
+    /// <summary>
     /// Gets the project whose callable catalog resolved this file, or null when it was analyzed as a standalone source.
     /// </summary>
     internal Uri? SemanticProjectUri { get; init; }

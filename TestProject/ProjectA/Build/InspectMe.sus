@@ -1,0 +1,15 @@
+﻿package Example;
+namespace Example;
+
+public int32 InspectMe(int32 input)
+{
+    int32 tripled = InspectMe(input);
+    int32 doubled = InspectMe2(input);
+
+    if (doubled > 10)
+    {
+        return doubled;
+    }
+
+    return doubled + 1;
+}
