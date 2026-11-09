@@ -56,7 +56,7 @@ try {
             $installed = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
             if ($installed.version -eq $manifest.version -and $installed.sha256 -eq $manifest.sha256 -and (Test-CompleteToolchain $DestinationRoot)) {
                 Write-Host "Verified LLVM-MinGW $($manifest.version) already exists at $DestinationRoot"
-                exit 0
+                return
             }
         }
     }
