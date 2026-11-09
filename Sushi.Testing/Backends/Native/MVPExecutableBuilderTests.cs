@@ -56,7 +56,9 @@ public class MVPExecutableBuilderTests
                 Directory.Delete(directory, recursive: true);
             }
         }
-        [TestCase(TestName = "MVP Executable Builder Should Link Void Programs Without Toolchain Runtime Dependencies")]
+    }
+
+    [TestCase(TestName = "MVP Executable Builder Should Link Void Programs Without Toolchain Runtime Dependencies")]
     public async Task BuildAsyncShouldLinkVoidProgramsWithoutToolchainRuntimeDependencies()
     {
         LoweredFunction function = new(
