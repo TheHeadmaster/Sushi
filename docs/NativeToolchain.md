@@ -1,55 +1,61 @@
 # Windows Native Toolchain
 
-Sushi's native backend uses LLVM to emit object files and the Clang driver to link them. On Windows x64, Sushi uses a pinned LLVM-MinGW distribution instead of relying on a machine-wide Clang, Visual Studio C++ Build Tools, MSVC linker libraries, or the Windows SDK.
+Sushi emits LLVM object files and links them through Clang. On Windows x64, the compiler consumes a complete, pinned LLVM-MinGW distribution delivered as a NuGet package. This avoids dependence on machine-wide Clang, Visual Studio C++ Build Tools, MSVC linker libraries, and the Windows SDK.
 
-## Pinned distribution
+## Pinned package
 
-The toolchain metadata in [tools/llvm-mingw.json](../tools/llvm-mingw.json) is authoritative:
+The lock metadata in [tools/llvm-mingw.json](../tools/llvm-mingw.json) identifies the complete toolchain package:
 
-- LLVM-MinGW release: 20260616
-- LLVM version: 22.1.8
+- NuGet package: `Sushi.NativeToolchain.LlvmMingw.WinX64` version `20260616`
+- LLVM-MinGW release: 20260616; LLVM 22.1.8
 - Runtime: UCRT
 - Host and target architecture: x86_64
 - Target triple: `x86_64-w64-windows-gnu`
-- Upstream archive: [llvm-mingw 20260616 UCRT x86_64](https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-x86_64.zip)
+- Upstream archive SHA-256: `b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35`
 
-The Windows GNU target is required because LLVM-MinGW supplies the GNU startup objects and MinGW runtime libraries. The UCRT package targets Windows 10 and later, using Windows-provided Universal C Runtime components rather than requiring the Visual C++ Redistributable. The generated native program does not include the toolchain itself.
+The NuGet package preserves the complete upstream archive layout, including Clang, LLD, compiler runtime libraries, startup objects, headers, target libraries, and license notices. The Windows GNU target uses GNU startup objects and MinGW runtime libraries. The UCRT distribution targets Windows 10 or newer and does not require a Visual C++ Redistributable for the supported executable subset.
 
-LLVM-MinGW is distributed by Martin Storsjö and contributors. It bundles LLVM, Clang, LLD, compiler runtime components, and mingw-w64 headers/libraries under their respective upstream licenses. Preserve the notices included in the complete archive when redistributing the toolchain. See the [LLVM-MinGW project](https://github.com/mstorsjo/llvm-mingw) and its included license files for attribution and component-specific terms.
+LLVM-MinGW is distributed by Martin Storsjö and contributors. The package retains upstream license and notice files and includes Sushi's third-party redistribution notice. Refer to those files for component-specific terms.
 
-## Development setup
+## Development
 
-From the repository root, run:
+After the package is published to a NuGet feed available to the developer, the standard workflow is:
 
 ```powershell
-./tools/RestoreLlvmMingw.ps1
+git pull
 dotnet restore Sushi.slnx
-dotnet build Sushi.slnx --no-restore
-dotnet test Sushi.Testing/Sushi.Testing.csproj --no-build
+dotnet build Sushi.slnx
+dotnet test Sushi.Testing/Sushi.Testing.csproj
 ```
 
-The script downloads only the pinned archive, verifies its full SHA-256 before extraction, rejects unsafe archive paths, and installs the complete upstream directory layout under `.tools/llvm-mingw`. The directory is ignored by Git. Re-running the script reuses a complete extraction with a matching version and checksum marker. Use `-Force` to replace it.
+No standalone toolchain bootstrap is part of local restore, build, test, or publish. If the package is unavailable, NuGet reports the ordinary package restore failure.
 
-No toolchain download occurs when Sushi compiles a program. Missing or incomplete native toolchain files produce an actionable error.
+The [explicit package workflow](../.github/workflows/publish-native-toolchain.yml) builds the package from the pinned upstream archive and can optionally publish it through NuGet.org Trusted Publishing. Ordinary repository pushes never publish the package. The NuGet.org package is not considered available until it has been verified through the feed. Publication requires the NuGet package owner to configure a trusted-publishing policy and the repository Actions variable `NUGET_USER`.
 
-## Publish a portable compiler
+## Package creation and validation
 
-On Windows x64 with the .NET 10 SDK:
+The packaging workflow invokes [RestoreLlvmMingw.ps1](../tools/RestoreLlvmMingw.ps1) only to acquire the upstream archive for package creation. It verifies the pinned SHA-256 before safe extraction, validates required compiler/runtime files, packages the complete extracted tree, preserves upstream notices, and rejects packages larger than NuGet.org's 250 MB limit.
+
+Consumer CI restores the generated nupkg through NuGet from a local package source, then sets `SUSHI_BLOCK_UPSTREAM_TOOLCHAIN_DOWNLOADS=1` for consumer restore/build/test/publish operations. The upstream acquisition helper refuses to access the release when this guard is active. Developers restore the published dependency from their configured NuGet feed; the CI package artifact is not the developer distribution channel.
+
+## Published compiler
+
+On Windows x64, publish with:
 
 ```powershell
 dotnet publish Compiler/Sushi.csproj -c Release -r win-x64 --self-contained true -o artifacts/publish/win-x64
 ```
 
-The publish target restores and verifies the pinned toolchain, then stages the complete directory under `toolchains/win-x64/llvm-mingw` beside Sushi. The resulting directory is relocatable; copy or extract it elsewhere and invoke `Sushi.exe --project <project-or-folder>`.
+The publish target stages the full restored package payload under `toolchains/win-x64/llvm-mingw` beside Sushi. The distribution remains usable after it is moved or extracted elsewhere, without access to the NuGet cache. Programs produced by Sushi do not include the toolchain.
 
 ## Runtime resolution
 
-On Windows x64, Sushi checks `SUSHI_NATIVE_TOOLCHAIN_ROOT` first. This development and test override must name the complete LLVM-MinGW root, containing `bin/clang.exe`, `bin/ld.lld.exe`, target startup objects, compiler runtime libraries, and headers. If the variable is unset, Sushi resolves the bundled toolchain relative to `AppContext.BaseDirectory`:
+On Windows x64, Sushi resolves the toolchain in this order:
 
-```text
-toolchains/win-x64/llvm-mingw
-```
+1. `SUSHI_NATIVE_TOOLCHAIN_ROOT`, when explicitly set to a complete toolchain root.
+2. The published `toolchains/win-x64/llvm-mingw` directory beside the compiler.
+3. The exact toolchain directory inside the restored NuGet package cache, identified at build time by NuGet's generated package path.
 
-An invalid explicit override fails directly; Sushi does not fall back to the bundled copy or system PATH. Normal published use does not require the override. The linker runs the selected absolute `clang.exe`, passes the Windows GNU target, and sanitizes inherited MSVC/SDK include and library variables and PATH entries so unrelated installations cannot redirect linking.
+The selected root must contain Clang, LLD, Windows x64 GNU startup/runtime files, compiler builtins, and headers. Invalid explicit overrides fail directly. The linker runs the selected absolute `clang.exe`, passes the pinned target triple, and removes inherited MSVC/Windows SDK variables and unrelated PATH entries.
 
-Other operating systems retain the existing PATH-based `clang` behavior. Bundled portability is currently supported only for Windows x64; other Windows architectures are rejected. Updates to LLVM-MinGW must be explicit: change the single metadata file after reviewing the upstream release, LLVM compatibility, archive checksum, runtime, layout, and licenses.
+Bundled support currently targets Windows x64 only. Other operating systems retain the existing PATH-based Clang behavior. Updating LLVM-MinGW requires an explicit change to the pinned metadata, checksum, package version, and verification results.
