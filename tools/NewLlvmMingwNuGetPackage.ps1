@@ -45,6 +45,7 @@ if ($packageLength -gt $maximumPackageBytes) {
 }
 
 Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
 try {
     $requiredEntries = @(
