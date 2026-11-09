@@ -12,10 +12,7 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</RuntimeIdentifier>
     </PropertyGroup>
-    <PropertyGroup>
-        <SushiLlvmMingwRoot Condition="'$(SushiLlvmMingwRoot)' == ''">$(MSBuildThisFileDirectory)../.tools/llvm-mingw</SushiLlvmMingwRoot>
-    </PropertyGroup>
-    <ItemGroup>
+<ItemGroup>
         <Content Include="Sushi.ico" />
     </ItemGroup>
     <ItemGroup>
@@ -23,6 +20,7 @@
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="OmniSharp.Extensions.LanguageServer" Version="0.19.9" />
+        <PackageReference Include="Sushi.NativeToolchain.LlvmMingw.WinX64" Version="20260616" GeneratePathProperty="true" />
         <PackageReference Include="Serilog" Version="4.4.0" />
         <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
         <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
@@ -33,13 +31,10 @@
         <PackageReference Include="Markdig" Version="1.5.1" />
         <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     </ItemGroup>
-    <Target Name="RestoreWindowsX64NativeToolchain" BeforeTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
-        <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)../tools/RestoreLlvmMingw.ps1&quot; -DestinationRoot &quot;$(SushiLlvmMingwRoot)&quot;" />
-    </Target>
-    <Target Name="StageWindowsX64NativeToolchain" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
-        <Error Condition="!Exists('$(SushiLlvmMingwRoot)/bin/clang.exe')" Text="The verified LLVM-MinGW toolchain is missing from $(SushiLlvmMingwRoot)." />
+<Target Name="StageWindowsX64NativeToolchain" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+        <Error Condition="!Exists('$(SushiLlvmMingwPackageRoot)/bin/clang.exe')" Text="The restored LLVM-MinGW NuGet package is missing or incomplete at $(SushiLlvmMingwPackageRoot). Run dotnet restore and verify the pinned toolchain package." />
         <ItemGroup>
-            <LlvmMingwPublishFile Include="$(SushiLlvmMingwRoot)/**/*" />
+            <LlvmMingwPublishFile Include="$(SushiLlvmMingwPackageRoot)/**/*" />
         </ItemGroup>
         <Copy SourceFiles="@(LlvmMingwPublishFile)" DestinationFiles="@(LlvmMingwPublishFile->'$(PublishDir)toolchains/win-x64/llvm-mingw/%(RecursiveDir)%(Filename)%(Extension)')" />
     </Target>
