@@ -108,7 +108,7 @@ jobs:
         if ($inspection -notmatch "IMAGE_FILE_MACHINE_AMD64") {
           throw "The native executable is not a Windows x64 PE image."
         }
-        $imports = [regex]::Matches($inspection, "Name: ([^\\s]+\\.dll)") | ForEach-Object { $_.Groups[1].Value }
+        $imports = [regex]::Matches($inspection, 'Name: ([^\s]+\.dll)') | ForEach-Object { $_.Groups[1].Value }
         if ($imports.Count -eq 0) {
           throw "The PE import table could not be inspected."
         }
