@@ -32,7 +32,7 @@
         <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     </ItemGroup>
 <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
-        <SushiLlvmMingwPackageRoot>$(PkgSushi_NativeToolchain_LlvmMingw_WinX64)\contentFiles\any\any\toolchain</SushiLlvmMingwPackageRoot>
+        <SushiLlvmMingwPackageRoot>$(PkgSushi_NativeToolchain_LlvmMingw_WinX64)\toolchain</SushiLlvmMingwPackageRoot>
     </PropertyGroup>
     <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
         <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
