@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Sushi.Backends.Native;
@@ -9,6 +10,7 @@ internal static class NativeToolchainResolver
 {
     public const string OverrideEnvironmentVariable = "SUSHI_NATIVE_TOOLCHAIN_ROOT";
     private const string BundledToolchainRelativePath = "toolchains/win-x64/llvm-mingw";
+    private const string PackageRootMetadataKey = "SushiNativeToolchainPackageRoot";
 
     /// <summary>
     /// Resolves a native linker executable for the current process.
@@ -19,13 +21,15 @@ internal static class NativeToolchainResolver
             OperatingSystem.IsWindows(),
             RuntimeInformation.ProcessArchitecture,
             Environment.GetEnvironmentVariable(OverrideEnvironmentVariable),
-            AppContext.BaseDirectory);
+            AppContext.BaseDirectory,
+            GetRestoredPackageToolchainRoot());
 
     internal static ResolvedNativeToolchain Resolve(
         bool isWindows,
         Architecture processArchitecture,
         string? explicitRoot,
-        string applicationBaseDirectory)
+        string applicationBaseDirectory,
+        string? restoredPackageRoot = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(applicationBaseDirectory);
 
@@ -41,13 +45,26 @@ internal static class NativeToolchainResolver
         }
 
         bool isOverride = !string.IsNullOrWhiteSpace(explicitRoot);
-        string root = Path.GetFullPath(isOverride
+        string bundledRoot = Path.GetFullPath(Path.Combine(applicationBaseDirectory, BundledToolchainRelativePath));
+        string selectedRoot = isOverride
             ? explicitRoot!
-            : Path.Combine(applicationBaseDirectory, BundledToolchainRelativePath));
+            : Directory.Exists(bundledRoot) || string.IsNullOrWhiteSpace(restoredPackageRoot)
+                ? bundledRoot
+                : restoredPackageRoot;
+        string root = Path.GetFullPath(selectedRoot);
 
         ValidateToolchainRoot(root, isOverride);
 
         return new ResolvedNativeToolchain(Path.Combine(root, "bin", "clang.exe"), root, IsBundled: true);
+    }
+
+    private static string? GetRestoredPackageToolchainRoot()
+    {
+        AssemblyMetadataAttribute? metadata = typeof(NativeToolchainResolver).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .FirstOrDefault(attribute => string.Equals(attribute.Key, PackageRootMetadataKey, StringComparison.Ordinal));
+
+        return metadata?.Value;
     }
 
     internal static void ValidateToolchainRoot(string root, bool isOverride)
@@ -88,7 +105,7 @@ internal static class NativeToolchainResolver
         {
             string source = isOverride
                 ? $"The toolchain selected by {OverrideEnvironmentVariable} is incomplete at {fullRoot}."
-                : $"The bundled LLVM-MinGW toolchain is missing or incomplete at {fullRoot}. Restore it with tools/RestoreLlvmMingw.ps1 or republish Sushi.";
+                : $"The restored or bundled LLVM-MinGW toolchain is missing or incomplete at {fullRoot}. Run dotnet restore to restore the pinned native toolchain package, or republish Sushi.";
 
             throw new InvalidOperationException(
                 $"{source} Missing required toolchain files: {string.Join(", ", missing)}.");
