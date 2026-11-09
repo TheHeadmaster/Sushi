@@ -3,6 +3,8 @@
         <TargetFramework>net10.0</TargetFramework>
         <PackageId>Sushi.NativeToolchain.LlvmMingw.WinX64</PackageId>
         <Authors>TheHeadmaster</Authors>
+        <PackageProjectUrl>https://github.com/mstorsjo/llvm-mingw</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/TheHeadmaster/Sushi</RepositoryUrl>
         <Description>Complete pinned LLVM-MinGW UCRT x64 toolchain for Sushi's Windows GNU native backend.</Description>
         <PackageTags>llvm;clang;lld;mingw;ucrt;windows-x64;sushi</PackageTags>
         <PackageLicenseFile>THIRD-PARTY-NOTICES.md</PackageLicenseFile>
