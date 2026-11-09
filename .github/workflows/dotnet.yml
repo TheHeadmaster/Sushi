@@ -26,6 +26,12 @@ jobs:
       run: npm run lint
     - name: Test inspection and extension behavior
       run: npm run test:inspection
+    - name: Restore pinned LLVM-MinGW
+      shell: pwsh
+      run: |
+        $toolchainRoot = Join-Path $env:GITHUB_WORKSPACE ".tools/llvm-mingw"
+        ./tools/RestoreLlvmMingw.ps1 -DestinationRoot $toolchainRoot
+        "SUSHI_NATIVE_TOOLCHAIN_ROOT=$toolchainRoot" >> $env:GITHUB_ENV
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
@@ -36,3 +42,90 @@ jobs:
       run: dotnet build --no-restore
     - name: Test
       run: dotnet test --no-build --verbosity normal
+    - name: Publish relocatable Windows x64 compiler
+      shell: pwsh
+      run: |
+        $publishRoot = Join-Path $env:RUNNER_TEMP "Sushi Publish"
+        dotnet publish Compiler/Sushi.csproj -c Release -r win-x64 --self-contained true -o $publishRoot
+        $requiredFiles = @(
+          "Sushi.exe",
+          "toolchains/win-x64/llvm-mingw/bin/clang.exe",
+          "toolchains/win-x64/llvm-mingw/bin/ld.lld.exe",
+          "toolchains/win-x64/llvm-mingw/x86_64-w64-mingw32/lib/crt2.o"
+        )
+        foreach ($relativePath in $requiredFiles) {
+          if (-not (Test-Path -LiteralPath (Join-Path $publishRoot $relativePath) -PathType Leaf)) {
+            throw "Published distribution is missing $relativePath"
+          }
+        }
+
+        $relocatedRoot = Join-Path $env:RUNNER_TEMP "Sushi Relocated Distribution"
+        New-Item -ItemType Directory -Path $relocatedRoot -Force | Out-Null
+        Copy-Item -Path (Join-Path $publishRoot "*") -Destination $relocatedRoot -Recurse -Force
+        $smokeRoot = Join-Path $env:RUNNER_TEMP "Sushi Native Smoke"
+        $sourceRoot = Join-Path $smokeRoot "Sources"
+        New-Item -ItemType Directory -Path $sourceRoot -Force | Out-Null
+        @'
+        name = "PortableSmoke"
+        assembly = "PortableSmoke"
+        language-version = "1.0"
+        [build]
+        default = "debug"
+        sources = ["Sources/**/*.sus"]
+        [build.targets.debug]
+        type = "Sushi.MVP.Debug"
+        '@ | Set-Content -Path (Join-Path $smokeRoot "PortableSmoke.susproj") -Encoding utf8
+        @'
+        package Example;
+        namespace Example;
+
+        public void Helper() {}
+
+        public root activity Application : task
+        {
+            public entry void Start()
+            {
+                Helper();
+            }
+        }
+        '@ | Set-Content -Path (Join-Path $sourceRoot "Program.sus") -Encoding utf8
+
+        Remove-Item Env:SUSHI_NATIVE_TOOLCHAIN_ROOT -ErrorAction SilentlyContinue
+        $env:PATH = [Environment]::GetFolderPath([Environment+SpecialFolder]::System)
+        $compiler = Join-Path $relocatedRoot "Sushi.exe"
+        & $compiler --project $smokeRoot
+        if ($LASTEXITCODE -ne 0) {
+          throw "The relocated Sushi compiler exited with code $LASTEXITCODE."
+        }
+
+        $nativeProgram = Join-Path $smokeRoot "bin/debug/PortableSmoke.exe"
+        if (-not (Test-Path -LiteralPath $nativeProgram -PathType Leaf)) {
+          throw "The relocated compiler did not produce the expected native executable."
+        }
+
+        $readobj = Join-Path $relocatedRoot "toolchains/win-x64/llvm-mingw/bin/llvm-readobj.exe"
+        $inspection = (& $readobj --file-headers --coff-imports $nativeProgram | Out-String)
+        if ($inspection -notmatch "IMAGE_FILE_MACHINE_AMD64") {
+          throw "The native executable is not a Windows x64 PE image."
+        }
+        $imports = [regex]::Matches($inspection, "Name: ([^\\s]+\\.dll)") | ForEach-Object { $_.Groups[1].Value }
+        if ($imports.Count -eq 0) {
+          throw "The PE import table could not be inspected."
+        }
+        $unexpectedImports = @($imports | Where-Object { $_ -notmatch "^(KERNEL32|api-ms-win-|ext-ms-win-|ucrtbase|msvcrt)" })
+        if ($unexpectedImports.Count -gt 0) {
+          throw "The native executable imports non-system runtime DLLs: $($unexpectedImports -join ', ')."
+        }
+
+        $toolchainDirectory = Join-Path $relocatedRoot "toolchains/win-x64/llvm-mingw"
+        $offlineToolchainDirectory = Join-Path $env:RUNNER_TEMP "llvm-mingw-offline"
+        Move-Item -LiteralPath $toolchainDirectory -Destination $offlineToolchainDirectory
+        try {
+          & $nativeProgram
+          if ($LASTEXITCODE -ne 0) {
+            throw "The native executable failed without the compiler toolchain present: $LASTEXITCODE."
+          }
+        }
+        finally {
+          Move-Item -LiteralPath $offlineToolchainDirectory -Destination $toolchainDirectory
+        }

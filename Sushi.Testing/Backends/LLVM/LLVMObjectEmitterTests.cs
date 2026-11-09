@@ -50,6 +50,11 @@ public class LLVMObjectEmitterTests
                 .Should()
                 .NotBeNullOrWhiteSpace();
 
+            if (OperatingSystem.IsWindows())
+            {
+                objectArtifact.TargetTriple.Should().Be("x86_64-w64-windows-gnu");
+            }
+
             llvmModuleArtifact.Module.Target
                 .Should()
                 .Be(objectArtifact.TargetTriple);

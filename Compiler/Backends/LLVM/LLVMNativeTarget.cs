@@ -1,4 +1,5 @@
 ﻿using LLVMSharp.Interop;
+using Sushi.Backends.Native;
 using LLVMNative = LLVMSharp.Interop.LLVM;
 
 namespace Sushi.Backends.LLVM;
@@ -20,7 +21,7 @@ internal static class LLVMNativeTarget
     {
         _ = initialization.Value;
 
-        string triple = LLVMTargetRef.DefaultTriple;
+        string triple = NativeTargetConfiguration.SelectTargetTriple(LLVMTargetRef.DefaultTriple);
 
         if (string.IsNullOrWhiteSpace(triple))
         {

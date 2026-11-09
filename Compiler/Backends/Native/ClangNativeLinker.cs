@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace Sushi.Backends.Native;
 
@@ -43,13 +44,19 @@ public sealed class ClangNativeLinker
             Directory.CreateDirectory(directory);
         }
 
+        NativeTargetConfiguration.ValidateArtifactTarget(
+            objectArtifact.TargetTriple,
+            OperatingSystem.IsWindows(),
+            RuntimeInformation.ProcessArchitecture);
+
+        ResolvedNativeToolchain toolchain = NativeToolchainResolver.ResolveForCurrentHost();
         string temporaryPath = CreateTemporaryOutputPath(fullOutputPath);
 
         try
         {
             ProcessStartInfo startInfo = new()
             {
-                FileName = "clang",
+                FileName = toolchain.ExecutablePath,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -57,6 +64,12 @@ public sealed class ClangNativeLinker
             };
 
             startInfo.ArgumentList.Add($"--target={objectArtifact.TargetTriple}");
+            if (toolchain.IsBundled)
+            {
+                ConfigureBundledToolchainEnvironment(startInfo, toolchain);
+                startInfo.ArgumentList.Add("-fuse-ld=lld");
+            }
+
             startInfo.ArgumentList.Add(objectArtifact.FilePath);
             startInfo.ArgumentList.Add("-o");
             startInfo.ArgumentList.Add(temporaryPath);
@@ -72,7 +85,10 @@ public sealed class ClangNativeLinker
             }
             catch (Win32Exception exception)
             {
-                throw new InvalidOperationException("Clang was not found. The MVP native linker requires clang to be available on PATH.", exception);
+                string message = toolchain.IsBundled
+                    ? $"The bundled Clang executable at {toolchain.ExecutablePath} could not be started. Verify the LLVM-MinGW extraction and Windows execution policy."
+                    : "Clang was not found on PATH. The native linker requires clang on non-Windows hosts.";
+                throw new InvalidOperationException(message, exception);
             }
 
             Task<string> standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
@@ -120,6 +136,51 @@ public sealed class ClangNativeLinker
                 File.Delete(temporaryPath);
             }
         }
+    }
+
+    private static void ConfigureBundledToolchainEnvironment(ProcessStartInfo startInfo, ResolvedNativeToolchain toolchain)
+    {
+        ArgumentNullException.ThrowIfNull(startInfo);
+        ArgumentNullException.ThrowIfNull(toolchain);
+
+        foreach (string variable in new[]
+        {
+            "INCLUDE",
+            "LIB",
+            "LIBPATH",
+            "WindowsSdkDir",
+            "WindowsSDKVersion",
+            "UniversalCRTSdkDir",
+            "UCRTVersion",
+            "VCToolsInstallDir",
+            "VCINSTALLDIR",
+            "VSINSTALLDIR",
+            "VisualStudioVersion",
+            "CL",
+            "_CL_",
+            "LIBRARY_PATH",
+            "COMPILER_PATH",
+            "C_INCLUDE_PATH",
+            "CPLUS_INCLUDE_PATH",
+            "SDKROOT",
+            "CFLAGS",
+            "LDFLAGS",
+            "CCC_OVERRIDE_OPTIONS"
+        })
+        {
+            startInfo.Environment.Remove(variable);
+        }
+
+        string windowsDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        string systemDirectory = Environment.GetFolderPath(Environment.SpecialFolder.System);
+        string[] pathEntries =
+        [
+            Path.Combine(toolchain.RootPath!, "bin"),
+            systemDirectory,
+            windowsDirectory
+        ];
+
+        startInfo.Environment["PATH"] = string.Join(Path.PathSeparator, pathEntries.Where(Directory.Exists));
     }
 
     private static string NormalizeExecutablePath(string outputPath)

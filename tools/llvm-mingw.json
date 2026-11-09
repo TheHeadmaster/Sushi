@@ -1,0 +1,11 @@
+{
+  "toolchain": "LLVM-MinGW",
+  "version": "20260616",
+  "llvmVersion": "22.1.8",
+  "archiveUrl": "https://github.com/mstorsjo/llvm-mingw/releases/download/20260616/llvm-mingw-20260616-ucrt-x86_64.zip",
+  "sha256": "b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35",
+  "hostArchitecture": "x86_64",
+  "targetArchitecture": "x86_64",
+  "runtime": "ucrt",
+  "targetTriple": "x86_64-w64-windows-gnu"
+}

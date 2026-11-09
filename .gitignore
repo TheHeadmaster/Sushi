@@ -419,3 +419,6 @@ FodyWeavers.xsd
 
 *.tsbuildinfo
 syntaxes/*.tmLanguage.json
+# Locally restored native compiler toolchains
+.tools/llvm-mingw/
+.tools/.llvm-mingw-*
