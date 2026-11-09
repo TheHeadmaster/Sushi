@@ -31,7 +31,16 @@
         <PackageReference Include="Markdig" Version="1.5.1" />
         <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" Version="10.0.12" />
     </ItemGroup>
-<Target Name="StageWindowsX64NativeToolchain" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+<PropertyGroup>
+        <SushiLlvmMingwPackageRoot>$(PkgSushi_NativeToolchain_LlvmMingw_WinX64)\contentFiles\any\any\toolchain</SushiLlvmMingwPackageRoot>
+    </PropertyGroup>
+    <ItemGroup>
+        <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+            <_Parameter1>SushiNativeToolchainPackageRoot</_Parameter1>
+            <_Parameter2>$(SushiLlvmMingwPackageRoot)</_Parameter2>
+        </AssemblyAttribute>
+    </ItemGroup>
+    <Target Name="StageWindowsX64NativeToolchain" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
         <Error Condition="!Exists('$(SushiLlvmMingwPackageRoot)/bin/clang.exe')" Text="The restored LLVM-MinGW NuGet package is missing or incomplete at $(SushiLlvmMingwPackageRoot). Run dotnet restore and verify the pinned toolchain package." />
         <ItemGroup>
             <LlvmMingwPublishFile Include="$(SushiLlvmMingwPackageRoot)/**/*" />
