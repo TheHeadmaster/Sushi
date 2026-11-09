@@ -15,7 +15,7 @@
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     </PropertyGroup>
     <ItemGroup Condition="'$(LlvmMingwRoot)' != ''">
-        <None Include="$(LlvmMingwRoot)/**/*" Pack="true" PackagePath="contentFiles/any/any/toolchain/%(RecursiveDir)%(Filename)%(Extension)" />
+        <None Include="$(LlvmMingwRoot)/**/*" Pack="true" PackagePath="toolchain/%(RecursiveDir)%(Filename)%(Extension)" />
     </ItemGroup>
     <ItemGroup>
         <None Include="README.md" Pack="true" PackagePath="README.md" />
