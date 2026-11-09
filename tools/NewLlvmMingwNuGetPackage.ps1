@@ -18,15 +18,15 @@ else {
     $PackageOutputDirectory = [IO.Path]::GetFullPath((Join-Path $repositoryRoot $PackageOutputDirectory))
 }
 $packageProject = Join-Path $PSScriptRoot "LlvmMingwPackage/LlvmMingwPackage.csproj"
-$maximumPackageBytes = 250MB
+$maximumPackageBytes = 250000000
 
 if ($env:SUSHI_BLOCK_UPSTREAM_TOOLCHAIN_DOWNLOADS -eq "1") {
     throw "Package creation cannot acquire LLVM-MinGW while consumer-download blocking is enabled."
 }
 
 & (Join-Path $PSScriptRoot "RestoreLlvmMingw.ps1") -DestinationRoot $ToolchainRoot
-if ($LASTEXITCODE -ne 0) {
-    throw "Pinned LLVM-MinGW acquisition failed with exit code $LASTEXITCODE."
+if (-not (Test-Path -LiteralPath (Join-Path $ToolchainRoot "bin/clang.exe") -PathType Leaf)) {
+    throw "Pinned LLVM-MinGW acquisition did not produce a complete toolchain."
 }
 
 $null = New-Item -ItemType Directory -Path $PackageOutputDirectory -Force
