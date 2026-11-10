@@ -1,0 +1,60 @@
+{
+  "toolchain": "LLVM-MinGW",
+  "version": "20260616",
+  "llvmVersion": "22.1.8",
+  "archiveFileName": "llvm-mingw-20260616-ucrt-x86_64.zip",
+  "archiveSize": 187504083,
+  "archiveSha256": "b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35",
+  "hostArchitecture": "x86_64",
+  "targetArchitecture": "x86_64",
+  "runtime": "ucrt",
+  "targetTriple": "x86_64-w64-windows-gnu",
+  "chunkSizeLimit": 20971520,
+  "chunks": [
+    {
+      "name": "archive.part000",
+      "size": 20971520,
+      "sha256": "705682d46a1245dd95d87054eaef0c9e7ee060238e635394bf5f427daa18f42a"
+    },
+    {
+      "name": "archive.part001",
+      "size": 20971520,
+      "sha256": "f37e6edffbc357528e1c65f559ab916a31e5fd42ca6a1f0d2eaaf88e87b24212"
+    },
+    {
+      "name": "archive.part002",
+      "size": 20971520,
+      "sha256": "0587bcd06e452e8a598f3a34345852599a9c2c7155f2f2035cd769496a939af4"
+    },
+    {
+      "name": "archive.part003",
+      "size": 20971520,
+      "sha256": "50ddba25bae24fe329e5d21c4658d5c2d25f8c78fa29a23d6cfc2f02597f6fad"
+    },
+    {
+      "name": "archive.part004",
+      "size": 20971520,
+      "sha256": "b9589a7c0e099852423ade209162b63da27cf780d5db8ceff30309d396566e10"
+    },
+    {
+      "name": "archive.part005",
+      "size": 20971520,
+      "sha256": "1ca29f9c289cdc2e07f009b0bc8e32b60f3ffc9763330a5dd9364afb4f5976c2"
+    },
+    {
+      "name": "archive.part006",
+      "size": 20971520,
+      "sha256": "3f14e427b09d57a55eb3a41c0eecca57e8457c9c26e4ba7338ffacdcd87a2a3f"
+    },
+    {
+      "name": "archive.part007",
+      "size": 20971520,
+      "sha256": "368fb28fefd7d4c7b13d9dbb2e26df11bfedcda1211d4c5330100b97e7a2f07b"
+    },
+    {
+      "name": "archive.part008",
+      "size": 19731923,
+      "sha256": "58c78d43b640e7518225d8c421b281854198c5d9e961fe65ad456fa22922d6a0"
+    }
+  ]
+}
