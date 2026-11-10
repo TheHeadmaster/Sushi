@@ -52,43 +52,22 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
-    public void BundledWindowsToolchainShouldBeSelectedWhenAvailable()
+    public void PublishedToolchainShouldBeSelectedBeforeTheDevelopmentExtraction()
     {
         string directory = CreateTemporaryDirectory();
 
         try
         {
-            string appBase = Path.Combine(directory, "Sushi 雪");
-            string expectedRoot = Path.Combine(appBase, "toolchains", "win-x64", "llvm-mingw");
-            CreateCompleteToolchain(expectedRoot);
+            string appBase = Path.Combine(directory, "Sushi");
+            string publishedRoot = Path.Combine(appBase, "toolchains", "win-x64", "llvm-mingw");
+            string developmentRoot = Path.Combine(directory, "checkout", ".tools", "llvm-mingw");
+            CreateCompleteToolchain(publishedRoot);
+            CreateCompleteToolchain(developmentRoot);
 
-            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, null, appBase);
+            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, null, appBase, developmentRoot);
 
-            toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(expectedRoot, "bin", "clang.exe")));
-            toolchain.RootPath.Should().Be(Path.GetFullPath(expectedRoot));
-            toolchain.IsBundled.Should().BeTrue();
-            Path.IsPathFullyQualified(toolchain.ExecutablePath).Should().BeTrue();
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Test]
-    public void RestoredNuGetToolchainShouldBeSelectedWhenTheDistributionIsNotBundled()
-    {
-        string directory = CreateTemporaryDirectory();
-
-        try
-        {
-            string packageRoot = Path.Combine(directory, "nuget cache", "toolchain");
-            CreateCompleteToolchain(packageRoot);
-
-            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, null, Path.Combine(directory, "Sushi"), packageRoot);
-
-            toolchain.RootPath.Should().Be(Path.GetFullPath(packageRoot));
-            toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(packageRoot, "bin", "clang.exe")));
+            toolchain.RootPath.Should().Be(Path.GetFullPath(publishedRoot));
+            toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(publishedRoot, "bin", "clang.exe")));
             toolchain.IsBundled.Should().BeTrue();
         }
         finally
@@ -98,7 +77,30 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
-    public void ExplicitToolchainOverrideShouldTakePrecedenceOverBundledToolchain()
+    public void RepositoryLocalToolchainShouldBeSelectedWhenNoPublishedDistributionExists()
+    {
+        string directory = CreateTemporaryDirectory();
+
+        try
+        {
+            string appBase = Path.Combine(directory, "bin", "Sushi");
+            string developmentRoot = Path.Combine(directory, "checkout", ".tools", "llvm-mingw");
+            CreateCompleteToolchain(developmentRoot);
+
+            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, null, appBase, developmentRoot);
+
+            toolchain.RootPath.Should().Be(Path.GetFullPath(developmentRoot));
+            toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(developmentRoot, "bin", "clang.exe")));
+            toolchain.IsBundled.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Test]
+    public void ExplicitToolchainOverrideShouldTakePrecedenceOverPublishedAndDevelopmentToolchains()
     {
         string directory = CreateTemporaryDirectory();
 
@@ -106,11 +108,13 @@ public sealed class NativeToolchainResolverTests
         {
             string appBase = Path.Combine(directory, "Sushi");
             string bundledRoot = Path.Combine(appBase, "toolchains", "win-x64", "llvm-mingw");
-            string overrideRoot = Path.Combine(directory, "Custom Toolchain ü");
+            string overrideRoot = Path.Combine(directory, "Custom Toolchain 雪");
+            string developmentRoot = Path.Combine(directory, "checkout", ".tools", "llvm-mingw");
             CreateCompleteToolchain(bundledRoot);
             CreateCompleteToolchain(overrideRoot);
+            CreateCompleteToolchain(developmentRoot);
 
-            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, overrideRoot, appBase);
+            ResolvedNativeToolchain toolchain = NativeToolchainResolver.Resolve(true, Architecture.X64, overrideRoot, appBase, developmentRoot);
 
             toolchain.RootPath.Should().Be(Path.GetFullPath(overrideRoot));
             toolchain.ExecutablePath.Should().Be(Path.GetFullPath(Path.Combine(overrideRoot, "bin", "clang.exe")));
@@ -122,7 +126,7 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
-    public void InvalidOverrideShouldFailInsteadOfFallingBackToTheBundledToolchain()
+    public void InvalidOverrideShouldFailInsteadOfFallingBackToOtherToolchains()
     {
         string directory = CreateTemporaryDirectory();
 
@@ -130,9 +134,10 @@ public sealed class NativeToolchainResolverTests
         {
             string appBase = Path.Combine(directory, "Sushi");
             CreateCompleteToolchain(Path.Combine(appBase, "toolchains", "win-x64", "llvm-mingw"));
+            CreateCompleteToolchain(Path.Combine(directory, "checkout", ".tools", "llvm-mingw"));
             string invalidOverride = Path.Combine(directory, "missing override");
 
-            Action resolve = () => NativeToolchainResolver.Resolve(true, Architecture.X64, invalidOverride, appBase);
+            Action resolve = () => NativeToolchainResolver.Resolve(true, Architecture.X64, invalidOverride, appBase, Path.Combine(directory, "checkout", ".tools", "llvm-mingw"));
 
             resolve.Should()
                 .Throw<InvalidOperationException>()
@@ -145,7 +150,7 @@ public sealed class NativeToolchainResolverTests
     }
 
     [Test]
-    public void MissingToolchainShouldExplainHowNuGetRestoreProvidesIt()
+    public void MissingToolchainShouldExplainGitReconstruction()
     {
         string directory = CreateTemporaryDirectory();
 
@@ -155,7 +160,7 @@ public sealed class NativeToolchainResolverTests
 
             resolve.Should()
                 .Throw<InvalidOperationException>()
-                .WithMessage("*dotnet restore*");
+                .WithMessage("*RestoreVendoredLlvmMingw.ps1*");
         }
         finally
         {
@@ -180,6 +185,7 @@ public sealed class NativeToolchainResolverTests
                 .Which;
             exception.Message.Should().Contain("crt2.o");
             exception.Message.Should().Contain("libclang_rt.builtins-x86_64.a");
+            exception.Message.Should().Contain(".sushi-llvm-mingw.json");
         }
         finally
         {
@@ -215,14 +221,15 @@ public sealed class NativeToolchainResolverTests
             "x86_64-w64-mingw32/lib/crtend.o",
             "x86_64-w64-mingw32/lib/libmingw32.a",
             "lib/clang/22/lib/windows/libclang_rt.builtins-x86_64.a",
-            "include/stdio.h"
+            "include/stdio.h",
+            ".sushi-llvm-mingw.json"
         ];
 
         foreach (string path in files)
         {
             string fullPath = Path.Combine(root, path);
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-            File.WriteAllText(fullPath, string.Empty);
+            File.WriteAllText(fullPath, path.EndsWith(".json", StringComparison.Ordinal) ? """{"version":"20260616","archiveSha256":"b9b68a4d276e16fa25802aaba458e4638f64b3884c290aaccdc2d87083b6ca35"}""" : string.Empty);
         }
     }
 }
