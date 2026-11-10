@@ -59,7 +59,7 @@ public sealed class VendoredLlvmMingwRestoreTests
         {
             RestoreFixture missing = CreateFixture(Path.Combine(temporaryRoot, "missing"));
             File.Delete(Path.Combine(missing.ChunkDirectory, "archive.part000"));
-            Func<Task> restoreMissing = async () => await RunRestore(scriptPath, missing.DestinationRoot, missing.PinnedManifestPath, missing.ChunkDirectory);
+            Func<Task> restoreMissing = async () => { await RunRestore(scriptPath, missing.DestinationRoot, missing.PinnedManifestPath, missing.ChunkDirectory); };
             await restoreMissing.Should()
                 .ThrowAsync<InvalidOperationException>()
                 .WithMessage("*chunk count mismatch*");
@@ -69,7 +69,7 @@ public sealed class VendoredLlvmMingwRestoreTests
             byte[] bytes = await File.ReadAllBytesAsync(Path.Combine(corrupted.ChunkDirectory, "archive.part000"));
             bytes[0] ^= 0xFF;
             await File.WriteAllBytesAsync(Path.Combine(corrupted.ChunkDirectory, "archive.part000"), bytes);
-            Func<Task> restoreCorrupted = async () => await RunRestore(scriptPath, corrupted.DestinationRoot, corrupted.PinnedManifestPath, corrupted.ChunkDirectory);
+            Func<Task> restoreCorrupted = async () => { await RunRestore(scriptPath, corrupted.DestinationRoot, corrupted.PinnedManifestPath, corrupted.ChunkDirectory); };
             await restoreCorrupted.Should()
                 .ThrowAsync<InvalidOperationException>()
                 .WithMessage("*failed SHA-256 verification*");
@@ -97,7 +97,7 @@ public sealed class VendoredLlvmMingwRestoreTests
             JsonNode chunkManifest = JsonNode.Parse(await File.ReadAllTextAsync(incorrectChunkHash.ChunkManifestPath))!;
             chunkManifest["chunks"]![0]!["sha256"] = new string('0', 64);
             await File.WriteAllTextAsync(incorrectChunkHash.ChunkManifestPath, chunkManifest.ToJsonString());
-            Func<Task> restoreIncorrectChunkHash = async () => await RunRestore(scriptPath, incorrectChunkHash.DestinationRoot, incorrectChunkHash.PinnedManifestPath, incorrectChunkHash.ChunkDirectory);
+            Func<Task> restoreIncorrectChunkHash = async () => { await RunRestore(scriptPath, incorrectChunkHash.DestinationRoot, incorrectChunkHash.PinnedManifestPath, incorrectChunkHash.ChunkDirectory); };
             await restoreIncorrectChunkHash.Should()
                 .ThrowAsync<InvalidOperationException>()
                 .WithMessage("*failed SHA-256 verification*");
@@ -111,7 +111,7 @@ public sealed class VendoredLlvmMingwRestoreTests
             await File.WriteAllTextAsync(incorrectArchiveHash.PinnedManifestPath, pinnedManifest.ToJsonString());
             await File.WriteAllTextAsync(incorrectArchiveHash.ChunkManifestPath, sourceManifest.ToJsonString());
 
-            Func<Task> restoreIncorrectArchiveHash = async () => await RunRestore(scriptPath, incorrectArchiveHash.DestinationRoot, incorrectArchiveHash.PinnedManifestPath, incorrectArchiveHash.ChunkDirectory);
+            Func<Task> restoreIncorrectArchiveHash = async () => { await RunRestore(scriptPath, incorrectArchiveHash.DestinationRoot, incorrectArchiveHash.PinnedManifestPath, incorrectArchiveHash.ChunkDirectory); };
             await restoreIncorrectArchiveHash.Should()
                 .ThrowAsync<InvalidOperationException>()
                 .WithMessage("*reassembled LLVM-MinGW archive failed SHA-256 verification*");
