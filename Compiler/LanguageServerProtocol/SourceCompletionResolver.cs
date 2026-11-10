@@ -75,6 +75,8 @@ internal static class SourceCompletionResolver
             ? nestedContext.ExpectedType
             : SourceCompletionExpressionContextResolver.Resolve(
                 analysis, owner, replacement.Start, visibleBindings, cancellationToken);
+        bool allowIntegerBooleanStarter = nestedContext.IsRecognized
+            && nestedContext.AllowsIntegerBooleanExpressionStarter;
 
         bool includeValues = labelResolution?.SuppressValueCompletions is not true
             && (hasIdentifier || expectedType is not null);
@@ -88,7 +90,7 @@ internal static class SourceCompletionResolver
 
                 if (!callable.Name.StartsWith(prefix, StringComparison.Ordinal)
                     || !HasReliableDeclaration(callable)
-                    || expectedType is BoundType required && callable.Function.ReturnType != required)
+                    || !IsCandidateTypeEligible(callable.Function.ReturnType, expectedType, allowIntegerBooleanStarter))
                 {
                     continue;
                 }
@@ -103,7 +105,7 @@ internal static class SourceCompletionResolver
         SourceCompletionBinding[] bindings = includeValues
             ? [.. visibleBindings.Where(binding =>
                 binding.Name.StartsWith(prefix, StringComparison.Ordinal)
-                && (expectedType is null || binding.Type == expectedType.Value))]
+                && IsCandidateTypeEligible(binding.Type, expectedType, allowIntegerBooleanStarter))]
             : [];
 
         PackageCallable[] selectedFunctions = [.. candidates.Values.OfType<PackageCallable>()];
@@ -115,7 +117,8 @@ internal static class SourceCompletionResolver
             : new SourceCompletionResult(replacement, selectedFunctions, bindings)
             {
                 ArgumentLabels = labels,
-                SuppressValueCandidates = labelResolution?.SuppressValueCompletions is true
+                SuppressValueCandidates = labelResolution?.SuppressValueCompletions is true,
+                PrioritizeBooleanExpressionStarters = allowIntegerBooleanStarter
             };
     }
 
@@ -280,6 +283,14 @@ internal static class SourceCompletionResolver
         return false;
     }
 
+    private static bool IsCandidateTypeEligible(
+        BoundType candidateType, BoundType? expectedType, bool allowIntegerBooleanStarter)
+        => expectedType is null
+            || candidateType == expectedType.Value
+            || allowIntegerBooleanStarter
+                && expectedType is BoundType.Bool
+                && candidateType is BoundType.Int32;
+
     private static bool HasReliableDeclaration(PackageCallable callable)
     {
         SyntaxToken name = callable.Declaration.Name;
@@ -362,4 +373,9 @@ internal sealed record SourceCompletionResult(
     /// Gets whether the invocation requires named arguments at the current slot.
     /// </summary>
     public bool SuppressValueCandidates { get; init; }
+
+    /// <summary>
+    /// Gets whether direct Boolean candidates should rank before integer expression starters.
+    /// </summary>
+    public bool PrioritizeBooleanExpressionStarters { get; init; }
 }
