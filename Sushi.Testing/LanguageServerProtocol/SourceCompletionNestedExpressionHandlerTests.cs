@@ -27,9 +27,19 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
             ["amount", "total", "IntegerFunction"]);
     }
 
+    [Test]
+    public async Task EmptyForConditionShouldExcludeTheVisibleIntegerLoopVariable()
+    {
+        await AssertCompletion(
+            CreateSource("int32", "for (int32 index = 0;/*cursor*/; index++) { }"),
+            ["enabled", "active", "BooleanFunction"],
+            ["amount", "total", "index", "IntegerFunction"]);
+    }
+
     [TestCase("return (/*cursor*/);", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return ((/*cursor*/));", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return (((/*cursor*/)));", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return ((/*cursor*/));", "bool", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
     public async Task ParenthesizedReturnExpressionsShouldInheritTheFunctionReturnType(
         string expression, string returnType, string include, string includeFunction, string exclude, string excludeFunction)
     {
@@ -41,12 +51,24 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
 
     [TestCase("return amount + /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return amount + am/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount - /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount * /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount / /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount % /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount << /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount >> /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return +/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return -/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return ~/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("if (not /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
     [TestCase("if (enabled and /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
     [TestCase("if (enabled or /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
     [TestCase("if (amount < /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("if (amount == /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("if (amount != /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("if (amount <= /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("if (amount > /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("if (amount >= /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     public async Task UnaryArithmeticLogicalAndComparisonOperandsShouldUseTheirOperandTypes(
         string expression, string returnType, string include, string includeFunction, string exclude, string excludeFunction)
     {
