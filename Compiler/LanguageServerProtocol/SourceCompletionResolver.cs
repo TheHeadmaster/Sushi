@@ -153,8 +153,16 @@ internal static class SourceCompletionResolver
 
             if (token.Type is LexTokenType.Keyword)
             {
-                return offset > token.Span.End
-                    && bytes[token.Span.Start..token.Span.End].SequenceEqual("return"u8);
+                if (offset <= token.Span.End)
+                {
+                    return false;
+                }
+
+                ReadOnlySpan<byte> keyword = bytes[token.Span.Start..token.Span.End];
+                return keyword.SequenceEqual("return"u8)
+                    || keyword.SequenceEqual("not"u8)
+                    || keyword.SequenceEqual("and"u8)
+                    || keyword.SequenceEqual("or"u8);
             }
 
             if (token.Type is LexTokenType.Operator)
@@ -164,7 +172,7 @@ internal static class SourceCompletionResolver
 
             return token.Type is LexTokenType.Punctuation
                 && token.Span.Length == 1
-                && bytes[token.Span.Start] is (byte)'(' or (byte)',' or (byte)':';
+                && bytes[token.Span.Start] is (byte)'(' or (byte)',' or (byte)':' or (byte)';';
         }
 
         return false;

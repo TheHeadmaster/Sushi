@@ -1,4 +1,5 @@
 using Sushi.Analysis;
+using Sushi.Lexing.Tokenization;
 using Sushi.Parsing.Syntax;
 using Sushi.Semantics;
 using Sushi.Source;
@@ -166,7 +167,7 @@ internal static class SourceCompletionNestedExpressionContextResolver
             return null;
         }
 
-        BoundType? expected = GetBindingType(nameToken, bindings);
+        BoundType? expected = GetWritableBindingType(nameToken, bindings);
         if (Contains(expression.Span, position))
         {
             return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken);
@@ -242,7 +243,7 @@ internal static class SourceCompletionNestedExpressionContextResolver
 
             BoundType? expected = operation.TypeToken is SyntaxToken typeToken
                 ? GetDeclaredType(typeToken)
-                : GetBindingType(operation.NameToken, bindings);
+                : GetWritableBindingType(operation.NameToken, bindings);
 
             if (Contains(value.Span, position))
             {
@@ -390,10 +391,14 @@ internal static class SourceCompletionNestedExpressionContextResolver
             return null;
         }
 
-        ExpressionSyntax otherOperand = ReferenceEquals(binary.Left, binary.Right)
-            ? binary.Left
-            : binary.OperatorToken.Span.Start < binary.Right.Span.Start ? binary.Left : binary.Right;
-        BoundType? established = InferExpressionType(analysis, otherOperand, expected, bindings, cancellationToken);
+        BoundType? leftType = InferExpressionType(analysis, binary.Left, null, bindings, cancellationToken);
+        BoundType? rightType = InferExpressionType(analysis, binary.Right, null, bindings, cancellationToken);
+        if (leftType is BoundType left && rightType is BoundType right && left != right)
+        {
+            return null;
+        }
+
+        BoundType? established = leftType ?? rightType;
         if (expected is BoundType expectedType && established is BoundType establishedType && expectedType != establishedType)
         {
             return null;
@@ -524,6 +529,17 @@ internal static class SourceCompletionNestedExpressionContextResolver
             : bindings.FirstOrDefault(binding => StringComparer.Ordinal.Equals(binding.Name, name))?.Type;
     }
 
+    private static BoundType? GetWritableBindingType(
+        SyntaxToken identifier, IReadOnlyList<SourceCompletionBinding> bindings)
+    {
+        string? name = IdentifierBinder.Bind(identifier);
+        return name is null
+            ? null
+            : bindings.FirstOrDefault(binding =>
+                binding.Kind is SourceCompletionBindingKind.Local
+                && StringComparer.Ordinal.Equals(binding.Name, name))?.Type;
+    }
+
     private static BoundType? GetDeclaredType(SyntaxToken token)
         => IdentifierBinder.Bind(token) switch
         {
@@ -545,23 +561,23 @@ internal static class SourceCompletionNestedExpressionContextResolver
             InvocationExpressionSyntax invocation =>
                 invocation.CloseParenthesisToken.IsMissing
                 || invocation.Arguments.Any(argument => ContainsMissingSyntax(argument.Expression)),
-            IncrementDecrementExpressionSyntax update => ContainsMissingSyntax(update.Expression),
+            IncrementDecrementExpressionSyntax update => ContainsMissingSyntax(update.Operand),
             _ => false
         };
 
     private static bool IsTriviaOnly(SourceAnalysisResult analysis, int start, int end)
     {
-        foreach (Lexing.Tokenization.LexToken token in analysis.SyntaxTree.LexerResult.Tokens)
+        foreach (LexToken token in analysis.SyntaxTree.LexerResult.Tokens)
         {
             if (token.Span.Start < start || token.Span.End > end)
             {
                 continue;
             }
 
-            if (token.Type is not (Lexing.Tokenization.LexTokenType.Whitespace
-                or Lexing.Tokenization.LexTokenType.LineTerminator
-                or Lexing.Tokenization.LexTokenType.LineComment
-                or Lexing.Tokenization.LexTokenType.BlockComment))
+            if (token.Type is not (LexTokenType.Whitespace
+                or LexTokenType.LineTerminator
+                or LexTokenType.LineComment
+                or LexTokenType.BlockComment))
             {
                 return false;
             }
