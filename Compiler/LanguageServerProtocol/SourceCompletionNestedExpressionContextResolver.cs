@@ -125,7 +125,7 @@ internal static class SourceCompletionNestedExpressionContextResolver
 
         if (returned.Expression is not ExpressionSyntax expression)
         {
-            return Recognized(returnType is BoundType.Void ? null : returnType);
+            return RecognizedResult(returnType is BoundType.Void ? null : returnType);
         }
 
         if (!Contains(expression.Span, position) && !ContainsMissingSyntax(expression))
@@ -133,9 +133,10 @@ internal static class SourceCompletionNestedExpressionContextResolver
             return null;
         }
 
-        return ResolveExpression(analysis, expression,
-            returnType is BoundType.Void ? null : returnType, position, bindings, cancellationToken)
-            ?? Recognized(returnType is BoundType.Void ? null : returnType);
+        BoundType? expected = returnType is BoundType.Void ? null : returnType;
+        return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken,
+            allowIntegerBooleanStarter: expected is BoundType.Bool)
+            ?? RecognizedResult(expected);
     }
 
     private static SourceCompletionExpressionContext? FindDeclaredValue(
@@ -151,10 +152,11 @@ internal static class SourceCompletionNestedExpressionContextResolver
         BoundType? expected = GetDeclaredType(typeToken);
         if (Contains(expression.Span, position))
         {
-            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken);
+            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken,
+                allowIntegerBooleanStarter: expected is BoundType.Bool);
         }
 
-        return ContainsMissingSyntax(expression) ? Recognized(expected) : null;
+        return ContainsMissingSyntax(expression) ? RecognizedResult(expected) : null;
     }
 
     private static SourceCompletionExpressionContext? FindAssignedValue(
@@ -170,10 +172,11 @@ internal static class SourceCompletionNestedExpressionContextResolver
         BoundType? expected = GetWritableBindingType(nameToken, bindings);
         if (Contains(expression.Span, position))
         {
-            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken);
+            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken,
+                allowIntegerBooleanStarter: expected is BoundType.Bool);
         }
 
-        return ContainsMissingSyntax(expression) ? Recognized(expected) : null;
+        return ContainsMissingSyntax(expression) ? RecognizedResult(expected) : null;
     }
 
     private static SourceCompletionExpressionContext? FindInConditional(
@@ -219,11 +222,12 @@ internal static class SourceCompletionNestedExpressionContextResolver
 
         if (Contains(expression.Span, position))
         {
-            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken)
-                ?? (ContainsMissingSyntax(expression) ? Recognized(expected) : Recognized(null));
+            return ResolveExpression(analysis, expression, expected, position, bindings, cancellationToken,
+                allowIntegerBooleanStarter: expected is BoundType.Bool)
+                ?? (ContainsMissingSyntax(expression) ? RecognizedResult(expected) : Recognized(null));
         }
 
-        return ContainsMissingSyntax(expression) ? Recognized(expected) : Recognized(null);
+        return ContainsMissingSyntax(expression) ? RecognizedResult(expected) : Recognized(null);
     }
 
     private static SourceCompletionExpressionContext? FindInFor(
@@ -247,12 +251,13 @@ internal static class SourceCompletionNestedExpressionContextResolver
 
             if (Contains(value.Span, position))
             {
-                return ResolveExpression(analysis, value, expected, position, bindings, cancellationToken);
+                return ResolveExpression(analysis, value, expected, position, bindings, cancellationToken,
+                    allowIntegerBooleanStarter: expected is BoundType.Bool);
             }
 
             if (ContainsMissingSyntax(value))
             {
-                return Recognized(expected);
+                return RecognizedResult(expected);
             }
         }
 
@@ -264,16 +269,17 @@ internal static class SourceCompletionNestedExpressionContextResolver
             {
                 if (Contains(condition.Span, position))
                 {
-                    return ResolveExpression(analysis, condition, BoundType.Bool, position, bindings, cancellationToken)
-                        ?? (ContainsMissingSyntax(condition) ? Recognized(BoundType.Bool) : Recognized(null));
+                    return ResolveExpression(analysis, condition, BoundType.Bool, position, bindings, cancellationToken,
+                        allowIntegerBooleanStarter: true)
+                        ?? (ContainsMissingSyntax(condition) ? RecognizedResult(BoundType.Bool) : Recognized(null));
                 }
 
-                return ContainsMissingSyntax(condition) ? Recognized(BoundType.Bool) : Recognized(null);
+                return ContainsMissingSyntax(condition) ? RecognizedResult(BoundType.Bool) : Recognized(null);
             }
 
             return IsTriviaOnly(analysis, conditionStart, position)
                 && IsTriviaOnly(analysis, position, conditionEnd)
-                    ? Recognized(BoundType.Bool)
+                    ? RecognizedResult(BoundType.Bool)
                     : Recognized(null);
         }
 
@@ -283,7 +289,7 @@ internal static class SourceCompletionNestedExpressionContextResolver
     private static SourceCompletionExpressionContext? ResolveExpression(
         SourceAnalysisResult analysis, ExpressionSyntax expression, BoundType? expected,
         int position, IReadOnlyList<SourceCompletionBinding> bindings,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool allowIntegerBooleanStarter = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -304,8 +310,9 @@ internal static class SourceCompletionNestedExpressionContextResolver
                     return Recognized(null);
                 }
 
-                return ResolveExpression(analysis, grouped.Expression, expected, position, bindings, cancellationToken)
-                    ?? (ContainsMissingSyntax(grouped.Expression) ? Recognized(expected) : Recognized(null));
+                return ResolveExpression(analysis, grouped.Expression, expected, position, bindings, cancellationToken,
+                    allowIntegerBooleanStarter: expected is BoundType.Bool)
+                    ?? (ContainsMissingSyntax(grouped.Expression) ? RecognizedResult(expected) : Recognized(null));
 
             case UnaryExpressionSyntax unary:
                 if (position < unary.OperatorToken.Span.End)
@@ -329,7 +336,7 @@ internal static class SourceCompletionNestedExpressionContextResolver
             case BooleanLiteralExpressionSyntax:
             case IdentifierExpressionSyntax:
             case IncrementDecrementExpressionSyntax:
-                return Recognized(expected);
+                return Recognized(expected, allowIntegerBooleanStarter);
 
             default:
                 return Recognized(null);
@@ -351,14 +358,16 @@ internal static class SourceCompletionNestedExpressionContextResolver
         ExpressionSyntax operand = useRight ? binary.Right : binary.Left;
         BoundType? operandType = GetOperandType(analysis, binary, expected, bindings, cancellationToken);
 
+        bool allowIntegerStarter = binary.OperatorToken.Type is SyntaxType.AndKeyword or SyntaxType.OrKeyword;
         if (Contains(operand.Span, position))
         {
-            return ResolveExpression(analysis, operand, operandType, position, bindings, cancellationToken)
-                ?? Recognized(operandType);
+            return ResolveExpression(analysis, operand, operandType, position, bindings, cancellationToken,
+                allowIntegerBooleanStarter: allowIntegerStarter)
+                ?? Recognized(operandType, allowIntegerStarter);
         }
 
         return ContainsMissingSyntax(operand)
-            ? Recognized(operandType)
+            ? Recognized(operandType, allowIntegerStarter)
             : Recognized(null);
     }
 
@@ -504,18 +513,19 @@ internal static class SourceCompletionNestedExpressionContextResolver
             CallArgumentSyntax argument = invocation.Arguments[argumentIndex];
             if (Contains(argument.Expression.Span, position))
             {
-                return ResolveExpression(analysis, argument.Expression, expected, position, bindings, cancellationToken)
-                    ?? (ContainsMissingSyntax(argument.Expression) ? Recognized(expected) : Recognized(null));
+                return ResolveExpression(analysis, argument.Expression, expected, position, bindings, cancellationToken,
+                    allowIntegerBooleanStarter: expected is BoundType.Bool)
+                    ?? (ContainsMissingSyntax(argument.Expression) ? RecognizedResult(expected) : Recognized(null));
             }
 
             if (Contains(argument.Span, position) || ContainsMissingSyntax(argument.Expression))
             {
-                return ContainsMissingSyntax(argument.Expression) ? Recognized(expected) : Recognized(null);
+                return ContainsMissingSyntax(argument.Expression) ? RecognizedResult(expected) : Recognized(null);
             }
         }
         else if (invocation.Arguments.Count == 0)
         {
-            return Recognized(expected);
+            return RecognizedResult(expected);
         }
 
         return Recognized(null);
@@ -589,8 +599,11 @@ internal static class SourceCompletionNestedExpressionContextResolver
     private static bool Contains(SourceSpan span, int position)
         => span.Start <= position && position <= span.End;
 
-    private static SourceCompletionExpressionContext Recognized(BoundType? expectedType)
-        => new(true, expectedType);
+    private static SourceCompletionExpressionContext Recognized(BoundType? expectedType, bool allowIntegerBooleanStarter = false)
+        => new(true, expectedType, allowIntegerBooleanStarter);
+
+    private static SourceCompletionExpressionContext RecognizedResult(BoundType? expectedType)
+        => Recognized(expectedType, expectedType is BoundType.Bool);
 }
 
 /// <summary>
@@ -598,5 +611,9 @@ internal static class SourceCompletionNestedExpressionContextResolver
 /// context separately from whether that context has a known expected type.
 /// </summary>
 /// <param name="IsRecognized">Whether the position is in a supported expression context.</param>
-/// <param name="ExpectedType">The expected type, or null when semantic context is unknown.</param>
-internal readonly record struct SourceCompletionExpressionContext(bool IsRecognized, BoundType? ExpectedType);
+/// <param name="ExpectedType">The required expression result type, or null when unknown.</param>
+/// <param name="AllowsIntegerBooleanExpressionStarter">
+/// Whether an integer value may begin a comparison that completes a Boolean expression.
+/// </param>
+internal readonly record struct SourceCompletionExpressionContext(
+    bool IsRecognized, BoundType? ExpectedType, bool AllowsIntegerBooleanExpressionStarter = false);
