@@ -13,6 +13,7 @@ namespace Sushi.Testing.Backends.Native;
 /// Verifies that a clean checkout can reconstruct LLVM-MinGW solely from its committed chunks.
 /// </summary>
 [TestFixture]
+[NonParallelizable]
 public sealed class VendoredLlvmMingwRestoreTests
 {
     [Test]
@@ -22,7 +23,11 @@ public sealed class VendoredLlvmMingwRestoreTests
 
         string repositoryRoot = FindRepositoryRoot();
         string scriptPath = Path.Combine(repositoryRoot, "tools", "RestoreVendoredLlvmMingw.ps1");
-        string destinationRoot = Path.Combine(Path.GetTempPath(), "Sushi Vendored Toolchain 雪", Guid.NewGuid().ToString("N"), "llvm-mingw");
+        string destinationRoot = Path.Combine(repositoryRoot, ".tools", "llvm-mingw");
+        if (Directory.Exists(destinationRoot))
+        {
+            Directory.Delete(destinationRoot, recursive: true);
+        }
 
         try
         {
@@ -38,10 +43,9 @@ public sealed class VendoredLlvmMingwRestoreTests
         }
         finally
         {
-            string parent = Path.GetDirectoryName(destinationRoot)!;
-            if (Directory.Exists(parent))
+            if (!Directory.Exists(destinationRoot))
             {
-                Directory.Delete(parent, recursive: true);
+                await RunRestore(scriptPath, destinationRoot);
             }
         }
     }
@@ -53,7 +57,7 @@ public sealed class VendoredLlvmMingwRestoreTests
 
         string repositoryRoot = FindRepositoryRoot();
         string scriptPath = Path.Combine(repositoryRoot, "tools", "RestoreVendoredLlvmMingw.ps1");
-        string temporaryRoot = Path.Combine(Path.GetTempPath(), "Sushi Toolchain Chunk Validation " + Guid.NewGuid().ToString("N"));
+        string temporaryRoot = Path.Combine(Path.GetTempPath(), "Sushi Toolchain Chunk Validation 雪 " + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporaryRoot);
 
         try
@@ -89,7 +93,7 @@ public sealed class VendoredLlvmMingwRestoreTests
 
         string repositoryRoot = FindRepositoryRoot();
         string scriptPath = Path.Combine(repositoryRoot, "tools", "RestoreVendoredLlvmMingw.ps1");
-        string temporaryRoot = Path.Combine(Path.GetTempPath(), "Sushi Toolchain Hash Validation " + Guid.NewGuid().ToString("N"));
+        string temporaryRoot = Path.Combine(Path.GetTempPath(), "Sushi Toolchain Hash Validation 雪 " + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(temporaryRoot);
 
         try
