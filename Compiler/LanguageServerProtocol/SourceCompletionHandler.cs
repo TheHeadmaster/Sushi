@@ -85,7 +85,7 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
         (int startLine, int startCharacter) = snapshot.GetUtf16Position(resolved.Replacement.Start);
         (int endLine, int endCharacter) = snapshot.GetUtf16Position(resolved.Replacement.End);
         LSPRange replacement = new(startLine, startCharacter, endLine, endCharacter);
-        SortedDictionary<string, CompletionItem> valueItems = new(StringComparer.Ordinal);
+        SortedDictionary<string, (int Priority, CompletionItem Item)> valueItems = new(StringComparer.Ordinal);
 
         if (!resolved.SuppressValueCandidates)
         {
@@ -94,19 +94,20 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string spelling = GetFunctionSpelling(callable);
-                valueItems.TryAdd(callable.Name, new CompletionItem
+                int priority = GetCandidatePriority(callable.Function.ReturnType, resolved.PrioritizeBooleanExpressionStarters);
+                valueItems.TryAdd(callable.Name, (priority, new CompletionItem
                 {
                     Label = spelling,
                     Kind = CompletionItemKind.Function,
                     Detail = FormatSignature(callable.Function),
                     FilterText = callable.Name,
-                    SortText = callable.Name,
+                    SortText = GetSortText(callable.Name, priority, resolved.PrioritizeBooleanExpressionStarters),
                     TextEdit = new TextEdit
                     {
                         Range = replacement,
                         NewText = spelling
                     }
-                });
+                }));
             }
 
             foreach (SourceCompletionBinding binding in resolved.Bindings)
@@ -114,24 +115,25 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
                 cancellationToken.ThrowIfCancellationRequested();
 
                 string category = binding.Kind is SourceCompletionBindingKind.Parameter ? "parameter" : "local";
-                valueItems[binding.Name] = new CompletionItem
+                int priority = GetCandidatePriority(binding.Type, resolved.PrioritizeBooleanExpressionStarters);
+                valueItems[binding.Name] = (priority, new CompletionItem
                 {
                     Label = binding.Spelling,
                     Kind = CompletionItemKind.Variable,
                     Detail = $"{category} {GetTypeName(binding.Type)} {binding.Name}",
                     FilterText = binding.Name,
-                    SortText = binding.Name,
+                    SortText = GetSortText(binding.Name, priority, resolved.PrioritizeBooleanExpressionStarters),
                     TextEdit = new TextEdit
                     {
                         Range = replacement,
                         NewText = binding.Spelling
                     }
-                };
+                });
             }
         }
 
-        List<(string Name, int Category, CompletionItem Item)> items = [];
-        items.AddRange(valueItems.Select(pair => (pair.Key, 1, pair.Value)));
+        List<(int Priority, string Name, int Category, CompletionItem Item)> items = [];
+        items.AddRange(valueItems.Select(pair => (pair.Value.Priority, pair.Key, 1, pair.Value.Item)));
 
         foreach (SourceCompletionArgumentLabelCandidate candidate in resolved.ArgumentLabels)
         {
@@ -139,7 +141,7 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
 
             (int labelStartLine, int labelStartCharacter) = snapshot.GetUtf16Position(candidate.Replacement.Start);
             (int labelEndLine, int labelEndCharacter) = snapshot.GetUtf16Position(candidate.Replacement.End);
-            items.Add((candidate.Name, 0, new CompletionItem
+            items.Add((0, candidate.Name, 0, new CompletionItem
             {
                 Label = candidate.Spelling + ":",
                 Kind = CompletionItemKind.Property,
@@ -155,11 +157,18 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
         }
 
         return new CompletionList(
-            items.OrderBy(item => item.Name, StringComparer.Ordinal)
+            items.OrderBy(item => item.Priority)
+                .ThenBy(item => item.Name, StringComparer.Ordinal)
                 .ThenBy(item => item.Category)
                 .Select(item => item.Item),
             isIncomplete: false);
     }
+
+    private static int GetCandidatePriority(BoundType type, bool prioritizeBooleanExpressionStarters)
+        => prioritizeBooleanExpressionStarters && type is BoundType.Int32 ? 1 : 0;
+
+    private static string GetSortText(string name, int priority, bool prioritizeBooleanExpressionStarters)
+        => prioritizeBooleanExpressionStarters ? $"{priority}_{name}" : name;
 
     private static string GetFunctionSpelling(PackageCallable callable)
         => callable.Declaration.Name.Type is SyntaxType.EscapedIdentifierToken
