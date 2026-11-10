@@ -24,11 +24,13 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
             public void Start(int32 width) { Configure(│); return; }
             """);
 
-        items.Select(item => item.Label).Should().Contain(new[] { "width:", "visible:", "width" });
+        items.Should().Contain(item => item.Label == "width:");
+        items.Should().Contain(item => item.Label == "visible:");
+        items.Should().Contain(item => item.Label == "width");
         items.Where(item => item.Label is "width:" or "visible:")
             .Should()
             .OnlyContain(item => item.Kind == CompletionItemKind.Property);
-        items.Single(item => item.Label == "width:").TextEdit!.NewText.Should().Be("width: ");
+        GetTextEdit(items.Single(item => item.Label == "width:")).NewText.Should().Be("width: ");
         items.Single(item => item.Label == "width").Kind.Should().Be(CompletionItemKind.Variable);
     }
 
@@ -67,9 +69,9 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
         CompletionItem label = matching.Single(item => item.Label == "visible:");
         label.FilterText.Should().Be("visible");
         label.Detail.Should().Be("named argument label (bool)");
-        label.TextEdit!.NewText.Should().Be("visible: ");
-        label.TextEdit.Range!.Start.Character.Should().Be(32);
-        label.TextEdit.Range.End.Character.Should().Be(34);
+        GetTextEdit(label).NewText.Should().Be("visible: ");
+        GetTextEdit(label).Range.Start.Character.Should().Be(32);
+        GetTextEdit(label).Range.End.Character.Should().Be(34);
 
         CompletionItem[] wrongCase = await Complete("""
             package Example;
@@ -92,8 +94,8 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
             """);
 
         CompletionItem label = items.Single(item => item.Label == "visible:");
-        label.TextEdit!.NewText.Should().Be("visible: ");
-        label.TextEdit.Range!.End.Character.Should().BeGreaterThan(label.TextEdit.Range.Start.Character);
+        GetTextEdit(label).NewText.Should().Be("visible: ");
+        GetTextEdit(label).Range.End.Character.Should().BeGreaterThan(GetTextEdit(label).Range.Start.Character);
     }
 
     [Test]
@@ -108,7 +110,7 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
 
         CompletionItem label = items.Single(item => item.Label == "@return:");
         label.FilterText.Should().Be("@return");
-        label.TextEdit!.NewText.Should().Be("@return: ");
+        GetTextEdit(label).NewText.Should().Be("@return: ");
     }
 
     [Test]
@@ -123,10 +125,10 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
 
         items.Should().Contain(item => item.Label == "enabled:"
             && item.Kind == CompletionItemKind.Property
-            && item.TextEdit!.NewText == "enabled: ");
+            && GetTextEdit(item).NewText == "enabled: ");
         items.Should().Contain(item => item.Label == "enabled"
             && item.Kind == CompletionItemKind.Variable
-            && item.TextEdit!.NewText == "enabled");
+            && GetTextEdit(item).NewText == "enabled");
     }
 
     [Test]
@@ -258,6 +260,13 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
             """);
 
         statement.Where(item => item.Kind == CompletionItemKind.Property).Should().BeEmpty();
+    }
+
+    private static TextEdit GetTextEdit(CompletionItem item)
+    {
+        item.TextEdit.Should().NotBeNull();
+        item.TextEdit!.IsTextEdit.Should().BeTrue();
+        return item.TextEdit.TextEdit!;
     }
 
     private static async Task<CompletionItem[]> Complete(string sourceWithMarker)
