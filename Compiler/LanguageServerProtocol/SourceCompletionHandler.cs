@@ -84,51 +84,81 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
         SourceSnapshot snapshot = resolved.Replacement.Snapshot;
         (int startLine, int startCharacter) = snapshot.GetUtf16Position(resolved.Replacement.Start);
         (int endLine, int endCharacter) = snapshot.GetUtf16Position(resolved.Replacement.End);
-
         LSPRange replacement = new(startLine, startCharacter, endLine, endCharacter);
-        SortedDictionary<string, CompletionItem> items = new(StringComparer.Ordinal);
+        SortedDictionary<string, CompletionItem> valueItems = new(StringComparer.Ordinal);
 
-        foreach (PackageCallable callable in resolved.Candidates)
+        if (!resolved.SuppressValueCandidates)
+        {
+            foreach (PackageCallable callable in resolved.Candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string spelling = GetFunctionSpelling(callable);
+                valueItems.TryAdd(callable.Name, new CompletionItem
+                {
+                    Label = spelling,
+                    Kind = CompletionItemKind.Function,
+                    Detail = FormatSignature(callable.Function),
+                    FilterText = callable.Name,
+                    SortText = callable.Name,
+                    TextEdit = new TextEdit
+                    {
+                        Range = replacement,
+                        NewText = spelling
+                    }
+                });
+            }
+
+            foreach (SourceCompletionBinding binding in resolved.Bindings)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string category = binding.Kind is SourceCompletionBindingKind.Parameter ? "parameter" : "local";
+                valueItems[binding.Name] = new CompletionItem
+                {
+                    Label = binding.Spelling,
+                    Kind = CompletionItemKind.Variable,
+                    Detail = $"{category} {GetTypeName(binding.Type)} {binding.Name}",
+                    FilterText = binding.Name,
+                    SortText = binding.Name,
+                    TextEdit = new TextEdit
+                    {
+                        Range = replacement,
+                        NewText = binding.Spelling
+                    }
+                };
+            }
+        }
+
+        List<(string Name, int Category, CompletionItem Item)> items = [];
+        items.AddRange(valueItems.Select(pair => (pair.Key, 1, pair.Value)));
+
+        foreach (SourceCompletionArgumentLabelCandidate candidate in resolved.ArgumentLabels)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            string spelling = GetFunctionSpelling(callable);
-            items.TryAdd(callable.Name, new CompletionItem
+            (int labelStartLine, int labelStartCharacter) = snapshot.GetUtf16Position(candidate.Replacement.Start);
+            (int labelEndLine, int labelEndCharacter) = snapshot.GetUtf16Position(candidate.Replacement.End);
+            items.Add((candidate.Name, 0, new CompletionItem
             {
-                Label = spelling,
-                Kind = CompletionItemKind.Function,
-                Detail = FormatSignature(callable.Function),
-                FilterText = callable.Name,
-                SortText = callable.Name,
+                Label = candidate.Spelling + ":",
+                Kind = CompletionItemKind.Property,
+                Detail = $"named argument label ({GetTypeName(candidate.Type)})",
+                FilterText = candidate.Spelling,
+                SortText = candidate.Name,
                 TextEdit = new TextEdit
                 {
-                    Range = replacement,
-                    NewText = spelling
+                    Range = new LSPRange(labelStartLine, labelStartCharacter, labelEndLine, labelEndCharacter),
+                    NewText = candidate.Spelling + ": "
                 }
-            });
+            }));
         }
 
-        foreach (SourceCompletionBinding binding in resolved.Bindings)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            string category = binding.Kind is SourceCompletionBindingKind.Parameter ? "parameter" : "local";
-            items[binding.Name] = new CompletionItem
-            {
-                Label = binding.Spelling,
-                Kind = CompletionItemKind.Variable,
-                Detail = $"{category} {GetTypeName(binding.Type)} {binding.Name}",
-                FilterText = binding.Name,
-                SortText = binding.Name,
-                TextEdit = new TextEdit
-                {
-                    Range = replacement,
-                    NewText = binding.Spelling
-                }
-            };
-        }
-
-        return new CompletionList(items.Values, isIncomplete: false);
+        return new CompletionList(
+            items.OrderBy(item => item.Name, StringComparer.Ordinal)
+                .ThenBy(item => item.Category)
+                .Select(item => item.Item),
+            isIncomplete: false);
     }
 
     private static string GetFunctionSpelling(PackageCallable callable)

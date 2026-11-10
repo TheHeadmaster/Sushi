@@ -40,21 +40,17 @@ internal static class SourceCompletionResolver
         IReadOnlyList<LexToken> tokens = analysis.SyntaxTree.LexerResult.Tokens;
         bool hasIdentifier = TryFindIdentifier(tokens, snapshot, offset, cancellationToken,
             out SourceSpan replacement, out string prefix);
+        bool hasPotentialExpressionContext = false;
 
         if (!hasIdentifier)
         {
             replacement = new SourceSpan(snapshot, offset, offset);
             prefix = string.Empty;
-
-            if (!HasPotentialEmptyExpressionContext(tokens, snapshot, offset, cancellationToken))
-            {
-                return null;
-            }
+            hasPotentialExpressionContext = HasPotentialEmptyExpressionContext(tokens, snapshot, offset, cancellationToken);
         }
 
         FunctionDeclarationSyntax? owner = FindEnclosingFunction(
             source, replacement, offset, cancellationToken);
-
         if (owner is null)
         {
             return null;
@@ -63,54 +59,64 @@ internal static class SourceCompletionResolver
         int scopeOffset = owner.Body.CloseBraceToken.IsMissing
             ? Math.Min(offset, owner.Body.CloseBraceToken.Span.Start)
             : offset;
-
         IReadOnlyList<SourceCompletionBinding> visibleBindings =
             SourceCompletionScopeResolver.Resolve(analysis, owner, scopeOffset, cancellationToken);
+        SourceCompletionArgumentLabelResolution? labelResolution =
+            SourceCompletionArgumentLabelResolver.Resolve(analysis, owner, offset, cancellationToken);
+
+        if (!hasIdentifier && !hasPotentialExpressionContext && labelResolution is null)
+        {
+            return null;
+        }
 
         SourceCompletionExpressionContext nestedContext = SourceCompletionNestedExpressionContextResolver.Resolve(
             analysis, owner, replacement.Start, visibleBindings, cancellationToken);
-
         BoundType? expectedType = nestedContext.IsRecognized
             ? nestedContext.ExpectedType
             : SourceCompletionExpressionContextResolver.Resolve(
                 analysis, owner, replacement.Start, visibleBindings, cancellationToken);
 
-        if (!hasIdentifier && expectedType is null)
-        {
-            return null;
-        }
-
+        bool includeValues = labelResolution?.SuppressValueCompletions is not true
+            && (hasIdentifier || expectedType is not null);
         SortedDictionary<string, PackageCallable?> candidates = new(StringComparer.Ordinal);
 
-        foreach (PackageCallable callable in analysis.VisibleCallables)
+        if (includeValues)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!callable.Name.StartsWith(prefix, StringComparison.Ordinal)
-                || !HasReliableDeclaration(callable)
-                || expectedType is BoundType required && callable.Function.ReturnType != required)
+            foreach (PackageCallable callable in analysis.VisibleCallables)
             {
-                continue;
-            }
+                cancellationToken.ThrowIfCancellationRequested();
 
-            if (!candidates.TryAdd(callable.Name, callable))
-            {
-                candidates[callable.Name] = null;
+                if (!callable.Name.StartsWith(prefix, StringComparison.Ordinal)
+                    || !HasReliableDeclaration(callable)
+                    || expectedType is BoundType required && callable.Function.ReturnType != required)
+                {
+                    continue;
+                }
+
+                if (!candidates.TryAdd(callable.Name, callable))
+                {
+                    candidates[callable.Name] = null;
+                }
             }
         }
 
-        SourceCompletionBinding[] bindings =
-        [
-            .. visibleBindings.Where(binding =>
+        SourceCompletionBinding[] bindings = includeValues
+            ? [.. visibleBindings.Where(binding =>
                 binding.Name.StartsWith(prefix, StringComparison.Ordinal)
-                && (expectedType is null || binding.Type == expectedType.Value))
-        ];
+                && (expectedType is null || binding.Type == expectedType.Value))]
+            : [];
 
         PackageCallable[] selectedFunctions = [.. candidates.Values.OfType<PackageCallable>()];
+        IReadOnlyList<SourceCompletionArgumentLabelCandidate> labels =
+            labelResolution?.Candidates ?? Array.Empty<SourceCompletionArgumentLabelCandidate>();
 
-        return selectedFunctions.Length == 0 && bindings.Length == 0
+        return selectedFunctions.Length == 0 && bindings.Length == 0 && labels.Count == 0
             ? null
-            : new SourceCompletionResult(replacement, selectedFunctions, bindings);
+            : new SourceCompletionResult(replacement, selectedFunctions, bindings)
+            {
+                ArgumentLabels = labels,
+                SuppressValueCandidates = labelResolution?.SuppressValueCompletions is true
+            };
     }
 
     private static bool HasPotentialEmptyExpressionContext(
@@ -345,4 +351,15 @@ internal static class SourceCompletionResolver
 internal sealed record SourceCompletionResult(
     SourceSpan Replacement,
     IReadOnlyList<PackageCallable> Candidates,
-    IReadOnlyList<SourceCompletionBinding> Bindings);
+    IReadOnlyList<SourceCompletionBinding> Bindings)
+{
+    /// <summary>
+    /// Gets named-argument label candidates available at the current invocation slot.
+    /// </summary>
+    public IReadOnlyList<SourceCompletionArgumentLabelCandidate> ArgumentLabels { get; init; } = [];
+
+    /// <summary>
+    /// Gets whether the invocation requires named arguments at the current slot.
+    /// </summary>
+    public bool SuppressValueCandidates { get; init; }
+}
