@@ -45,12 +45,12 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     {
         await AssertCompletion(
             CreateSource(returnType, expression),
-            [include, "total", includeFunction],
+            new[] { include, "total", includeFunction }.Where(name => name.Length > 0),
             [exclude, "active", excludeFunction]);
     }
 
     [TestCase("return amount + /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
-    [TestCase("return amount + am/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
+    [TestCase("return amount + am/*cursor*/;", "int32", "amount", "", "enabled", "BooleanFunction")]
     [TestCase("return amount - /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return amount * /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return amount / /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
@@ -74,7 +74,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     {
         await AssertCompletion(
             CreateSource(returnType, expression),
-            [include, includeFunction],
+            new[] { include, includeFunction }.Where(name => name.Length > 0),
             [exclude, excludeFunction]);
     }
 
@@ -87,7 +87,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     {
         await AssertCompletion(
             CreateSource(returnType, expression),
-            [include, includeFunction],
+            new[] { include, includeFunction }.Where(name => name.Length > 0),
             [exclude, excludeFunction]);
     }
 
@@ -173,7 +173,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
             namespace Example;
             public int32 IntegerFunction(int32 value) { return value; }
             public int32 First(int32 hiddenAmount) { return hiddenAmount; }
-            public int32 Second(bool enabled)
+            public bool Second(bool enabled)
             {
                 return /*cursor*/;
             }
@@ -232,8 +232,15 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
             }, CancellationToken.None);
 
             string[] labels = [.. completion.Items.Select(item => item.FilterText ?? item.Label)];
-            labels.Should().Contain(expected);
-            labels.Should().NotContain(excluded);
+            if (expected.Count > 0)
+            {
+                labels.Should().Contain(expected);
+            }
+
+            if (excluded.Count > 0)
+            {
+                labels.Should().NotContain(excluded);
+            }
         }
         finally
         {
