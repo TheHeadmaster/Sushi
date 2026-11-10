@@ -106,6 +106,7 @@ jobs:
 
           Reconstruct and verify it with `tools/RestoreVendoredLlvmMingw.ps1`. Upstream project: https://github.com/mstorsjo/llvm-mingw. See the upstream distribution's license and notice files in the archive.
           "@ | Set-Content -LiteralPath (Join-Path $chunkRoot "README.md") -Encoding utf8
+          "third_party/llvm-mingw/** -text" | Set-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE ".gitattributes") -Encoding ascii
       - name: Commit verified source archive to this branch
         shell: pwsh
         run: |
