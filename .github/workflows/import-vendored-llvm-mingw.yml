@@ -1,0 +1,127 @@
+name: Import source-controlled LLVM-MinGW
+
+on:
+  push:
+    branches:
+      - v0.2.0-alpha-project-structure-mingw
+    paths:
+      - .github/workflows/import-vendored-llvm-mingw.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: llvm-mingw-source-import
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.ref == 'refs/heads/v0.2.0-alpha-project-structure-mingw'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v0.2.0-alpha-project-structure-mingw
+          fetch-depth: 0
+      - name: Download and verify pinned upstream archive
+        shell: pwsh
+        run: |
+          $metadata = Get-Content tools/llvm-mingw.json -Raw | ConvertFrom-Json
+          $archive = Join-Path $env:RUNNER_TEMP $metadata.archiveFileName
+          Invoke-WebRequest -Uri $metadata.archiveUrl -OutFile $archive
+          $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = $metadata.sha256.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "Archive SHA-256 mismatch. Expected $expected, got $actual."
+          }
+          "ARCHIVE=$archive" >> $env:GITHUB_ENV
+      - name: Split and verify deterministic Git chunks
+        shell: pwsh
+        run: |
+          $metadata = Get-Content tools/llvm-mingw.json -Raw | ConvertFrom-Json
+          $archive = $env:ARCHIVE
+          $archiveInfo = Get-Item -LiteralPath $archive
+          $chunkLimit = 20MB
+          $chunkRoot = Join-Path $env:GITHUB_WORKSPACE "third_party/llvm-mingw/win-x64/$($metadata.version)"
+          New-Item -ItemType Directory -Path $chunkRoot -Force | Out-Null
+          $chunks = [System.Collections.Generic.List[object]]::new()
+          $input = [System.IO.File]::OpenRead($archive)
+          try {
+            $index = 0
+            while ($input.Position -lt $input.Length) {
+              $remaining = [int][Math]::Min($chunkLimit, $input.Length - $input.Position)
+              $buffer = [byte[]]::new($remaining)
+              $read = $input.Read($buffer, 0, $remaining)
+              if ($read -ne $remaining) {
+                throw "Could not read a complete deterministic chunk."
+              }
+              $name = "archive.part{0:D3}" -f $index
+              $path = Join-Path $chunkRoot $name
+              [System.IO.File]::WriteAllBytes($path, $buffer)
+              $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+              $chunks.Add([ordered]@{ name = $name; size = $read; sha256 = $hash })
+              $index++
+            }
+          }
+          finally {
+            $input.Dispose()
+          }
+
+          $reassembled = Join-Path $env:RUNNER_TEMP "llvm-mingw-reassembled.zip"
+          $output = [System.IO.File]::Create($reassembled)
+          try {
+            foreach ($chunk in $chunks) {
+              $bytes = [System.IO.File]::ReadAllBytes((Join-Path $chunkRoot $chunk.name))
+              $output.Write($bytes, 0, $bytes.Length)
+            }
+          }
+          finally {
+            $output.Dispose()
+          }
+          $reassembledHash = (Get-FileHash -LiteralPath $reassembled -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($reassembledHash -ne $metadata.sha256.ToLowerInvariant()) {
+            throw "Reassembled archive checksum mismatch: $reassembledHash"
+          }
+
+          $manifest = [ordered]@{
+            toolchain = $metadata.toolchain
+            version = $metadata.version
+            llvmVersion = $metadata.llvmVersion
+            archiveFileName = $metadata.archiveFileName
+            archiveSize = $archiveInfo.Length
+            archiveSha256 = $metadata.sha256.ToLowerInvariant()
+            hostArchitecture = $metadata.hostArchitecture
+            targetArchitecture = $metadata.targetArchitecture
+            runtime = $metadata.runtime
+            targetTriple = $metadata.targetTriple
+            chunkSizeLimit = $chunkLimit
+            chunks = @($chunks)
+          } | ConvertTo-Json -Depth 6
+          [System.IO.File]::WriteAllText((Join-Path $chunkRoot "manifest.json"), $manifest, [System.Text.UTF8Encoding]::new($false))
+          @"
+          # LLVM-MinGW source archive
+
+          This directory contains the unmodified LLVM-MinGW $($metadata.version) UCRT Windows x64 archive, split into deterministic 20 MiB byte chunks for ordinary Git storage. The original archive SHA-256 is `$($metadata.sha256)`.
+
+          Reconstruct and verify it with `tools/RestoreVendoredLlvmMingw.ps1`. Upstream project: https://github.com/mstorsjo/llvm-mingw. See the upstream distribution's license and notice files in the archive.
+          "@ | Set-Content -LiteralPath (Join-Path $chunkRoot "README.md") -Encoding utf8
+      - name: Commit verified source archive to this branch
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .gitattributes tools/llvm-mingw.json third_party/llvm-mingw/win-x64
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "The verified source-controlled archive is already present."
+            exit 0
+          }
+          git commit -m "Vendor pinned LLVM-MinGW archive as verified Git chunks"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not commit the verified archive chunks."
+          }
+          git push origin HEAD:v0.2.0-alpha-project-structure-mingw
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not push the toolchain import to the designated branch."
+          }
