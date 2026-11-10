@@ -1,4 +1,6 @@
-﻿namespace Sushi.Intermediate.Lowering;
+﻿using Sushi.Semantics;
+
+namespace Sushi.Intermediate.Lowering;
 
 /// <summary>
 /// Lowers structured Sushi IR into explicit control flow while preserving
@@ -88,6 +90,10 @@ public sealed class IRFunctionLowerer
                 {
                     case IRReturnStatement result:
                         this.LowerReturn(result);
+                        break;
+
+                    case IRExitStatement exit:
+                        this.LowerExit(exit);
                         break;
 
                     case IRWhileStatement loop:
@@ -314,6 +320,20 @@ public sealed class IRFunctionLowerer
             }
 
             this.current.Terminate(new LoweredReturnTerminator(value));
+        }
+
+        private void LowerExit(IRExitStatement statement)
+        {
+            LoweredValue status = statement.StatusExpression is null
+                ? new LoweredIntegerConstant(ProgramTerminationCodes.GracefulSuccess)
+                : this.LowerExpression(statement.StatusExpression);
+
+            if (status.Type is not IRType.Int32)
+            {
+                throw new InvalidOperationException("A program exit status must have type int32.");
+            }
+
+            this.current.Terminate(new LoweredExitTerminator(status));
         }
 
         private void LowerLocalDeclaration(IRLocalDeclarationStatement declaration)

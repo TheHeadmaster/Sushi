@@ -111,6 +111,28 @@ public class IRFunctionLowererTests
             .Throw<NotSupportedException>();
     }
     
+    [TestCase(TestName = "IR Function Lowerer Should Preserve Program Exit As A Distinct Non-Returning Terminator")]
+    public void LowerShould_PreserveExitTerminator()
+    {
+        IRFunction function = new(
+            IRAccessibility.Public,
+            "terminate",
+            IRType.Int32,
+            new IRBlock(
+            [
+                new IRExitStatement(new IRIntegerConstant(42)),
+                new IRReturnStatement(new IRIntegerConstant(0))
+            ]));
+
+        LoweredFunction lowered = IRFunctionLowerer.Lower(function, CancellationToken.None);
+        LoweredBasicBlock entry = lowered.Blocks.Should().ContainSingle().Which;
+
+        entry.Terminator.Should().BeOfType<LoweredExitTerminator>().Subject.Status
+            .Should()
+            .Be(new LoweredIntegerConstant(42));
+        lowered.Blocks.Should().ContainSingle();
+    }
+
     private static IRFunction CreateBooleanFunction(IRExpression expression)
         => new(
             IRAccessibility.Public,

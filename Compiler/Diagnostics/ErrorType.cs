@@ -56,6 +56,7 @@ public enum ErrorType
     UnsupportedRootLifecycleParameters = 321,
     UnsupportedRootLifecycleBody = 322,
     MissingReturnPath = 323,
-    DuplicateLocal = 324
+    DuplicateLocal = 324,
+    InvalidApplicationExitStatus = 325
     #endregion
 }

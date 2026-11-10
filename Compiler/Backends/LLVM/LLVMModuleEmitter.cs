@@ -1,6 +1,7 @@
 ﻿using LLVMSharp.Interop;
 using Sushi.Intermediate;
 using Sushi.Intermediate.Lowering;
+using Sushi.Semantics;
 
 namespace Sushi.Backends.LLVM;
 
@@ -55,6 +56,11 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                 DeclareFunction(module, function);
             }
 
+            if (functions.Any(function => function.Blocks.Any(block => block.Terminator is LoweredExitTerminator)))
+            {
+                DeclareTerminationFunctions(module);
+            }
+
             foreach (LoweredFunction function in functions)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -87,6 +93,14 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         {
             llvmFunction.GetParam((uint)parameter.Index).Name = parameter.Name;
         }
+    }
+
+    private static void DeclareTerminationFunctions(LLVMModuleRef module)
+    {
+        LLVMContextRef context = module.Context;
+        LLVMTypeRef functionType = LLVMTypeRef.CreateFunction(context.VoidType, [context.Int32Type]);
+        module.AddFunction("exit", functionType);
+        module.AddFunction("_Exit", functionType);
     }
 
     private static void EmitFunction(LLVMModuleRef module, LLVMBuilderRef builder, LoweredFunction function, CancellationToken cancellationToken)
@@ -143,6 +157,7 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
         private LLVMBasicBlockRef shiftFailureBlock;
         private int nextArithmeticBlockIndex;
         private int nextShiftBlockIndex;
+        private int nextExitBlockIndex;
 
         public FunctionEmitter(LLVMModuleRef module, LLVMValueRef function, LoweredFunction loweredFunction, LLVMBuilderRef builder, CancellationToken cancellationToken)
         {
@@ -582,6 +597,10 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                     this.builder.BuildRet(this.EmitValue(result.Value!));
                     return;
 
+                case LoweredExitTerminator exiting:
+                    this.EmitExit(exiting);
+                    return;
+
                 case LoweredBranchTerminator branch:
                     this.builder.BuildBr(this.GetBlock(branch.Target));
                     return;
@@ -593,6 +612,34 @@ public sealed class LLVMModuleEmitter : IModuleEmitter
                 default:
                     throw new NotSupportedException($"Lowered terminator type \"{terminator.GetType().Name}\" is not supported by the LLVM backend.");
             }
+        }
+
+        private void EmitExit(LoweredExitTerminator terminator)
+        {
+            LLVMValueRef status = this.EmitValue(terminator.Status);
+            LLVMValueRef invalidStatus = LLVMValueRef.CreateConstInt(this.context.Int32Type, (ulong)ProgramTerminationCodes.InvalidTerminationCode);
+            LLVMValueRef isInvalid = this.builder.BuildICmp(LLVMIntPredicate.LLVMIntEQ, status, invalidStatus, "sushi.exit.invalid.status");
+            LLVMBasicBlockRef origin = this.builder.InsertBlock;
+            string suffix = this.nextExitBlockIndex++.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            LLVMBasicBlockRef fatalBlock = this.function.AppendBasicBlock($"sushi.exit.invalid.{suffix}");
+            LLVMBasicBlockRef gracefulBlock = this.function.AppendBasicBlock($"sushi.exit.graceful.{suffix}");
+
+            this.builder.BuildCondBr(isInvalid, fatalBlock, gracefulBlock);
+
+            this.builder.PositionAtEnd(fatalBlock);
+            LLVMTypeRef terminationType = LLVMTypeRef.CreateFunction(this.context.VoidType, [this.context.Int32Type]);
+            LLVMValueRef fatalTermination = this.module.GetNamedFunction("_Exit");
+            LLVMValueRef fatalCode = LLVMValueRef.CreateConstInt(this.context.Int32Type, (ulong)ProgramTerminationCodes.InvalidTerminationCode);
+            LLVMValueRef[] fatalArguments = [fatalCode];
+            this.builder.BuildCall2(terminationType, fatalTermination, fatalArguments);
+            this.builder.BuildUnreachable();
+
+            this.builder.PositionAtEnd(gracefulBlock);
+            LLVMValueRef gracefulTermination = this.module.GetNamedFunction("exit");
+            LLVMValueRef[] gracefulArguments = [status];
+            this.builder.BuildCall2(terminationType, gracefulTermination, gracefulArguments);
+            this.builder.BuildUnreachable();
+            this.builder.PositionAtEnd(origin);
         }
 
         private LLVMValueRef EmitValue(LoweredValue value)

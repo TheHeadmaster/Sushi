@@ -52,4 +52,24 @@ public class LLVMModuleEmitterTests
             .Should()
             .Contain("ret i32 42");
     }
+    [TestCase(TestName = "LLVM Module Emitter Should Lower Exit To Process Termination With A Fatal Invalid Status Path")]
+    public void EmitShould_EmitProgramTermination()
+    {
+        LoweredFunction function = new(
+            IRAccessibility.Public,
+            "terminate",
+            IRType.Void,
+            [new LoweredBasicBlock("entry", [], new LoweredExitTerminator(new LoweredIntegerConstant(42)))]);
+
+        using IModuleArtifact artifact = new LLVMModuleEmitter().Emit("ExitModule", function, CancellationToken.None);
+        LLVMModuleArtifact llvmArtifact = artifact.Should().BeOfType<LLVMModuleArtifact>().Subject;
+        llvmArtifact.Module.TryVerify(LLVMVerifierFailureAction.LLVMReturnStatusAction, out string verificationMessage)
+            .Should()
+            .BeTrue(verificationMessage);
+
+        string llvm = llvmArtifact.Module.PrintToString();
+        llvm.Should().Contain("call void @_Exit(i32 1)");
+        llvm.Should().Contain("call void @exit(i32 42)");
+        llvm.Should().Contain("unreachable");
+    }
 }

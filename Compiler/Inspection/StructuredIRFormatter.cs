@@ -97,6 +97,18 @@ public static class StructuredIRFormatter
 
             switch (statement)
             {
+                case IRExitStatement exiting:
+                    this.text.Append("exit");
+
+                    if (exiting.StatusExpression is not null)
+                    {
+                        this.text.Append(' ');
+                        this.WriteExpression(exiting.StatusExpression);
+                    }
+
+                    this.text.Append(";\n");
+                    break;
+
                 case IRReturnStatement returning:
                     this.text.Append("return");
 

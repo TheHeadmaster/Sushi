@@ -253,6 +253,10 @@ public static class LoweredIRFormatter
                     this.text.Append(" false: ");
                     this.WriteBlockReference(branch.FalseTarget);
                     break;
+                case LoweredExitTerminator exiting:
+                    this.text.Append("exit ");
+                    this.WriteValue(exiting.Status);
+                    break;
                 case LoweredReturnTerminator returning:
                     this.text.Append("return");
                     if (returning.Value is not null)

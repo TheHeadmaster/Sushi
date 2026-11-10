@@ -238,6 +238,7 @@ public sealed class FunctionDeclarationBinder
                 BoundStatement? boundStatement = statement switch
                 {
                     ReturnStatementSyntax result => BindReturnStatement(result, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
+                    ExitStatementSyntax exit => BindExitStatement(exit, parameters, callables, diagnosticReporter, context, cancellationToken),
                     IfStatementSyntax conditional => BindConditionalStatement(conditional, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
                     WhileStatementSyntax loop => BindWhileStatement(loop, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
                     DoWhileStatementSyntax loop => BindDoWhileStatement(loop, returnType, parameters, diagnosticReporter, callables, context, cancellationToken),
@@ -913,6 +914,37 @@ public sealed class FunctionDeclarationBinder
         return expression is null ? null : new BoundReturnStatement(expression);
     }
 
+    private static BoundExitStatement? BindExitStatement(
+        ExitStatementSyntax statement,
+        IReadOnlyList<BoundParameter> parameters,
+        IReadOnlyList<PackageCallable>? callables,
+        IDiagnosticReporter diagnosticReporter,
+        LocalBindingContext locals,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!statement.ExitKeyword.IsSourceBacked || !statement.SemicolonToken.IsSourceBacked)
+        {
+            return null;
+        }
+
+        if (statement.StatusExpression is null)
+        {
+            return new BoundExitStatement(statement.Span, null);
+        }
+
+        BoundExpression? status = BindValue(statement.StatusExpression, BoundType.Int32, parameters, callables, diagnosticReporter, locals, cancellationToken);
+
+        if (status is BoundIntegerLiteralExpression { Value: ProgramTerminationCodes.InvalidTerminationCode })
+        {
+            diagnosticReporter.GenerateError(ErrorType.InvalidApplicationExitStatus, statement.StatusExpression.Span);
+            return null;
+        }
+
+        return status is null ? null : new BoundExitStatement(statement.Span, status);
+    }
+
     private static bool CanCompleteNormally(BoundBlock block)
     {
         foreach (BoundStatement statement in block.Statements)
@@ -929,7 +961,7 @@ public sealed class FunctionDeclarationBinder
     private static bool CanCompleteNormally(BoundStatement statement)
         => statement switch
         {
-            BoundReturnStatement => false,
+            BoundReturnStatement or BoundExitStatement => false,
             BoundIfStatement conditional => CanConditionalCompleteNormally(conditional),
             BoundWhileStatement or BoundDoWhileStatement or BoundForStatement => true,
             _ => true

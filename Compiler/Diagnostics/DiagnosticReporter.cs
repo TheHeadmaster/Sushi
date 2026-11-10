@@ -49,7 +49,8 @@ public sealed class DiagnosticReporter : IDiagnosticReporter
         [ErrorType.UnsupportedRootLifecycleParameters] = "The current native bootstrap requires parameterless root lifecycle methods.",
         [ErrorType.UnsupportedRootLifecycleBody] = "The current native bootstrap supports an empty lifecycle body or a single bare return statement.",
         [ErrorType.MissingReturnPath] = "A reachable path through a value-returning function can complete without returning a value.",
-        [ErrorType.DuplicateLocal] = "A local declaration conflicts with a binding already visible in its scope."
+        [ErrorType.DuplicateLocal] = "A local declaration conflicts with a binding already visible in its scope.",
+        [ErrorType.InvalidApplicationExitStatus] = "Termination status 1 is reserved for fatal invalid termination-code violations and cannot be requested as a graceful exit status."
     };
 
     private static readonly Dictionary<WarningType, string> warningMessages = new()

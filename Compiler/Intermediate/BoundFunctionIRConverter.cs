@@ -54,6 +54,9 @@ public sealed class BoundFunctionIRConverter
             BoundReturnStatement result => new IRReturnStatement(
                 result.Expression is null ? null : ConvertExpression(result.Expression, cancellationToken)),
 
+            BoundExitStatement exit => new IRExitStatement(
+                exit.StatusExpression is null ? null : ConvertExpression(exit.StatusExpression, cancellationToken)),
+
             BoundIfStatement conditional => new IRIfStatement(
                 ConvertExpression(conditional.Condition, cancellationToken),
                 ConvertBlock(conditional.Then, cancellationToken),

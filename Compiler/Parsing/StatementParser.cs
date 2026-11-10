@@ -7,7 +7,7 @@ namespace Sushi.Parsing;
 
 /// <summary>
 /// Parses braced statements, conditionals, ordinary loops, loop transfers,
-/// returns, initialized locals, assignments, invocations, and integer updates.
+/// returns, exits, initialized locals, assignments, invocations, and integer updates.
 /// </summary>
 /// <param name="cursor">
 /// The cursor shared by the current parsing session.
@@ -82,6 +82,11 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         if (this.IsKeywordAhead("return"u8))
         {
             return this.ParseReturnStatement(diagnosticReporter);
+        }
+
+        if (this.IsKeywordAhead("exit"u8))
+        {
+            return this.ParseExitStatement(diagnosticReporter);
         }
 
         if (this.IsLocalDeclarationAhead())
@@ -400,6 +405,17 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
         return new ReturnStatementSyntax(returnKeyword, expression, semicolon);
     }
 
+    private ExitStatementSyntax ParseExitStatement(IDiagnosticReporter diagnosticReporter)
+    {
+        SyntaxToken exitKeyword = this.ParseKeyword("exit"u8, SyntaxType.ExitKeyword, "Expected \"exit\" keyword.", diagnosticReporter);
+        ExpressionSyntax? statusExpression = this.cursor.TryPeek(out LexToken next) && this.IsPunctuation(next, (byte)';')
+            ? null
+            : this.expressions.ParseExpression(diagnosticReporter);
+        SyntaxToken semicolon = this.ParsePunctuation((byte)';', SyntaxType.SemicolonToken, "Expected \";\" after exit statement.", diagnosticReporter);
+
+        return new ExitStatementSyntax(exitKeyword, statusExpression, semicolon);
+    }
+
     private SyntaxToken ParseKeyword(ReadOnlySpan<byte> spelling, SyntaxType syntaxType, string diagnosticMessage, IDiagnosticReporter diagnosticReporter)
     {
         if (this.cursor.TryConsumeKeyword(spelling, out LexToken token))
@@ -414,6 +430,7 @@ internal sealed class StatementParser(ParserCursor cursor, CancellationToken can
 
     private bool IsStatementAhead()
         => this.IsKeywordAhead("return"u8)
+            || this.IsKeywordAhead("exit"u8)
             || this.IsKeywordAhead("if"u8)
             || this.IsKeywordAhead("while"u8)
             || this.IsKeywordAhead("do"u8)

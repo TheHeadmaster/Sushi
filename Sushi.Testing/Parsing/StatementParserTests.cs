@@ -194,6 +194,33 @@ public class StatementParserTests
             .Be(cursor.Snapshot.SourceLength);
     }
 
+    [TestCase(TestName = "Statement Parser Should Parse Program Exit With Optional Status")]
+    public void ParserShould_ParseExitStatements()
+    {
+        const string source = "{ exit; exit (40 + 2); }";
+        (BlockSyntax block, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseBlock(source);
+
+        ExitStatementSyntax[] exits = [.. block.Statements.Cast<ExitStatementSyntax>()];
+        exits.Should().HaveCount(2);
+        exits[0].StatusExpression.Should().BeNull();
+        exits[0].ExitKeyword.Type.Should().Be(SyntaxType.ExitKeyword);
+        exits[0].SemicolonToken.IsMissing.Should().BeFalse();
+        exits[1].StatusExpression.Should().BeOfType<ParenthesizedExpressionSyntax>();
+        exits[1].SemicolonToken.IsMissing.Should().BeFalse();
+        exits[0].Span.Snapshot.Should().BeSameAs(cursor.Snapshot);
+        diagnostics.Should().BeEmpty();
+    }
+
+    [TestCase(TestName = "Statement Parser Should Preserve Escaped Exit As An Identifier")]
+    public void ParserShould_ParseEscapedExitIdentifier()
+    {
+        (BlockSyntax block, ParserCursor cursor, IReadOnlyList<SushiDiagnostic> diagnostics) = ParseBlock("{ @exit(); }");
+        cursor.Position.Should().Be(cursor.Snapshot.SourceLength);
+
+        block.Statements.Should().ContainSingle().Which.Should().BeOfType<ExpressionStatementSyntax>();
+        diagnostics.Should().BeEmpty();
+    }
+
     private static (BlockSyntax Block, ParserCursor Cursor, IReadOnlyList<SushiDiagnostic> Diagnostics) ParseBlock(string source)
     {
         SourceSnapshot snapshot = SourceSnapshot.FromText(testUri, version: null, source);
