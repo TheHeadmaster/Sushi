@@ -190,7 +190,7 @@ public sealed class SourceCompletionExpressionHandlerTests
             completion.Items.Where(item => item.Kind != CompletionItemKind.Property)
                 .Select(item => item.Label)
                 .Should()
-                .Equal("verbose");
+                .Equal("verbose", "amount");
             completion.Items.Where(item => item.Kind == CompletionItemKind.Property)
                 .Select(item => item.Label)
                 .Should()
