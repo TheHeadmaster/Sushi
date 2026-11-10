@@ -1,13 +1,16 @@
 [CmdletBinding()]
 param(
     [string] $DestinationRoot,
-    [string] $ChunkDirectory
+    [string] $ChunkDirectory,
+    [string] $PinnedManifestPath
 )
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$pinnedManifestPath = Join-Path $PSScriptRoot "llvm-mingw.json"
-$pinned = Get-Content -LiteralPath $pinnedManifestPath -Raw | ConvertFrom-Json
+if ([string]::IsNullOrWhiteSpace($PinnedManifestPath)) {
+    $PinnedManifestPath = Join-Path $PSScriptRoot "llvm-mingw.json"
+}
+$pinned = Get-Content -LiteralPath $PinnedManifestPath -Raw | ConvertFrom-Json
 
 if ([string]::IsNullOrWhiteSpace($ChunkDirectory)) {
     $ChunkDirectory = Join-Path $repositoryRoot ("third_party/llvm-mingw/win-x64/" + $pinned.version)
