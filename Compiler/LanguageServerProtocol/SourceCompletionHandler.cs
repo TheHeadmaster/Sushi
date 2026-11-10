@@ -165,7 +165,8 @@ public sealed class SourceCompletionHandler(WorkspaceOrchestrator workspace) : C
                 Scheme = "file",
                 Pattern = "**/*.sus"
             }),
-            TriggerCharacters = new Container<string>(" ", "(", ",", "=", ":"),
+            TriggerCharacters = new Container<string>(
+                " ", "(", ",", "=", ":", "+", "-", "*", "/", "%", "&", "|", "^", "<", ">", "~", ";"),
             ResolveProvider = false
         };
 }

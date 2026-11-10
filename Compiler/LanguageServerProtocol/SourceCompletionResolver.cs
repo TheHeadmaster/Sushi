@@ -67,8 +67,13 @@ internal static class SourceCompletionResolver
         IReadOnlyList<SourceCompletionBinding> visibleBindings =
             SourceCompletionScopeResolver.Resolve(analysis, owner, scopeOffset, cancellationToken);
 
-        BoundType? expectedType = SourceCompletionExpressionContextResolver.Resolve(
+        SourceCompletionExpressionContext nestedContext = SourceCompletionNestedExpressionContextResolver.Resolve(
             analysis, owner, replacement.Start, visibleBindings, cancellationToken);
+
+        BoundType? expectedType = nestedContext.IsRecognized
+            ? nestedContext.ExpectedType
+            : SourceCompletionExpressionContextResolver.Resolve(
+                analysis, owner, replacement.Start, visibleBindings, cancellationToken);
 
         if (!hasIdentifier && expectedType is null)
         {

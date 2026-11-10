@@ -107,6 +107,66 @@ internal static class SourceSignatureHelpResolver
         return null;
     }
 
+    /// <summary>
+    /// Resolves the callable and active parameter for a specific invocation node,
+    /// even when the cursor is nested inside one of its argument expressions.
+    /// </summary>
+    /// <param name="analysis">The current analyzed source snapshot.</param>
+    /// <param name="invocation">The parsed invocation whose parameter context is required.</param>
+    /// <param name="offset">The cursor's canonical UTF-8 byte offset.</param>
+    /// <param name="cancellationToken">Cancels source inspection.</param>
+    /// <returns>The selected callable and active parameter, or null when resolution is ambiguous.</returns>
+    internal static SourceSignatureHelpResult? ResolveInvocation(
+        SourceAnalysisResult analysis, InvocationExpressionSyntax invocation, int offset,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(analysis);
+        ArgumentNullException.ThrowIfNull(invocation);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (invocation.Target is not IdentifierExpressionSyntax target)
+        {
+            return null;
+        }
+
+        string? name = IdentifierBinder.Bind(target.IdentifierToken);
+        if (name is null)
+        {
+            return null;
+        }
+
+        PackageCallable[] candidates = [.. analysis.VisibleCallables.Where(callable =>
+            StringComparer.Ordinal.Equals(callable.Name, name))];
+        if (candidates.Length != 1)
+        {
+            return null;
+        }
+
+        IReadOnlyList<LexToken> tokens = analysis.SyntaxTree.LexerResult.Tokens;
+        int openingIndex = -1;
+        for (int index = 0; index < tokens.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (tokens[index].Span.Start == invocation.OpenParenthesisToken.Span.Start
+                && tokens[index].Span.End == invocation.OpenParenthesisToken.Span.End)
+            {
+                openingIndex = index;
+                break;
+            }
+        }
+
+        if (openingIndex < 0)
+        {
+            return null;
+        }
+
+        PackageCallable callable = candidates[0];
+        int? activeParameter = FindActiveParameter(
+            tokens, openingIndex, offset, callable.Function.Parameters, cancellationToken);
+        return new SourceSignatureHelpResult(callable, activeParameter);
+    }
+
     private static List<OpenDelimiter> FindOpenDelimiters(
         IReadOnlyList<LexToken> tokens, ReadOnlySpan<byte> bytes, int offset, CancellationToken cancellationToken)
     {
