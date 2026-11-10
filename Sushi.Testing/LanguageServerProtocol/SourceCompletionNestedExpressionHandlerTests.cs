@@ -19,27 +19,27 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     [TestCase("while (/*cursor*/) { }")]
     [TestCase("do { } while (/*cursor*/)")]
     [TestCase("for (int32 index = 0;/*cursor*/; index++) { }")]
-    public async Task BooleanControlConditionsShouldOfferOnlyBooleanValues(string statement)
+    public async Task BooleanControlConditionsShouldOfferBooleanAndIntegerExpressionStarters(string statement)
     {
         await AssertCompletion(
             CreateSource("int32", statement),
-            ["enabled", "active", "BooleanFunction"],
-            ["amount", "total", "IntegerFunction"]);
+            ["enabled", "active", "BooleanFunction", "amount", "total", "IntegerFunction"],
+            []);
     }
 
     [Test]
-    public async Task EmptyForConditionShouldExcludeTheVisibleIntegerLoopVariable()
+    public async Task EmptyForConditionShouldIncludeTheVisibleIntegerLoopVariableAsAStarter()
     {
         await AssertCompletion(
             CreateSource("int32", "for (int32 index = 0;/*cursor*/; index++) { }"),
-            ["enabled", "active", "BooleanFunction"],
-            ["amount", "total", "index", "IntegerFunction"]);
+            ["enabled", "active", "BooleanFunction", "amount", "total", "index", "IntegerFunction"],
+            []);
     }
 
     [TestCase("return (/*cursor*/);", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return ((/*cursor*/));", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return (((/*cursor*/)));", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
-    [TestCase("return ((/*cursor*/));", "bool", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
+    [TestCase("return ((/*cursor*/));", "bool", "enabled", "BooleanFunction", "", "")]
     public async Task ParenthesizedReturnExpressionsShouldInheritTheFunctionReturnType(
         string expression, string returnType, string include, string includeFunction, string exclude, string excludeFunction)
     {
@@ -61,8 +61,8 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     [TestCase("return -/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("return ~/*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("if (not /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
-    [TestCase("if (enabled and /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
-    [TestCase("if (enabled or /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "amount", "IntegerFunction")]
+    [TestCase("if (enabled and /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "", "")]
+    [TestCase("if (enabled or /*cursor*/) { }", "int32", "enabled", "BooleanFunction", "", "")]
     [TestCase("if (amount < /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("if (amount == /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
     [TestCase("if (amount != /*cursor*/) { }", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
@@ -105,13 +105,13 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     {
         await AssertCompletion(
             CreateSource("int32", "ConsumeBoolean((/*cursor*/));"),
-            ["enabled", "active", "BooleanFunction"],
-            ["amount", "IntegerFunction"]);
+            ["enabled", "active", "BooleanFunction", "amount", "total", "IntegerFunction"],
+            []);
 
         await AssertCompletion(
             CreateSource("int32", "ConsumeNamed(ready: (/*cursor*/));"),
-            ["enabled", "active", "BooleanFunction"],
-            ["amount", "IntegerFunction"]);
+            ["enabled", "active", "BooleanFunction", "amount", "total", "IntegerFunction"],
+            []);
     }
 
     [Test]
