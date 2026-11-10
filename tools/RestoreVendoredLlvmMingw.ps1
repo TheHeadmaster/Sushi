@@ -33,7 +33,16 @@ $backupPath = Join-Path $destinationParent (".$destinationName-backup-" + [Guid]
 $lock = $null
 
 function Get-Sha256([string] $Path) {
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $hash = $algorithm.ComputeHash($stream)
+        return ([BitConverter]::ToString($hash)).Replace("-", "").ToLowerInvariant()
+    }
+    finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
 }
 
 function Test-CompleteToolchain([string] $Root) {
