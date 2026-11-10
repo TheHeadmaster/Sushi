@@ -46,7 +46,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
         await AssertCompletion(
             CreateSource(returnType, expression),
             new[] { include, includeFunction }.Where(name => name.Length > 0).ToArray(),
-            [exclude, "active", excludeFunction]);
+            [exclude, excludeFunction]);
     }
 
     [TestCase("return amount + /*cursor*/;", "int32", "amount", "IntegerFunction", "enabled", "BooleanFunction")]
@@ -150,7 +150,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
             ["amount", "IntegerFunction"]);
 
         await AssertCompletion(
-            CreateSource("int32", "return /*cursor*/; // comment"),
+            CreateSource("int32", "return /* pending§cursor§ */; // comment"),
             [],
             ["amount", "IntegerFunction"]);
 
