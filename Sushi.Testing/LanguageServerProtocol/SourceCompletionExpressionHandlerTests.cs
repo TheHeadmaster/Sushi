@@ -119,7 +119,7 @@ public sealed class SourceCompletionExpressionHandlerTests
     }
 
     [Test]
-    public async Task BooleanAssignmentShouldExcludeIntegerBindings()
+    public async Task BooleanAssignmentShouldAllowIntegerComparisonStarters()
     {
         const string source = """
             package Example;
@@ -138,7 +138,7 @@ public sealed class SourceCompletionExpressionHandlerTests
 
             names.Should().Contain("active");
             names.Should().Contain("enabled");
-            names.Should().NotContain("amount");
+            names.Should().Contain("amount");
         });
     }
 
@@ -217,7 +217,7 @@ public sealed class SourceCompletionExpressionHandlerTests
 
             completion.Items.Select(item => item.Label)
                 .Should()
-                .Equal("verbose");
+                .Contain(["amount", "verbose"]);
         });
     }
 
