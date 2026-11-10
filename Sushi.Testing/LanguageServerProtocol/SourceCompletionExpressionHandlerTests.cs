@@ -159,9 +159,14 @@ public sealed class SourceCompletionExpressionHandlerTests
         {
             CompletionList completion = await handler.Handle(At(source, uri, "Log("), CancellationToken.None);
 
-            completion.Items.Select(item => item.Label)
+            completion.Items.Where(item => item.Kind != CompletionItemKind.Property)
+                .Select(item => item.Label)
                 .Should()
                 .Equal("amount");
+            completion.Items.Where(item => item.Kind == CompletionItemKind.Property)
+                .Select(item => item.Label)
+                .Should()
+                .Equal("amount:", "verbose:");
         });
     }
 
@@ -182,9 +187,14 @@ public sealed class SourceCompletionExpressionHandlerTests
         {
             CompletionList completion = await handler.Handle(At(source, uri, "Log(1, "), CancellationToken.None);
 
-            completion.Items.Select(item => item.Label)
+            completion.Items.Where(item => item.Kind != CompletionItemKind.Property)
+                .Select(item => item.Label)
                 .Should()
                 .Equal("verbose");
+            completion.Items.Where(item => item.Kind == CompletionItemKind.Property)
+                .Select(item => item.Label)
+                .Should()
+                .Equal("verbose:");
         });
     }
 

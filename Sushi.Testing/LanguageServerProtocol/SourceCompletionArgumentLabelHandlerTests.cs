@@ -34,7 +34,7 @@ public sealed class SourceCompletionArgumentLabelHandlerTests
         items.Single(item => item.Label == "width").Kind.Should().Be(CompletionItemKind.Variable);
     }
 
-    [TestCase("Configure(100, │);", "visible:")]
+    [TestCase("Configure(100, │);", "height:", "visible:")]
     [TestCase("Configure(100, 200, │);", "visible:")]
     [TestCase("Configure(visible: true, │);", "height:", "width:")]
     [TestCase("Configure(height: 2, width: 1, │);", "visible:")]
