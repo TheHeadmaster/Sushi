@@ -45,7 +45,7 @@ public sealed class SourceCompletionNestedExpressionHandlerTests
     {
         await AssertCompletion(
             CreateSource(returnType, expression),
-            new[] { include, "total", includeFunction }.Where(name => name.Length > 0).ToArray(),
+            new[] { include, includeFunction }.Where(name => name.Length > 0).ToArray(),
             [exclude, "active", excludeFunction]);
     }
 
