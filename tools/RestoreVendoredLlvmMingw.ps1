@@ -90,16 +90,17 @@ function Get-ValidatedArchiveManifest {
         }
     }
 
-    if ($archiveManifest.toolchain -ne $pinned.toolchain
-        -or $archiveManifest.version -ne $pinned.version
-        -or $archiveManifest.llvmVersion -ne $pinned.llvmVersion
-        -or $archiveManifest.archiveFileName -ne $pinned.archiveFileName
-        -or [long] $archiveManifest.archiveSize -ne [long] $pinned.archiveSize
-        -or $archiveManifest.archiveSha256 -ne $pinned.sha256
-        -or $archiveManifest.hostArchitecture -ne $pinned.hostArchitecture
-        -or $archiveManifest.targetArchitecture -ne $pinned.targetArchitecture
-        -or $archiveManifest.runtime -ne $pinned.runtime
-        -or $archiveManifest.targetTriple -ne $pinned.targetTriple) {
+    $matchesPinned = $archiveManifest.toolchain -eq $pinned.toolchain
+    $matchesPinned = $matchesPinned -and $archiveManifest.version -eq $pinned.version
+    $matchesPinned = $matchesPinned -and $archiveManifest.llvmVersion -eq $pinned.llvmVersion
+    $matchesPinned = $matchesPinned -and $archiveManifest.archiveFileName -eq $pinned.archiveFileName
+    $matchesPinned = $matchesPinned -and [long] $archiveManifest.archiveSize -eq [long] $pinned.archiveSize
+    $matchesPinned = $matchesPinned -and $archiveManifest.archiveSha256 -eq $pinned.sha256
+    $matchesPinned = $matchesPinned -and $archiveManifest.hostArchitecture -eq $pinned.hostArchitecture
+    $matchesPinned = $matchesPinned -and $archiveManifest.targetArchitecture -eq $pinned.targetArchitecture
+    $matchesPinned = $matchesPinned -and $archiveManifest.runtime -eq $pinned.runtime
+    $matchesPinned = $matchesPinned -and $archiveManifest.targetTriple -eq $pinned.targetTriple
+    if (-not $matchesPinned) {
         throw "The source-controlled LLVM-MinGW chunk manifest does not match tools/llvm-mingw.json."
     }
 
